@@ -83,14 +83,14 @@ struct ContentView: View {
                     .lineLimit(2).help(error)
             }
         }
-        .padding(24).frame(width: 720, height: 360)
-        .background {
-            RoundedRectangle(cornerRadius: 24)
-                .fill(LinearGradient(colors: [stateColor.opacity(colorScheme == .dark ? 0.16 : 0.09), stateColor.opacity(0.025)], startPoint: .topLeading, endPoint: .bottomTrailing))
-        }
-        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(stateColor.opacity(0.13), lineWidth: 1))
-        .padding(.horizontal, 40).padding(.vertical, 20)
+        .padding(.horizontal, 36).padding(.top, 16).padding(.bottom, 28)
         .frame(width: 800, height: 400)
+        .background {
+            LinearGradient(
+                colors: [stateColor.opacity(colorScheme == .dark ? 0.16 : 0.09), stateColor.opacity(0.025)],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            ).ignoresSafeArea()
+        }
         .onAppear { commandFocused = true }
         .sheet(isPresented: $showHistory, onDismiss: { commandFocused = true }) { HistoryView(store: store) }
         .sheet(isPresented: Binding(get: { store.database.pendingEnd != nil }, set: { _ in })) {
@@ -140,6 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
         Window("FocusCount · 学习计时", id: "main") { ContentView() }
+            .windowStyle(.hiddenTitleBar)
             .defaultSize(width: 800, height: 400)
             .windowResizability(.contentSize)
     }
