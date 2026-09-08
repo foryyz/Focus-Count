@@ -28,64 +28,71 @@ struct ContentView: View {
     private var stateTitle: String { phase == 1 ? "正在学习" : phase == 2 ? "休息一下 · 已暂停" : "准备好，开始专注" }
     private var stateIcon: String { phase == 1 ? "leaf.fill" : phase == 2 ? "pause.circle.fill" : "play.circle.fill" }
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             HStack {
-                Text("FocusCount").font(.title2.bold())
+                Text("FocusCount")
+                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Button {
                     do { NSWorkspace.shared.open(try Storage.directory) }
                     catch { store.error = error.localizedDescription }
-                } label: { Image(systemName: "folder") }
-                    .help("打开 JSON 和 CSV 数据目录")
+                } label: { Image(systemName: "folder").frame(width: 28, height: 24) }
+                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .help("打开数据目录")
             }
             Button { store.toggle(); commandFocused = true } label: {
-                VStack(spacing: 18) {
+                VStack(spacing: 14) {
                     Label(stateTitle, systemImage: stateIcon)
-                        .font(.system(size: 13, weight: .semibold))
-                        .padding(.horizontal, 14).padding(.vertical, 7)
-                        .background(stateColor.opacity(0.10), in: Capsule())
+                        .font(.system(size: 13, weight: .medium))
                     Text(duration(store.database.draft.seconds()))
-                        .font(.system(size: 58, weight: .light, design: .monospaced))
-                    HStack(spacing: 7) {
-                        Image(systemName: phase == 1 ? "pause.fill" : "play.fill").font(.caption)
-                        Text(phase == 1 ? "点击或回车暂停 · 专注时间正在累积" : phase == 2 ? "点击或回车继续 · 暂停不计时" : "点击或回车开始本次学习")
-                            .font(.callout)
-                    }
+                        .font(.system(size: 84, weight: .light, design: .monospaced))
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    Text(phase == 1 ? "点击或回车暂停" : phase == 2 ? "点击或回车继续" : "点击或回车开始")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 .foregroundStyle(stateColor)
-                .frame(maxWidth: .infinity).padding(.vertical, 26)
-                .background {
-                    RoundedRectangle(cornerRadius: 22)
-                        .fill(LinearGradient(colors: [stateColor.opacity(colorScheme == .dark ? 0.20 : 0.12), stateColor.opacity(0.035)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
-                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(stateColor.opacity(0.20), lineWidth: 1))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain).disabled(store.blocked)
             .accessibilityLabel("\(stateTitle)，\(duration(store.database.draft.seconds()))")
             .accessibilityHint(phase == 1 ? "暂停计时" : "开始或继续计时")
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: phase)
-            HStack {
-                TextField("输入 stop! 并回车，结束本次学习", text: $command)
-                    .textFieldStyle(.roundedBorder).focused($commandFocused)
-                    .onSubmit { submit() }
+            HStack(spacing: 12) {
+                TextField("输入 stop! 结束学习", text: $command)
+                    .textFieldStyle(.plain).font(.system(size: 12))
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+                    .focused($commandFocused).onSubmit { submit() }
                 Button { store.finish() } label: {
-                    Label("结束", systemImage: "stop.circle.fill")
+                    Image(systemName: "stop.circle").font(.system(size: 20))
+                        .frame(width: 30, height: 32)
                 }
-                .tint(.orange)
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help("结束本次学习").accessibilityLabel("结束本次学习")
                 .disabled(store.database.draft.startedAt == nil || store.blocked)
+                Rectangle().fill(Color.primary.opacity(0.10)).frame(width: 1, height: 18)
+                Button { showHistory = true } label: {
+                    Label("学习记录", systemImage: "chart.bar.xaxis")
+                        .font(.system(size: 12, weight: .medium)).padding(.vertical, 8)
+                }.buttonStyle(.plain).foregroundStyle(.secondary)
             }
             if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(.secondary) }
-            Button { showHistory = true } label: {
-                Label("学习记录", systemImage: "chart.bar.xaxis")
-                    .font(.callout).foregroundStyle(.secondary)
-            }.buttonStyle(.plain).padding(.top, 4)
             if let error = store.error {
                 Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
+                    .lineLimit(2).help(error)
             }
         }
-        .padding(28).frame(minWidth: 540, minHeight: 370)
+        .padding(24).frame(width: 720, height: 360)
+        .background {
+            RoundedRectangle(cornerRadius: 24)
+                .fill(LinearGradient(colors: [stateColor.opacity(colorScheme == .dark ? 0.16 : 0.09), stateColor.opacity(0.025)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        }
+        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(stateColor.opacity(0.13), lineWidth: 1))
+        .padding(.horizontal, 40).padding(.vertical, 20)
+        .frame(width: 800, height: 400)
         .onAppear { commandFocused = true }
-        .sheet(isPresented: $showHistory) { HistoryView(store: store) }
+        .sheet(isPresented: $showHistory, onDismiss: { commandFocused = true }) { HistoryView(store: store) }
         .sheet(isPresented: Binding(get: { store.database.pendingEnd != nil }, set: { _ in })) {
             VStack(alignment: .leading, spacing: 20) {
                 Label("完成本次学习", systemImage: "checkmark.circle.fill")
@@ -133,6 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
         Window("FocusCount · 学习计时", id: "main") { ContentView() }
-            .defaultSize(width: 580, height: 410)
+            .defaultSize(width: 800, height: 400)
+            .windowResizability(.contentSize)
     }
 }

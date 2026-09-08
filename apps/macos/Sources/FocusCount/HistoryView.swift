@@ -32,23 +32,29 @@ struct HistoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack {
+            HStack(spacing: 18) {
+                Button { dismiss() } label: {
+                    Label("返回计时", systemImage: "arrow.left")
+                        .font(.system(size: 14, weight: .semibold))
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                }
+                .buttonStyle(.borderedProminent).tint(.teal)
+                .keyboardShortcut(.cancelAction).help("返回计时（Esc）")
                 VStack(alignment: .leading, spacing: 4) {
                     Text("学习记录").font(.title2.bold())
-                    Text("回顾投入的时间，也给每次专注一个准确的记录。")
+                    Text("回顾每一次专注")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button {
                     editing = StudySession(startedAt: Date().addingTimeInterval(-1800), endedAt: Date(), activeSeconds: 1800, subject: "", focus: "A")
                 } label: { Label("补记", systemImage: "plus") }.disabled(store.blocked)
-                Button("返回计时") { dismiss() }.keyboardShortcut(.cancelAction)
             }
             HStack(spacing: 14) {
                 Picker("记录", selection: $filter.deleted) {
                     Text("学习记录").tag(false)
                     Text("最近删除").tag(true)
-                }.pickerStyle(.segmented).frame(width: 210)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 200)
                 Spacer()
                 Picker("科目", selection: $filter.subject) {
                     Text("全部科目").tag("")
