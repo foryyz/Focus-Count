@@ -1,86 +1,6 @@
 import SwiftUI
 import AppKit
 
-@MainActor final class StudyStore: ObservableObject {
-    @Published var database = Database()
-    @Published var error: String?
-    @Published var blocked = false
-    private var ticker: Timer?
-    private var ticks = 0
-    private var observers: [NSObjectProtocol] = []
-    private var file: URL { get throws { try Storage.directory.appendingPathComponent("sessions.json") } }
-
-    init() {
-        do {
-            try Storage.migrateLegacyData(from: Storage.legacyDirectory, to: Storage.directory)
-            if try FileManager.default.fileExists(atPath: file.path) {
-                database = try JSONDecoder().decode(Database.self, from: Data(contentsOf: file))
-                guard database.version == 1 else { throw CocoaError(.fileReadUnknown) }
-            }
-        } catch {
-            blocked = true
-            self.error = "无法读取数据，已停止写入以保护原文件。请检查数据目录：\(error.localizedDescription)"
-        }
-        if !blocked {
-            do { try writeCSV() } catch { self.error = "CSV 更新失败：\(error.localizedDescription)" }
-        }
-        ticker = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.objectWillChange.send()
-                self.ticks += 1
-                if self.ticks % 20 == 0 && self.database.draft.isRunning { self.persist() }
-            }
-        }
-        observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.pause() }
-        })
-        observers.append(NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.persist() }
-        })
-    }
-    func persist() {
-        guard !blocked else { return }
-        do {
-            try FileManager.default.createDirectory(at: Storage.directory, withIntermediateDirectories: true)
-            var snapshot = database
-            snapshot.draft = database.draft.checkpoint()
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(snapshot).write(to: file, options: .atomic)
-        } catch { self.error = "保存失败：\(error.localizedDescription)" }
-    }
-    func writeCSV() throws {
-        try FileManager.default.createDirectory(at: Storage.directory, withIntermediateDirectories: true)
-        try Data(Storage.csv(database.sessions).utf8).write(to: Storage.directory.appendingPathComponent("sessions.csv"), options: .atomic)
-    }
-    func toggle() {
-        guard !blocked, database.pendingEnd == nil else { return }
-        database.draft.toggle()
-        persist()
-    }
-    func pause() { database.draft.pause(); persist() }
-    func finish() {
-        guard !blocked, database.draft.startedAt != nil else { return }
-        database.draft.pause()
-        database.pendingEnd = Date()
-        persist()
-    }
-    func resumeEditingTimer() { database.pendingEnd = nil; persist() }
-    func save(subject: String, focus: String) -> Bool {
-        guard !blocked, let start = database.draft.startedAt, let end = database.pendingEnd else { return false }
-        let old = database
-        database.sessions.append(StudySession(startedAt: start, endedAt: end, activeSeconds: database.draft.seconds(), subject: subject.trimmingCharacters(in: .whitespacesAndNewlines), focus: focus))
-        database.draft = TimerState()
-        database.pendingEnd = nil
-        error = nil
-        persist()
-        if error != nil { database = old; return false }
-        do { try writeCSV() } catch { self.error = "记录已保存，但 CSV 更新失败：\(error.localizedDescription)" }
-        return true
-    }
-}
-
 func duration(_ seconds: Double) -> String {
     let value = max(0, Int(seconds))
     return String(format: "%02d:%02d:%02d", value / 3600, value / 60 % 60, value % 60)
@@ -92,6 +12,7 @@ struct ContentView: View {
     @State private var subject = ""
     @State private var focus = "A"
     @State private var hint = ""
+    @State private var showHistory = false
     @FocusState private var commandFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -154,43 +75,28 @@ struct ContentView: View {
                 .disabled(store.database.draft.startedAt == nil || store.blocked)
             }
             if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(.secondary) }
-            Divider()
-            HStack {
-                Text("学习记录").font(.headline)
-                Spacer()
-                Text("共 \(store.database.sessions.count) 次 · \(duration(store.database.sessions.reduce(0) { $0 + $1.activeSeconds }))")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            if store.database.sessions.isEmpty {
-                Text("完成第一次学习后，记录会显示在这里。")
-                    .foregroundStyle(.secondary).frame(maxWidth: .infinity, minHeight: 100)
-            } else {
-                List(store.database.sessions.reversed()) { s in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(s.subject).font(.headline)
-                            Text(s.startedAt.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(duration(s.activeSeconds)).monospacedDigit()
-                        Text(s.focus).font(.headline).frame(width: 30).padding(5)
-                            .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-                    }.padding(.vertical, 4)
-                }.listStyle(.inset).frame(minHeight: 130)
-            }
+            Button { showHistory = true } label: {
+                Label("学习记录", systemImage: "chart.bar.xaxis")
+                    .font(.callout).foregroundStyle(.secondary)
+            }.buttonStyle(.plain).padding(.top, 4)
             if let error = store.error {
                 Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
             }
-            Text("自动保存在项目 data 目录 · JSON + CSV").font(.caption2).foregroundStyle(.secondary)
         }
-        .padding(28).frame(minWidth: 540, minHeight: 530)
+        .padding(28).frame(minWidth: 540, minHeight: 370)
         .onAppear { commandFocused = true }
+        .sheet(isPresented: $showHistory) { HistoryView(store: store) }
         .sheet(isPresented: Binding(get: { store.database.pendingEnd != nil }, set: { _ in })) {
             VStack(alignment: .leading, spacing: 20) {
                 Label("完成本次学习", systemImage: "checkmark.circle.fill")
                     .font(.title2.bold()).foregroundStyle(.teal)
                 Text("有效学习时间  \(duration(store.database.draft.seconds()))").foregroundStyle(.secondary)
                 TextField("学习科目（必填）", text: $subject).textFieldStyle(.roundedBorder)
+                if !store.subjects.isEmpty {
+                    Menu("选择已有科目") {
+                        ForEach(store.subjects, id: \.self) { item in Button(item) { subject = item } }
+                    }.fixedSize()
+                }
                 Picker("专注度", selection: $focus) {
                     ForEach(["S", "A", "B", "C", "D"], id: \.self) { Text($0).tag($0) }
                 }.pickerStyle(.segmented)
@@ -227,6 +133,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
         Window("FocusCount · 学习计时", id: "main") { ContentView() }
-            .defaultSize(width: 580, height: 650)
+            .defaultSize(width: 580, height: 410)
     }
 }

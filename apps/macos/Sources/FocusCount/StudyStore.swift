@@ -1,0 +1,124 @@
+import SwiftUI
+import AppKit
+
+@MainActor final class StudyStore: ObservableObject {
+    @Published var database = Database()
+    @Published var error: String?
+    @Published var blocked = false
+    private var ticker: Timer?
+    private var ticks = 0
+    private var observers: [NSObjectProtocol] = []
+    private var file: URL { get throws { try self.directory.appendingPathComponent("sessions.json") } }
+
+    private let customDirectory: URL?
+    private var directory: URL { get throws { try customDirectory ?? Storage.directory } }
+    var sessions: [StudySession] { database.sessions.filter { $0.deletedAt == nil } }
+    var subjects: [String] { Array(Set(sessions.map(\.subject))).sorted() }
+
+    init(directory: URL? = nil, observeSystem: Bool = true) {
+        customDirectory = directory
+        do {
+            if customDirectory == nil { try Storage.migrateLegacyData(from: Storage.legacyDirectory, to: self.directory) }
+            if try FileManager.default.fileExists(atPath: file.path) {
+                let contents = try Data(contentsOf: file)
+                database = try JSONDecoder().decode(Database.self, from: contents)
+                guard [1, 2].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
+                if database.version == 1 {
+                    let backup = try self.directory.appendingPathComponent("sessions.v1.backup.json")
+                    if !FileManager.default.fileExists(atPath: backup.path) { try contents.write(to: backup, options: .atomic) }
+                    database.version = 2
+                    for index in database.sessions.indices {
+                        database.sessions[index].updatedAt = database.sessions[index].endedAt
+                    }
+                }
+            }
+        } catch {
+            blocked = true
+            self.error = "无法读取数据，已停止写入以保护原文件。请检查数据目录：\(error.localizedDescription)"
+        }
+        if !blocked {
+            do { try writeCSV() } catch { self.error = "CSV 更新失败：\(error.localizedDescription)" }
+        }
+        guard observeSystem else { return }
+        ticker = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.objectWillChange.send()
+                self.ticks += 1
+                if self.ticks % 20 == 0 && self.database.draft.isRunning { self.persist() }
+            }
+        }
+        observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.pause() }
+        })
+        observers.append(NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { _ = self?.persist() }
+        })
+    }
+    @discardableResult func persist() -> Bool {
+        guard !blocked else { return false }
+        do {
+            try FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
+            var snapshot = database
+            snapshot.draft = database.draft.checkpoint()
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(snapshot).write(to: file, options: .atomic)
+            return true
+        } catch { self.error = "保存失败：\(error.localizedDescription)"; return false }
+    }
+    func writeCSV() throws {
+        try FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
+        try Data(Storage.csv(database.sessions).utf8).write(to: self.directory.appendingPathComponent("sessions.csv"), options: .atomic)
+    }
+    func toggle() {
+        guard !blocked, database.pendingEnd == nil else { return }
+        database.draft.toggle()
+        persist()
+    }
+    func pause() { database.draft.pause(); persist() }
+    func finish() {
+        guard !blocked, database.draft.startedAt != nil else { return }
+        database.draft.pause()
+        database.pendingEnd = Date()
+        persist()
+    }
+    func resumeEditingTimer() { database.pendingEnd = nil; persist() }
+    func save(subject: String, focus: String) -> Bool {
+        guard !blocked, let start = database.draft.startedAt, let end = database.pendingEnd else { return false }
+        let session = StudySession(startedAt: start, endedAt: end, activeSeconds: database.draft.seconds(), subject: subject.trimmingCharacters(in: .whitespacesAndNewlines), focus: focus, updatedAt: Date())
+        return commit { database in
+            database.sessions.append(session)
+            database.draft = TimerState()
+            database.pendingEnd = nil
+        }
+    }
+    private func commit(_ change: (inout Database) -> Void) -> Bool {
+        guard !blocked else { return false }
+        let old = database
+        change(&database)
+        error = nil
+        guard persist() else { database = old; return false }
+        do { try writeCSV() } catch { self.error = "记录已保存，但 CSV 更新失败：\(error.localizedDescription)" }
+        return true
+    }
+    func upsert(_ session: StudySession) -> Bool {
+        var edited = session
+        edited.subject = edited.subject.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let problem = edited.validationError { error = problem; return false }
+        edited.updatedAt = Date()
+        return commit { database in
+            if let index = database.sessions.firstIndex(where: { $0.id == edited.id }) {
+                database.sessions[index] = edited
+            } else { database.sessions.append(edited) }
+        }
+    }
+    @discardableResult func setDeleted(_ id: UUID, deleted: Bool) -> Bool {
+        guard let index = database.sessions.firstIndex(where: { $0.id == id }) else { return false }
+        return commit { database in
+            database.sessions[index].deletedAt = deleted ? Date() : nil
+            database.sessions[index].updatedAt = Date()
+        }
+    }
+}
+

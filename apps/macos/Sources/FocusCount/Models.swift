@@ -7,6 +7,16 @@ struct StudySession: Codable, Identifiable {
     var activeSeconds: Double
     var subject: String
     var focus: String
+    var updatedAt: Date?
+    var deletedAt: Date?
+
+    var validationError: String? {
+        if subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请填写学习科目。" }
+        if !["S", "A", "B", "C", "D"].contains(focus) { return "请选择有效专注度。" }
+        if endedAt < startedAt { return "结束时间不能早于开始时间。" }
+        if !activeSeconds.isFinite || activeSeconds < 0 || activeSeconds > endedAt.timeIntervalSince(startedAt) + 0.001 { return "有效时长须在 0 与起止时间差之间。" }
+        return nil
+    }
 }
 
 struct TimerState: Codable {
@@ -40,7 +50,7 @@ struct TimerState: Codable {
 }
 
 struct Database: Codable {
-    var version = 1
+    var version = 2
     var sessions: [StudySession] = []
     var draft = TimerState()
     var pendingEnd: Date?
@@ -82,7 +92,7 @@ enum Storage {
               FileManager.default.fileExists(atPath: source.path) else { return }
         let contents = try Data(contentsOf: source)
         let database = try JSONDecoder().decode(Database.self, from: contents)
-        guard database.version == 1 else { throw CocoaError(.fileReadUnknown) }
+        guard [1, 2].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
         try contents.write(to: target, options: .atomic)
     }
@@ -94,7 +104,7 @@ enum Storage {
             let safe = dangerous.contains(where: { value.hasPrefix($0) }) ? "'" + value : value
             return "\"" + safe.replacingOccurrences(of: "\"", with: "\"\"") + "\""
         }
-        let rows = sessions.map { s in
+        let rows = sessions.filter { $0.deletedAt == nil }.map { s in
             [s.id.uuidString, iso.string(from: s.startedAt), iso.string(from: s.endedAt),
              String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), s.activeSeconds),
              s.subject, s.focus].map(field).joined(separator: ",")

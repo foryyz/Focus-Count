@@ -48,7 +48,12 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test --pack
 - “返回计时”保留进度并恢复为暂停状态。
 - 暂停不累计时间，系统睡眠自动暂停，关闭窗口退出。
 - 运行中约每 5 秒保存草稿，操作时立即保存，重启后恢复为暂停状态。
-- 支持深色模式、历史记录列表、总次数和有效总时长。
+- 主界面默认隐藏历史列表与统计，点击“学习记录”打开独立管理页。
+- 记录页支持日期、科目、专注度筛选；编辑、补记、删除和恢复。
+- 每日时长与科目分布图可点击筛选，统计与列表实时更新。
+- 编辑保留原记录 ID；起止时间与有效时长分别填写，暂停不计时。
+- “最近删除”不计入统计，可随时恢复，不自动清空。
+- 完成学习与编辑时可选择已有科目；支持深色模式。
 
 ## 数据迁移与同步
 
@@ -58,7 +63,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test --pack
 
 将 `data/` 用同步工具同步至另一台电脑对应项目的 `data/`，即可为未来跨平台共享做准备。**切换设备前退出应用并等待同步完成，避免两端同时写入。** 当前没有云同步服务、跨设备锁或冲突合并。请保留备份。
 
-数据协议见 [docs/data-format.md](docs/data-format.md)。为兼容原记录，JSON 日期仍使用自 2001 年起的秒数；CSV 日期为 ISO 8601 UTC。
+数据协议见 [docs/data-format.md](docs/data-format.md)。当前写入版本为 v2，新增修改和删除时间；首次读取 v1 数据会保留 `sessions.v1.backup.json` 备份，旧应用不能继续读写新版数据。为兼容原记录，JSON 日期仍使用自 2001 年起的秒数；CSV 日期为 ISO 8601 UTC。
 
 ## 版本控制
 
