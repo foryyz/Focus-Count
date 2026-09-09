@@ -32,18 +32,18 @@ final class CoreTests: XCTestCase {
         var older = local; older.updatedAt = Date(timeIntervalSince1970: 90); older.subject = "旧科目"
         XCTAssertEqual(RecordExchange.merge(local: [local], incoming: [older]).first?.subject, "数学")
         var tied = local; tied.subject = "相同时间"
-        XCTAssertEqual(RecordExchange.merge(local: [local], incoming: [tied]).first?.subject, "数学")
+        XCTAssertEqual(SessionSnapshot(RecordExchange.merge(local: [local], incoming: [tied])[0]), SessionSnapshot(RecordExchange.merge(local: [tied], incoming: [local])[0]))
         var deleted = local; deleted.updatedAt = Date(timeIntervalSince1970: 200); deleted.deletedAt = deleted.updatedAt
         let merged = RecordExchange.merge(local: [local], incoming: [deleted, sample()])
         XCTAssertEqual(merged.count, 2)
-        XCTAssertNotNil(merged.first?.deletedAt)
+        XCTAssertNotNil(merged.first(where: { $0.id == local.id })?.deletedAt)
         var restored = deleted; restored.deletedAt = nil; restored.updatedAt = Date(timeIntervalSince1970: 300)
-        XCTAssertNil(RecordExchange.merge(local: merged, incoming: [restored]).first?.deletedAt)
+        XCTAssertNil(RecordExchange.merge(local: merged, incoming: [restored]).first(where: { $0.id == local.id })?.deletedAt)
     }
     func testImportValidationAndV1Compatibility() throws {
         let session = sample()
         let decoded = try RecordExchange.decode(RecordExchange.encode(Database(version: 1, sessions: [session])))
-        XCTAssertEqual(decoded.version, 2)
+        XCTAssertEqual(decoded.version, 3)
         XCTAssertEqual(decoded.sessions.first?.id, session.id)
         XCTAssertThrowsError(try RecordExchange.decode(RecordExchange.encode(Database(version: 99))))
         XCTAssertThrowsError(try RecordExchange.decode(RecordExchange.encode(Database(sessions: [session, session]))))
@@ -61,5 +61,41 @@ final class CoreTests: XCTestCase {
         let decoded = try JSONDecoder().decode(Database.self, from: data)
         XCTAssertEqual(decoded.draft.accumulated, 12)
         XCTAssertFalse(decoded.draft.isRunning)
+    }
+    func testRoundTripsPreserveEveryVersionAndAreIdempotent() throws {
+        let original = sample()
+        var macEdit = original; macEdit.subject = "物理"; macEdit.updatedAt = Date(timeIntervalSince1970: 200)
+        macEdit = RecordExchange.replacing(original, with: macEdit, now: Date(timeIntervalSince1970: 200))
+        var phoneEdit = original; phoneEdit.focus = "S"
+        phoneEdit = RecordExchange.replacing(original, with: phoneEdit, now: Date(timeIntervalSince1970: 200))
+        let forward = RecordExchange.merge(local: [macEdit], incoming: [phoneEdit])
+        let reverse = RecordExchange.merge(local: [phoneEdit], incoming: [macEdit])
+        XCTAssertEqual(try RecordExchange.encode(Database(sessions: forward)), try RecordExchange.encode(Database(sessions: reverse)))
+        let all = Set((forward[0].history ?? []) + [SessionSnapshot(forward[0])])
+        XCTAssertEqual(all, Set([SessionSnapshot(original), SessionSnapshot(macEdit), SessionSnapshot(phoneEdit)]))
+        var repeated = forward
+        for _ in 0..<5 {
+            let exported = try RecordExchange.decode(RecordExchange.encode(Database(sessions: repeated)))
+            repeated = RecordExchange.merge(local: repeated, incoming: exported.sessions + [phoneEdit, original])
+        }
+        XCTAssertEqual(try RecordExchange.encode(Database(sessions: repeated)), try RecordExchange.encode(Database(sessions: forward)))
+    }
+    func testThreeWayMergeIsAssociativeAndRestorationKeepsHistory() throws {
+        let a = sample()
+        var b = a; b.subject = "英语"; b.updatedAt = Date(timeIntervalSince1970: 200)
+        var c = a; c.deletedAt = Date(timeIntervalSince1970: 300); c.updatedAt = c.deletedAt
+        let first = RecordExchange.merge(local: RecordExchange.merge(local: [a], incoming: [b]), incoming: [c])
+        let second = RecordExchange.merge(local: [a], incoming: RecordExchange.merge(local: [b], incoming: [c]))
+        XCTAssertEqual(try RecordExchange.encode(Database(sessions: first)), try RecordExchange.encode(Database(sessions: second)))
+        XCTAssertEqual(first[0].history?.count, 2)
+        let restored = RecordExchange.replacing(first[0], with: a, now: Date(timeIntervalSince1970: 400))
+        XCTAssertNil(restored.deletedAt)
+        XCTAssertTrue(restored.history!.contains(SessionSnapshot(c)))
+        XCTAssertEqual(RecordExchange.merge(local: [restored], incoming: [c])[0].subject, a.subject)
+    }
+    func testInvalidHistoryRejectsEntireImport() throws {
+        var current = sample()
+        current.history = [SessionSnapshot(sample())] // different ID must not enter this history
+        XCTAssertThrowsError(try RecordExchange.decode(RecordExchange.encode(Database(sessions: [current]))))
     }
 }

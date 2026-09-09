@@ -58,4 +58,23 @@ final class PhoneStoreTests: XCTestCase {
         XCTAssertThrowsError(try store.export())
         XCTAssertEqual(try Data(contentsOf: file), corrupt)
     }
+    @MainActor func testConflictsTravelThroughExportAndCanBeRestored() throws {
+        let root = directory(); defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        let original = sample()
+        XCTAssertTrue(store.save(original))
+        var changed = original; changed.subject = "Mac 修改"; changed.updatedAt = Date().addingTimeInterval(10)
+        XCTAssertTrue(store.importRecords(Database(sessions: [changed])))
+        let exported = try RecordExchange.decode(store.export())
+        XCTAssertEqual(exported.version, 3)
+        XCTAssertEqual(exported.sessions[0].history?.count, 1)
+        XCTAssertTrue(store.importRecords(exported))
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertEqual(store.sessions[0].history?.count, 1)
+        store.restoreVersion(exported.sessions[0].history![0])
+        XCTAssertEqual(store.sessions[0].subject, original.subject)
+        XCTAssertTrue(store.sessions[0].history!.contains { $0.subject == changed.subject })
+        let files = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+        XCTAssertTrue(files.contains { $0.lastPathComponent.hasPrefix("incoming-") })
+    }
 }

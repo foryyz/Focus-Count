@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var focus = "A"
     @State private var hint = ""
     @State private var showHistory = false
+    @State private var showData = false
     @FocusState private var commandFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -34,12 +35,9 @@ struct ContentView: View {
                 Text("FocusCount")
                     .font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
                 Spacer()
-                Button {
-                    do { NSWorkspace.shared.open(try Storage.directory) }
-                    catch { store.error = error.localizedDescription }
-                } label: { Image(systemName: "folder").frame(width: 28, height: 24) }
+                Button { showData = true } label: { Image(systemName: "arrow.up.arrow.down").frame(width: 28, height: 24) }
                     .buttonStyle(.plain).foregroundStyle(.secondary)
-                    .help("打开数据目录")
+                    .help("数据导入、导出与历史版本").accessibilityLabel("数据管理")
             }
             Button { store.toggle(); commandFocused = true } label: {
                 VStack(spacing: 14) {
@@ -93,6 +91,7 @@ struct ContentView: View {
             ).ignoresSafeArea()
         }
         .onAppear { commandFocused = true }
+        .sheet(isPresented: $showData, onDismiss: { commandFocused = true }) { DataExchangeView(store: store) }
         .sheet(isPresented: $showHistory, onDismiss: { commandFocused = true }) { HistoryView(store: store) }
         .sheet(isPresented: Binding(get: { store.database.pendingEnd != nil }, set: { _ in })) {
             VStack(alignment: .leading, spacing: 20) {

@@ -86,17 +86,64 @@ final class HistoryTests: XCTestCase {
         try original.write(to: file)
         let store = StudyStore(directory: root, observeSystem: false)
         XCTAssertFalse(store.blocked)
-        XCTAssertEqual(store.database.version, 2)
+        XCTAssertEqual(store.database.version, 3)
         XCTAssertEqual(store.database.draft.accumulated, 12)
         XCTAssertEqual(store.sessions.first?.updatedAt, Date(timeIntervalSinceReferenceDate: 60))
         XCTAssertEqual(try Data(contentsOf: root.appendingPathComponent("sessions.v1.backup.json")), original)
         XCTAssertTrue(store.persist())
-        XCTAssertEqual(try JSONDecoder().decode(Database.self, from: Data(contentsOf: file)).version, 2)
+        XCTAssertEqual(try JSONDecoder().decode(Database.self, from: Data(contentsOf: file)).version, 3)
         let unknown = try JSONEncoder().encode(Database(version: 99))
         try unknown.write(to: file)
         let blocked = StudyStore(directory: root, observeSystem: false)
         XCTAssertTrue(blocked.blocked)
         XCTAssertFalse(blocked.upsert(sample()))
         XCTAssertEqual(try Data(contentsOf: file), unknown)
+    }
+    @MainActor func testImportBacksUpBothSidesPreservesDraftAndVersions() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root, observeSystem: false)
+        let original = sample()
+        XCTAssertTrue(store.upsert(original))
+        store.database.draft.toggle(now: 100)
+        let running = store.database.draft.runningSince
+        var incoming = original; incoming.subject = "另一端修改"; incoming.updatedAt = Date().addingTimeInterval(10)
+        XCTAssertTrue(store.importRecords(Database(sessions: [incoming])))
+        XCTAssertEqual(store.database.draft.runningSince, running)
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertEqual(store.sessions[0].subject, incoming.subject)
+        XCTAssertEqual(store.sessions[0].history?.count, 1)
+        let backupFolders = try FileManager.default.contentsOfDirectory(at: root.appendingPathComponent("backups"), includingPropertiesForKeys: nil)
+        XCTAssertEqual(backupFolders.count, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: backupFolders[0].appendingPathComponent("before-import.json").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: backupFolders[0].appendingPathComponent("incoming.json").path))
+        let exported = try RecordExchange.decode(store.export())
+        XCTAssertEqual(exported.sessions[0].history?.count, 1)
+        XCTAssertTrue(store.restoreVersion(exported.sessions[0].history![0]))
+        XCTAssertEqual(store.sessions[0].subject, original.subject)
+        XCTAssertTrue(store.sessions[0].history!.contains { $0.subject == incoming.subject })
+    }
+    @MainActor func testImportFailureAndInvalidFileDoNotChangeRecords() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root, observeSystem: false)
+        XCTAssertTrue(store.upsert(sample()))
+        XCTAssertFalse(store.importRecords(Database(version: 99)))
+        XCTAssertEqual(store.sessions.count, 1)
+        // Block backup creation: nothing may be merged if backup cannot be written.
+        try Data().write(to: root.appendingPathComponent("backups"))
+        XCTAssertFalse(store.importRecords(Database(sessions: [sample()])))
+        XCTAssertEqual(store.sessions.count, 1)
+    }
+    @MainActor func testV2MigrationKeepsModificationTimestamps() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var record = sample(); record.updatedAt = Date(timeIntervalSince1970: 9000)
+        try RecordExchange.encode(Database(version: 2, sessions: [record])).write(to: root.appendingPathComponent("sessions.json"))
+        let store = StudyStore(directory: root, observeSystem: false)
+        XCTAssertFalse(store.blocked)
+        XCTAssertEqual(store.sessions[0].updatedAt, record.updatedAt)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("sessions.v2.backup.json").path))
     }
 }

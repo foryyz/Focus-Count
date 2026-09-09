@@ -23,13 +23,14 @@ import AppKit
             if try FileManager.default.fileExists(atPath: file.path) {
                 let contents = try Data(contentsOf: file)
                 database = try JSONDecoder().decode(Database.self, from: contents)
-                guard [1, 2].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
-                if database.version == 1 {
-                    let backup = try self.directory.appendingPathComponent("sessions.v1.backup.json")
+                guard [1, 2, 3].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
+                _ = try RecordExchange.decode(contents)
+                if database.version < 3 {
+                    let backup = try self.directory.appendingPathComponent("sessions.v\(database.version).backup.json")
                     if !FileManager.default.fileExists(atPath: backup.path) { try contents.write(to: backup, options: .atomic) }
-                    database.version = 2
+                    database.version = 3
                     for index in database.sessions.indices {
-                        database.sessions[index].updatedAt = database.sessions[index].endedAt
+                        database.sessions[index].updatedAt = database.sessions[index].updatedAt ?? database.sessions[index].endedAt
                     }
                 }
             }
@@ -110,15 +111,42 @@ import AppKit
         edited.updatedAt = Date()
         return commit { database in
             if let index = database.sessions.firstIndex(where: { $0.id == edited.id }) {
-                database.sessions[index] = edited
+                database.sessions[index] = RecordExchange.replacing(database.sessions[index], with: edited)
             } else { database.sessions.append(edited) }
         }
     }
     @discardableResult func setDeleted(_ id: UUID, deleted: Bool) -> Bool {
         guard let index = database.sessions.firstIndex(where: { $0.id == id }) else { return false }
         return commit { database in
-            database.sessions[index].deletedAt = deleted ? Date() : nil
-            database.sessions[index].updatedAt = Date()
+            var changed = database.sessions[index]
+            changed.deletedAt = deleted ? Date() : nil
+            database.sessions[index] = RecordExchange.replacing(database.sessions[index], with: changed)
+        }
+    }
+    func importRecords(_ incoming: Database) -> Bool {
+        guard !blocked else { return false }
+        do {
+            let validated = try RecordExchange.decode(RecordExchange.encode(incoming))
+            let backupFolder = try directory.appendingPathComponent("backups/\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
+            try export().write(to: backupFolder.appendingPathComponent("before-import.json"), options: .atomic)
+            try RecordExchange.encode(incoming).write(to: backupFolder.appendingPathComponent("incoming.json"), options: .atomic)
+            return commit { $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: validated.sessions) }
+        } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
+    }
+    func export() throws -> Data {
+        guard !blocked else { throw RecordExchange.ExchangeError.invalid("数据读取失败，无法导出。") }
+        var snapshot = database
+        snapshot.draft = database.draft.checkpoint()
+        return try RecordExchange.encode(snapshot)
+    }
+    func restoreVersion(_ snapshot: SessionSnapshot) -> Bool {
+        guard let current = database.sessions.first(where: { $0.id == snapshot.sessionID }) else { return false }
+        // Restore as a new edit, retaining both the current and all archived versions.
+        return commit { database in
+            if let index = database.sessions.firstIndex(where: { $0.id == current.id }) {
+                database.sessions[index] = RecordExchange.replacing(current, with: snapshot.session)
+            }
         }
     }
 }

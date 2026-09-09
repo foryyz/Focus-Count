@@ -47,21 +47,19 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 ## 存储与计时行为
 
-手机端本地文件位于应用沙盒 `Library/Application Support/FocusCount/app-state.json`。这是手机的内部状态文件，包含记录以及运行中的手机计时状态，不能直接放到电脑 `data/sessions.json`。应用的导出功能会生成兼容的共享 v2 JSON。
+手机端本地文件位于应用沙盒 `Library/Application Support/FocusCount/app-state.json`。这是手机的内部状态文件，包含记录以及运行中的手机计时状态，不能直接放到电脑 `data/sessions.json`。应用的导出功能会生成兼容的共享 v3 JSON。
 
 手机计时把运行时间基准持久化，不依赖持续后台执行。锁屏或退出进程不会自动暂停，休息时请主动点暂停。手动更改系统时间可能影响运行时长；暂停后的累计时间不会随时钟变化。此版本没有锁屏实时活动、后台音频或结束提醒。
 
 ## 与电脑交换记录
 
-1. 从 Mac 的 `data/sessions.json` 复制文件到 iPhone 可访问的位置。
-2. 在手机首页右上角打开“数据管理”→“导入 JSON”，选择文件、检查预览并确认合并。
-3. 相同 ID 以 `max(updatedAt 或 endedAt, deletedAt)` 较新的版本为准，时间相同保留手机记录。删除标记也参与合并。不会把电脑草稿替换为手机计时。
-4. 手机“导出 JSON”可保存到“我的 iPhone → FocusCount → Exports”，无需 iCloud。它生成所有记录（含删除标记）及手机计时草稿的暂停快照。运行中的手机计时不会因此暂停。
-5. Mac 当前没有合并导入界面。如要用手机导出文件替换 Mac 数据，先退出 Mac 应用并备份 `data/sessions.json`，确认导出中包含所需电脑记录后再替换；不要覆盖尚未合并的电脑新记录。
+Mac 与 iPhone 都打开首页右上角“数据管理”，选择“导出 JSON”或“导入 JSON / 导入并合并”。iPhone 可导出至“我的 iPhone → FocusCount → Exports”，不需要 iCloud。选择文件后先看预览，再确认自动合并。
 
-每次确认导入前，手机保留 `before-import-<UUID>.json` 本地快照，包含当时的计时状态。此备份位于同一沙盒目录，可通过 Xcode 下载应用容器取得。备份不自动清理。
+相同 ID 自动去重，以修改时间较新者作为当前记录；同时间按固定规则选定，两端结果一致。不同内容全部保存在 history 中，随 JSON 往返导出，在两端的“历史版本”中可查看与恢复，不重复计入学习时长。删除标记也参与合并，不会因旧文件导入而直接复活。
 
-文件不是自动云同步。不要把当前的手动合并当作多设备实时同步；时间戳冲突采用明确的“新者优先”规则，没有字段级冲突编辑器。
+导入前会备份双方数据，当前运行草稿不会被外部草稿替换。iPhone 备份在沙盒 Application Support/FocusCount 的 `before-import-<UUID>.json` 和 `incoming-<UUID>.json`，可以通过 Xcode 下载应用容器取得。备份不自动清理。
+
+两端都需要更新到支持共享 v3 的版本。iPhone 内部状态版本升级为 2，升级前保留 app-state.v1.backup.json。当前没有自动云同步，不要用文件直接覆盖代替应用内合并；详见 `docs/data-format.md`。
 
 ## 项目维护
 

@@ -2,7 +2,7 @@ import SwiftUI
 import FocusCountCore
 
 struct PhoneState: Codable {
-    var version = 1
+    var version = 2
     var sessions: [StudySession] = []
     var clock = MobileClock()
 }
@@ -26,10 +26,15 @@ struct PhoneState: Codable {
         do {
             if FileManager.default.fileExists(atPath: file.path) {
                 let data = try Data(contentsOf: file)
-                let loaded = try JSONDecoder().decode(PhoneState.self, from: data)
-                guard loaded.version == 1, loaded.clock.isValid else { throw CocoaError(.fileReadCorruptFile) }
+                var loaded = try JSONDecoder().decode(PhoneState.self, from: data)
+                guard [1, 2].contains(loaded.version), loaded.clock.isValid else { throw CocoaError(.fileReadCorruptFile) }
                 // Validate the records with the same rules as interchange files.
                 _ = try RecordExchange.decode(RecordExchange.encode(Database(sessions: loaded.sessions)))
+                if loaded.version == 1 {
+                    let backup = self.directory.appendingPathComponent("app-state.v1.backup.json")
+                    if !FileManager.default.fileExists(atPath: backup.path) { try data.write(to: backup, options: .atomic) }
+                    loaded.version = 2
+                }
                 state = loaded
             }
         } catch { blocked = true; self.error = "无法读取本地数据，已停止写入保护原文件。\n\(error.localizedDescription)" }
@@ -55,7 +60,7 @@ struct PhoneState: Codable {
         if let issue = edited.validationError { error = issue; return false }
         edited.updatedAt = Date()
         return commit {
-            if let index = $0.sessions.firstIndex(where: { $0.id == edited.id }) { $0.sessions[index] = edited }
+            if let index = $0.sessions.firstIndex(where: { $0.id == edited.id }) { $0.sessions[index] = RecordExchange.replacing($0.sessions[index], with: edited) }
             else { $0.sessions.append(edited) }
             if completesTimer { $0.clock = MobileClock() }
         }
@@ -63,19 +68,27 @@ struct PhoneState: Codable {
     func delete(_ session: StudySession, restore: Bool = false) {
         commit {
             guard let index = $0.sessions.firstIndex(where: { $0.id == session.id }) else { return }
-            $0.sessions[index].deletedAt = restore ? nil : Date()
-            $0.sessions[index].updatedAt = Date()
+            var changed = $0.sessions[index]
+            changed.deletedAt = restore ? nil : Date()
+            $0.sessions[index] = RecordExchange.replacing($0.sessions[index], with: changed)
         }
     }
     func importRecords(_ database: Database) -> Bool {
         guard !blocked else { return false }
         do {
-            // Preserve a backup before each import, including the current timer.
+            let incoming = try RecordExchange.decode(RecordExchange.encode(database))
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let backup = directory.appendingPathComponent("before-import-\(UUID().uuidString).json")
-            try JSONEncoder().encode(state).write(to: backup, options: .atomic)
-        } catch { self.error = "导入前备份失败：\(error.localizedDescription)"; return false }
-        return commit { $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: database.sessions) }
+            let identifier = UUID().uuidString
+            try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("before-import-\(identifier).json"), options: .atomic)
+            try RecordExchange.encode(database).write(to: directory.appendingPathComponent("incoming-\(identifier).json"), options: .atomic)
+            return commit { $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: incoming.sessions) }
+        } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
+    }
+    func restoreVersion(_ snapshot: SessionSnapshot) {
+        commit {
+            guard let index = $0.sessions.firstIndex(where: { $0.id == snapshot.sessionID }) else { return }
+            $0.sessions[index] = RecordExchange.replacing($0.sessions[index], with: snapshot.session)
+        }
     }
     func export() throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("本地数据读取失败，无法导出。") }

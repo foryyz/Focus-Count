@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 public struct StudySession: Codable, Identifiable {
     public var id = UUID()
@@ -9,11 +10,12 @@ public struct StudySession: Codable, Identifiable {
     public var focus: String
     public var updatedAt: Date?
     public var deletedAt: Date?
+    public var history: [SessionSnapshot]?
 
-    public init(id: UUID = UUID(), startedAt: Date, endedAt: Date, activeSeconds: Double, subject: String, focus: String, updatedAt: Date? = nil, deletedAt: Date? = nil) {
+    public init(id: UUID = UUID(), startedAt: Date, endedAt: Date, activeSeconds: Double, subject: String, focus: String, updatedAt: Date? = nil, deletedAt: Date? = nil, history: [SessionSnapshot]? = nil) {
         self.id = id; self.startedAt = startedAt; self.endedAt = endedAt
         self.activeSeconds = activeSeconds; self.subject = subject; self.focus = focus
-        self.updatedAt = updatedAt; self.deletedAt = deletedAt
+        self.updatedAt = updatedAt; self.deletedAt = deletedAt; self.history = history
     }
 
     public var validationError: String? {
@@ -57,11 +59,37 @@ public struct TimerState: Codable {
 }
 
 public struct Database: Codable {
-    public var version = 2
+    public var version = 3
     public var sessions: [StudySession] = []
     public var draft = TimerState()
     public var pendingEnd: Date?
-    public init(version: Int = 2, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil) {
+    public init(version: Int = 3, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil) {
         self.version = version; self.sessions = sessions; self.draft = draft; self.pendingEnd = pendingEnd
+    }
+}
+
+/// Flat, portable prior version; never counted as a separate study session.
+public struct SessionSnapshot: Codable, Hashable, Identifiable {
+    public var sessionID: UUID
+    public var startedAt: Date
+    public var endedAt: Date
+    public var activeSeconds: Double
+    public var subject: String
+    public var focus: String
+    public var updatedAt: Date?
+    public var deletedAt: Date?
+    public init(_ value: StudySession) {
+        sessionID = value.id; startedAt = value.startedAt; endedAt = value.endedAt
+        activeSeconds = value.activeSeconds; subject = value.subject; focus = value.focus
+        updatedAt = value.updatedAt ?? value.endedAt; deletedAt = value.deletedAt
+    }
+    public var session: StudySession {
+        StudySession(id: sessionID, startedAt: startedAt, endedAt: endedAt, activeSeconds: activeSeconds,
+                     subject: subject, focus: focus, updatedAt: updatedAt, deletedAt: deletedAt)
+    }
+    public var id: String {
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        // All imported versions are validated before use; dates and seconds must be finite.
+        return SHA256.hash(data: (try? encoder.encode(self)) ?? Data()).map { String(format: "%02x", $0) }.joined()
     }
 }
