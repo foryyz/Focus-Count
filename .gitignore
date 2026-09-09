@@ -5,3 +5,6 @@ dist/
 data/*
 !data/README.md
 *.xcodeproj/xcuserdata/
+
+DerivedData/
+*.xcuserstate

@@ -1,6 +1,6 @@
 # FocusCount
 
-学习计时器。目前提供 macOS 原生 SwiftUI 客户端；目录已为后续 Windows 11 客户端与共享数据预留边界，Windows 客户端尚未实现。
+学习计时器。提供 macOS 与 iPhone 原生 SwiftUI 客户端；Windows 11 客户端尚未实现。iPhone 开发与运行方式见 [apps/ios/README.md](apps/ios/README.md)。
 
 ## 项目结构
 
@@ -9,7 +9,9 @@ FocusCount/
 ├── .focuscount-root          项目根目录标记，移动/同步项目时必须保留
 ├── apps/
 │   ├── macos/                Swift Package、Sources、Tests
+│   ├── ios/                  iPhone Xcode 工程、源码与测试
 │   └── windows/              后续 Windows 开发说明
+├── packages/FocusCountCore/  Mac / iPhone 共用模型与数据逻辑
 ├── data/                     跨平台共享数据，个人记录不进入 Git
 ├── docs/data-format.md       两个平台共同遵守的数据协议
 ├── scripts/build-app.sh      macOS 构建与本地签名

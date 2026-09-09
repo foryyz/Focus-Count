@@ -1,3 +1,4 @@
+import FocusCountCore
 import XCTest
 @testable import FocusCount
 

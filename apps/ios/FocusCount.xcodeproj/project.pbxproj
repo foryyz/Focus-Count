@@ -1,0 +1,68 @@
+// !$*UTF8*$!
+{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+38E3758EE39252BA51EF8D58 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExchangeScreen.swift; sourceTree = "<group>"; };
+11FD2D9475253CFF619F994E = { isa = PBXBuildFile; fileRef = 38E3758EE39252BA51EF8D58; };
+B03F0C787FACE595D91C0E80 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCountApp.swift; sourceTree = "<group>"; };
+ED59C1983025EEC0E0D68A4A = { isa = PBXBuildFile; fileRef = B03F0C787FACE595D91C0E80; };
+1FD351825BC66ADD701F9AED = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHistory.swift; sourceTree = "<group>"; };
+0DE88444DF3B507126DAB721 = { isa = PBXBuildFile; fileRef = 1FD351825BC66ADD701F9AED; };
+4CF628851D5981C12303F952 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneStore.swift; sourceTree = "<group>"; };
+91D0BAA289A386CA7C83A845 = { isa = PBXBuildFile; fileRef = 4CF628851D5981C12303F952; };
+1FBFFC812F489BBEEC3C23C5 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordEditor.swift; sourceTree = "<group>"; };
+F8CEA72177241F5AEDE59219 = { isa = PBXBuildFile; fileRef = 1FBFFC812F489BBEEC3C23C5; };
+59BD0A3FF43B32849B319E64 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+05FAC94380A70241F23780E7 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+CF8A4D27E1C506A7C75A76BE = { isa = PBXBuildFile; fileRef = 05FAC94380A70241F23780E7; };
+38A007151ABE87CC01A5B6E9 = { isa = PBXFileReference; explicitFileType = wrapper.application; path = FocusCount.app; sourceTree = BUILT_PRODUCTS_DIR; };
+582681C2EAE02B3F3D399C0C = { isa = XCLocalSwiftPackageReference; relativePath = ../../packages/FocusCountCore; };
+E9FAD0C6CD43534327C0AF90 = { isa = XCSwiftPackageProductDependency; package = 582681C2EAE02B3F3D399C0C; productName = FocusCountCore; };
+4F0AA52D656A3D75867F784B = { isa = PBXBuildFile; productRef = E9FAD0C6CD43534327C0AF90; };
+482182478A3ECD4745BEA917 = { isa = PBXGroup; children = (38E3758EE39252BA51EF8D58,B03F0C787FACE595D91C0E80,1FD351825BC66ADD701F9AED,4CF628851D5981C12303F952,1FBFFC812F489BBEEC3C23C5,59BD0A3FF43B32849B319E64,05FAC94380A70241F23780E7,); path = FocusCount; sourceTree = "<group>"; };
+FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (38A007151ABE87CC01A5B6E9,B7480EC88B7F22D0A4757273,); name = Products; sourceTree = "<group>"; };
+B28B7AF69320201D1CF206EB = { isa = PBXGroup; children = (482182478A3ECD4745BEA917,E05FCB614AB36FDEE72EE1F2,FBDC4F23F93125BBEEAE800C,); sourceTree = "<group>"; };
+BCE16DD0260827ECF338C787 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (11FD2D9475253CFF619F994E,ED59C1983025EEC0E0D68A4A,0DE88444DF3B507126DAB721,91D0BAA289A386CA7C83A845,F8CEA72177241F5AEDE59219,); runOnlyForDeploymentPostprocessing = 0; };
+7561BFB015D8F536760CB671 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (4F0AA52D656A3D75867F784B,); runOnlyForDeploymentPostprocessing = 0; };
+0189424A5A60FED329FA868E = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (CF8A4D27E1C506A7C75A76BE,); runOnlyForDeploymentPostprocessing = 0; };
+89E1FD6268CC0F221A2BE178 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { CLANG_ENABLE_MODULES = YES; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; }; };
+7082CC0B6FC1282FCEABD07A = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
+ ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; PRODUCT_NAME = FocusCount; PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios;
+ GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = FocusCount/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = FocusCount;
+ INFOPLIST_KEY_UIFileSharingEnabled = YES; INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+ INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+ INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+ TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+ SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+ CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; CODE_SIGN_STYLE = Automatic;
+ ENABLE_DEBUG_DYLIB = NO; ENABLE_TESTABILITY = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+ SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG";
+ }; };
+E6DE6C99132752C914FEF632 = { isa = XCBuildConfiguration; name = Release; buildSettings = { CLANG_ENABLE_MODULES = YES; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; }; };
+639A7CA24D39909E713B47F7 = { isa = XCBuildConfiguration; name = Release; buildSettings = {
+ ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; PRODUCT_NAME = FocusCount; PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios;
+ GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = FocusCount/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = FocusCount;
+ INFOPLIST_KEY_UIFileSharingEnabled = YES; INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+ INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+ INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+ TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+ SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+ CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 1.0; CODE_SIGN_STYLE = Automatic;
+ ENABLE_DEBUG_DYLIB = NO; ENABLE_TESTABILITY = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "-O";
+ SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+ }; };
+862894B703A6DEDF96A9DD6C = { isa = XCConfigurationList; buildConfigurations = (89E1FD6268CC0F221A2BE178,E6DE6C99132752C914FEF632,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+C57128001CE614BF8549D6BB = { isa = XCConfigurationList; buildConfigurations = (7082CC0B6FC1282FCEABD07A,639A7CA24D39909E713B47F7,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+0E8A3AD980EC179856012B7E = { isa = PBXNativeTarget; buildConfigurationList = C57128001CE614BF8549D6BB; buildPhases = (BCE16DD0260827ECF338C787,7561BFB015D8F536760CB671,0189424A5A60FED329FA868E,); buildRules = (); dependencies = (); name = FocusCount; packageProductDependencies = (E9FAD0C6CD43534327C0AF90,); productName = FocusCount; productReference = 38A007151ABE87CC01A5B6E9; productType = "com.apple.product-type.application"; };
+E05FCB614AB36FDEE72EE1F2 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/PhoneStoreTests.swift; sourceTree = "<group>"; };
+80FAC02A0BD5812E2A00F339 = { isa = PBXBuildFile; fileRef = E05FCB614AB36FDEE72EE1F2; };
+DF5B192FE80F93ACAF2EA928 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (80FAC02A0BD5812E2A00F339,); runOnlyForDeploymentPostprocessing = 0; };
+B7480EC88B7F22D0A4757273 = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = FocusCountTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+D799BAE6088A90139B415FCC = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 0E8A3AD980EC179856012B7E; remoteInfo = FocusCount; };
+B6EBBA31D46E8F71AE1B6924 = { isa = PBXTargetDependency; target = 0E8A3AD980EC179856012B7E; targetProxy = D799BAE6088A90139B415FCC; };
+0F3D67935A4F199E058A017A = { isa = XCBuildConfiguration; name = Debug; buildSettings = { GENERATE_INFOPLIST_FILE = YES; PRODUCT_NAME = FocusCountTests; PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios.tests; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FocusCount.app/FocusCount"; BUNDLE_LOADER = "$(TEST_HOST)"; TARGETED_DEVICE_FAMILY = 1; CODE_SIGN_STYLE = Automatic; SWIFT_VERSION = 5.0; }; };
+20B70E15FDC36C625E57F658 = { isa = XCBuildConfiguration; name = Release; buildSettings = { GENERATE_INFOPLIST_FILE = YES; PRODUCT_NAME = FocusCountTests; PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios.tests; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FocusCount.app/FocusCount"; BUNDLE_LOADER = "$(TEST_HOST)"; TARGETED_DEVICE_FAMILY = 1; CODE_SIGN_STYLE = Automatic; SWIFT_VERSION = 5.0; }; };
+BECB265224D91761C05FDA33 = { isa = XCConfigurationList; buildConfigurations = (0F3D67935A4F199E058A017A,20B70E15FDC36C625E57F658,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+C9F380819EDC0E56C623B360 = { isa = PBXBuildFile; productRef = E9FAD0C6CD43534327C0AF90; };
+99C7943D90D870A50ADE9160 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C9F380819EDC0E56C623B360,); runOnlyForDeploymentPostprocessing = 0; };
+0A06C5E2DA34E686D888A695 = { isa = PBXNativeTarget; buildConfigurationList = BECB265224D91761C05FDA33; buildPhases = (DF5B192FE80F93ACAF2EA928,99C7943D90D870A50ADE9160,); packageProductDependencies = (E9FAD0C6CD43534327C0AF90,); buildRules = (); dependencies = (B6EBBA31D46E8F71AE1B6924,); name = FocusCountTests; productName = FocusCountTests; productReference = B7480EC88B7F22D0A4757273; productType = "com.apple.product-type.bundle.unit-test"; };
+98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2600; }; buildConfigurationList = 862894B703A6DEDF96A9DD6C; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; knownRegions = ("zh-Hans", en, Base,); mainGroup = B28B7AF69320201D1CF206EB; productRefGroup = FBDC4F23F93125BBEEAE800C; packageReferences = (582681C2EAE02B3F3D399C0C,); projectDirPath = ""; projectRoot = ""; targets = (0E8A3AD980EC179856012B7E,0A06C5E2DA34E686D888A695,); };
+}; rootObject = 98F54143AB4E86B28C3AFEE0; }

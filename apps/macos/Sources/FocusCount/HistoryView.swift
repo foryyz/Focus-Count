@@ -1,3 +1,4 @@
+import FocusCountCore
 import SwiftUI
 
 struct HistoryFilter {
