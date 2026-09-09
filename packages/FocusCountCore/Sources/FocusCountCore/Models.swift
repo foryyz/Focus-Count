@@ -65,4 +65,3 @@ public struct Database: Codable {
         self.version = version; self.sessions = sessions; self.draft = draft; self.pendingEnd = pendingEnd
     }
 }
-
