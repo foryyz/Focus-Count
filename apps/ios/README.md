@@ -67,8 +67,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 新增/移除 Swift 源文件后，可从项目根目录运行 `python3 scripts/generate-ios-project.py` 重新生成 Xcode 项目。生成器包含应用和存储测试 target；自定义签名设置前请注意重新生成会覆盖项目设置。
 
-图标源码在 `scripts/generate-ios-icon.swift`，可在 Mac 上重新生成：
+应用图标使用 `assets/app-icon.jpg` 中保存的原始图片，仅做尺寸与格式转换。重新生成 iPhone PNG 和 Mac ICNS：
 
 ```sh
-swift scripts/generate-ios-icon.swift apps/ios/FocusCount/Assets.xcassets/AppIcon.appiconset/AppIcon.png
+bash scripts/generate-icons.sh
 ```
