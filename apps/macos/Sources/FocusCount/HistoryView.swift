@@ -26,6 +26,7 @@ struct HistoryView: View {
     @State private var filter = HistoryFilter()
     @State private var editing: StudySession?
     @State private var deleting: StudySession?
+    @State private var purging: Set<UUID> = []
     private var records: [StudySession] { filter.apply(store.database.sessions) }
     private var total: Double { records.reduce(0) { $0 + $1.activeSeconds } }
     private var days: [Date] { Array(Set(records.map { Calendar.current.startOfDay(for: $0.startedAt) })).sorted() }
@@ -76,7 +77,8 @@ struct HistoryView: View {
                 Text("开始日期不能晚于结束日期。").foregroundStyle(.red).font(.caption)
             }
             if filter.deleted {
-                Text("已删除记录不计入学习统计，可随时恢复；当前不会自动清空。")
+                HStack { Text("可恢复或彻底删除。清空全部包含筛选外的记录。"); Spacer(); Button("清空全部", role: .destructive) { purging = Set(store.database.sessions.filter { $0.deletedAt != nil }.map(\.id)) }
+                    .disabled(store.blocked || !store.database.sessions.contains { $0.deletedAt != nil }) }
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 HStack(spacing: 36) {
@@ -111,6 +113,7 @@ struct HistoryView: View {
                         Text(session.focus).font(.headline).frame(width: 24)
                         if filter.deleted {
                             Button("恢复") { store.setDeleted(session.id, deleted: false) }
+                            Button("彻底删除", role: .destructive) { purging = [session.id] }
                         } else {
                             Button("编辑") { editing = session }
                             Button { deleting = session } label: { Image(systemName: "trash") }
@@ -122,6 +125,10 @@ struct HistoryView: View {
             if let error = store.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
         }
         .padding(24).frame(width: 840, height: 740)
+        .alert("彻底删除这 \(purging.count) 条记录？", isPresented: Binding(get: { !purging.isEmpty }, set: { if !$0 { purging = [] } })) {
+            Button("取消", role: .cancel) { purging = [] }
+            Button("彻底删除", role: .destructive) { store.permanentlyDelete(purging); purging = [] }
+        } message: { Text("记录及其历史版本将从当前数据中移除，无法在应用内恢复。导入旧文件不会重新出现。已有备份文件不受影响。") }
         .sheet(item: $editing) { session in SessionEditor(store: store, session: session) }
         .alert("将这条记录移至最近删除？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("取消", role: .cancel) { deleting = nil }

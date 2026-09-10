@@ -2,7 +2,8 @@ import SwiftUI
 import FocusCountCore
 
 struct PhoneState: Codable {
-    var version = 2
+    var version = 3
+    var purgedIDs: Set<UUID>?
     var sessions: [StudySession] = []
     var clock = MobileClock()
 }
@@ -27,13 +28,13 @@ struct PhoneState: Codable {
             if FileManager.default.fileExists(atPath: file.path) {
                 let data = try Data(contentsOf: file)
                 var loaded = try JSONDecoder().decode(PhoneState.self, from: data)
-                guard [1, 2].contains(loaded.version), loaded.clock.isValid else { throw CocoaError(.fileReadCorruptFile) }
+                guard [1, 2, 3].contains(loaded.version), loaded.clock.isValid else { throw CocoaError(.fileReadCorruptFile) }
                 // Validate the records with the same rules as interchange files.
-                _ = try RecordExchange.decode(RecordExchange.encode(Database(sessions: loaded.sessions)))
-                if loaded.version == 1 {
-                    let backup = self.directory.appendingPathComponent("app-state.v1.backup.json")
+                loaded.sessions = try RecordExchange.decode(RecordExchange.encode(Database(purgedIDs: loaded.purgedIDs, sessions: loaded.sessions))).sessions
+                if loaded.version < 3 {
+                    let backup = self.directory.appendingPathComponent("app-state.v\(loaded.version).backup.json")
                     if !FileManager.default.fileExists(atPath: backup.path) { try data.write(to: backup, options: .atomic) }
-                    loaded.version = 2
+                    loaded.version = 3
                 }
                 state = loaded
             }
@@ -55,6 +56,7 @@ struct PhoneState: Codable {
     func returnToTimer() { commit { $0.clock.pendingEnd = nil } }
     func checkpoint() { commit { _ in } }
     func save(_ session: StudySession, completesTimer: Bool = false) -> Bool {
+        guard !(state.purgedIDs ?? []).contains(session.id) else { error = "此记录已彻底删除。"; return false }
         var edited = session
         edited.subject = edited.subject.trimmingCharacters(in: .whitespacesAndNewlines)
         if let issue = edited.validationError { error = issue; return false }
@@ -73,6 +75,13 @@ struct PhoneState: Codable {
             $0.sessions[index] = RecordExchange.replacing($0.sessions[index], with: changed)
         }
     }
+    @discardableResult func permanentlyDelete(_ ids: Set<UUID>) -> Bool {
+        return commit {
+            let removed = Set($0.sessions.filter { ids.contains($0.id) && $0.deletedAt != nil }.map(\.id))
+            $0.purgedIDs = ($0.purgedIDs ?? []).union(removed)
+            $0.sessions.removeAll { removed.contains($0.id) }
+        }
+    }
     func importRecords(_ database: Database) -> Bool {
         guard !blocked else { return false }
         do {
@@ -81,7 +90,10 @@ struct PhoneState: Codable {
             let identifier = UUID().uuidString
             try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("before-import-\(identifier).json"), options: .atomic)
             try RecordExchange.encode(database).write(to: directory.appendingPathComponent("incoming-\(identifier).json"), options: .atomic)
-            return commit { $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: incoming.sessions) }
+            return commit {
+                $0.purgedIDs = ($0.purgedIDs ?? []).union(incoming.purgedIDs ?? [])
+                $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: incoming.sessions, purgedIDs: $0.purgedIDs ?? [])
+            }
         } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
     }
     func restoreVersion(_ snapshot: SessionSnapshot) {
@@ -93,7 +105,7 @@ struct PhoneState: Codable {
     func export() throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("本地数据读取失败，无法导出。") }
         let draft = TimerState(startedAt: state.clock.startedAt, accumulated: state.clock.seconds())
-        return try RecordExchange.encode(Database(sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd))
+        return try RecordExchange.encode(Database(purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd))
     }
 }
 

@@ -4,6 +4,30 @@ import FocusCountCore
 
 final class PhoneStoreTests: XCTestCase {
     private func directory() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString) }
+
+    @MainActor func testPermanentDeletionSurvivesOldImportsAndRelaunch() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        let record = sample()
+        XCTAssertTrue(store.save(record))
+        XCTAssertTrue(store.permanentlyDelete([record.id]))
+        XCTAssertEqual(store.state.sessions.count, 1)
+        store.delete(record)
+        XCTAssertTrue(store.permanentlyDelete([record.id]))
+        XCTAssertTrue(store.state.sessions.isEmpty)
+        XCTAssertTrue(store.importRecords(Database(sessions: [record])))
+        XCTAssertTrue(store.state.sessions.isEmpty)
+        let reopened = PhoneStore(directory: root)
+        XCTAssertTrue(reopened.state.sessions.isEmpty)
+        let exported = try RecordExchange.decode(reopened.export())
+        XCTAssertTrue(exported.purgedIDs?.contains(record.id) == true)
+        let peer = PhoneStore(directory: root.appendingPathComponent("peer"))
+        XCTAssertTrue(peer.save(record))
+        XCTAssertTrue(peer.importRecords(exported))
+        XCTAssertTrue(peer.state.sessions.isEmpty)
+        XCTAssertFalse(peer.save(record))
+    }
     private func sample() -> StudySession {
         StudySession(startedAt: Date(timeIntervalSince1970: 100), endedAt: Date(timeIntervalSince1970: 200), activeSeconds: 60, subject: "数学", focus: "S", updatedAt: Date())
     }
@@ -66,7 +90,7 @@ final class PhoneStoreTests: XCTestCase {
         var changed = original; changed.subject = "Mac 修改"; changed.updatedAt = Date().addingTimeInterval(10)
         XCTAssertTrue(store.importRecords(Database(sessions: [changed])))
         let exported = try RecordExchange.decode(store.export())
-        XCTAssertEqual(exported.version, 3)
+        XCTAssertEqual(exported.version, 4)
         XCTAssertEqual(exported.sessions[0].history?.count, 1)
         XCTAssertTrue(store.importRecords(exported))
         XCTAssertEqual(store.sessions.count, 1)

@@ -20,7 +20,7 @@ struct ExchangeScreen: View {
     @State private var message: String?
     @State private var failure: String?
     @State private var showVersions = false
-    private var added: Int { pending?.sessions.filter { record in !store.state.sessions.contains { $0.id == record.id } }.count ?? 0 }
+    private var added: Int { pending?.sessions.filter { record in !(store.state.purgedIDs ?? []).contains(record.id) && !store.state.sessions.contains { $0.id == record.id } }.count ?? 0 }
     var body: some View {
         NavigationStack {
             Form {
@@ -38,13 +38,13 @@ struct ExchangeScreen: View {
                 } footer: { Text("兼容 Mac 的 sessions.json。导入只合并记录，不接管其他设备的计时草稿；导出包含已删除标记。") }
                 Section {
                     Button { showVersions = true } label: { Label("历史版本与恢复", systemImage: "clock.arrow.circlepath") }
-                } footer: { Text("不同修改会保留为历史版本，不重复计入统计。两端都需更新到支持 v3 的版本。") }
+                } footer: { Text("不同修改会保留为历史版本，不重复计入统计。两端都需更新到支持 v4 的版本。") }
                 if let pending {
                     Section("导入预览") {
                         LabeledContent("文件记录", value: "\(pending.sessions.count) 条")
                         LabeledContent("新增", value: "\(added) 条")
-                        LabeledContent("合并后历史版本", value: "\(RecordExchange.archivedCount(RecordExchange.merge(local: store.state.sessions, incoming: pending.sessions))) 个")
-                        Text("相同 ID 自动去重，以修改时间较新者为当前记录；同时间按固定规则选定，两端结果一致。其他版本保留可恢复。导入前备份双方数据。")
+                        LabeledContent("合并后历史版本", value: "\(RecordExchange.archivedCount(RecordExchange.merge(local: store.state.sessions, incoming: pending.sessions, purgedIDs: (store.state.purgedIDs ?? []).union(pending.purgedIDs ?? [])))) 个")
+                        Text("彻底删除标记会同步清除对应记录及其历史版本。相同 ID 自动去重，以修改时间较新者为当前记录；同时间按固定规则选定，两端结果一致。其他版本保留可恢复。导入前备份双方数据。")
                             .font(.footnote).foregroundStyle(.secondary)
                         Button("确认合并") {
                             if store.importRecords(pending) { self.pending = nil; message = "导入完成，学习记录已更新。" }

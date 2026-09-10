@@ -23,12 +23,13 @@ import AppKit
             if try FileManager.default.fileExists(atPath: file.path) {
                 let contents = try Data(contentsOf: file)
                 database = try JSONDecoder().decode(Database.self, from: contents)
-                guard [1, 2, 3].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
-                _ = try RecordExchange.decode(contents)
-                if database.version < 3 {
+                guard [1, 2, 3, 4].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
+                let validated = try RecordExchange.decode(contents)
+                database.sessions = validated.sessions
+                if database.version < 4 {
                     let backup = try self.directory.appendingPathComponent("sessions.v\(database.version).backup.json")
                     if !FileManager.default.fileExists(atPath: backup.path) { try contents.write(to: backup, options: .atomic) }
-                    database.version = 3
+                    database.version = 4
                     for index in database.sessions.indices {
                         database.sessions[index].updatedAt = database.sessions[index].updatedAt ?? database.sessions[index].endedAt
                     }
@@ -105,6 +106,7 @@ import AppKit
         return true
     }
     func upsert(_ session: StudySession) -> Bool {
+        guard !(database.purgedIDs ?? []).contains(session.id) else { error = "此记录已彻底删除。"; return false }
         var edited = session
         edited.subject = edited.subject.trimmingCharacters(in: .whitespacesAndNewlines)
         if let problem = edited.validationError { error = problem; return false }
@@ -123,6 +125,13 @@ import AppKit
             database.sessions[index] = RecordExchange.replacing(database.sessions[index], with: changed)
         }
     }
+    @discardableResult func permanentlyDelete(_ ids: Set<UUID>) -> Bool {
+        return commit {
+            let removed = Set($0.sessions.filter { ids.contains($0.id) && $0.deletedAt != nil }.map(\.id))
+            $0.purgedIDs = ($0.purgedIDs ?? []).union(removed)
+            $0.sessions.removeAll { removed.contains($0.id) }
+        }
+    }
     func importRecords(_ incoming: Database) -> Bool {
         guard !blocked else { return false }
         do {
@@ -131,7 +140,10 @@ import AppKit
             try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
             try export().write(to: backupFolder.appendingPathComponent("before-import.json"), options: .atomic)
             try RecordExchange.encode(incoming).write(to: backupFolder.appendingPathComponent("incoming.json"), options: .atomic)
-            return commit { $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: validated.sessions) }
+            return commit {
+                $0.purgedIDs = ($0.purgedIDs ?? []).union(validated.purgedIDs ?? [])
+                $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: validated.sessions, purgedIDs: $0.purgedIDs ?? [])
+            }
         } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
     }
     func export() throws -> Data {

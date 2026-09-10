@@ -34,7 +34,7 @@ public struct MobileClock: Codable {
 public enum RecordExchange {
     public static func decode(_ data: Data) throws -> Database {
         var database = try JSONDecoder().decode(Database.self, from: data)
-        guard [1, 2, 3].contains(database.version) else { throw ExchangeError.invalid("不支持此数据版本。") }
+        guard [1, 2, 3, 4].contains(database.version) else { throw ExchangeError.invalid("不支持此数据版本。") }
         var ids = Set<UUID>()
         for index in database.sessions.indices {
             let session = database.sessions[index]
@@ -47,13 +47,14 @@ public enum RecordExchange {
             }
             database.sessions[index].updatedAt = session.updatedAt ?? session.endedAt
         }
-        database.version = 3
+        database.sessions.removeAll { (database.purgedIDs ?? []).contains($0.id) }
+        database.version = 4
         return database
     }
     /// Merge is commutative and idempotent: every distinct version travels with the record.
-    public static func merge(local: [StudySession], incoming: [StudySession]) -> [StudySession] {
+    public static func merge(local: [StudySession], incoming: [StudySession], purgedIDs: Set<UUID> = []) -> [StudySession] {
         var records: [UUID: StudySession] = [:]
-        for session in local + incoming {
+        for session in local + incoming where !purgedIDs.contains(session.id) {
             if let old = records[session.id] {
                 let oldSnapshot = SessionSnapshot(old), newSnapshot = SessionSnapshot(session)
                 let winner: StudySession

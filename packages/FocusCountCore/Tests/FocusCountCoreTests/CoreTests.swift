@@ -43,7 +43,7 @@ final class CoreTests: XCTestCase {
     func testImportValidationAndV1Compatibility() throws {
         let session = sample()
         let decoded = try RecordExchange.decode(RecordExchange.encode(Database(version: 1, sessions: [session])))
-        XCTAssertEqual(decoded.version, 3)
+        XCTAssertEqual(decoded.version, 4)
         XCTAssertEqual(decoded.sessions.first?.id, session.id)
         XCTAssertThrowsError(try RecordExchange.decode(RecordExchange.encode(Database(version: 99))))
         XCTAssertThrowsError(try RecordExchange.decode(RecordExchange.encode(Database(sessions: [session, session]))))

@@ -3,6 +3,30 @@ import XCTest
 @testable import FocusCount
 
 final class HistoryTests: XCTestCase {
+
+    @MainActor func testPermanentDeletionSurvivesOldImportsAndRelaunch() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root)
+        let record = sample()
+        XCTAssertTrue(store.upsert(record))
+        XCTAssertTrue(store.permanentlyDelete([record.id]))
+        XCTAssertEqual(store.database.sessions.count, 1)
+        store.setDeleted(record.id, deleted: true)
+        XCTAssertTrue(store.permanentlyDelete([record.id]))
+        XCTAssertTrue(store.database.sessions.isEmpty)
+        XCTAssertTrue(store.importRecords(Database(sessions: [record])))
+        XCTAssertTrue(store.database.sessions.isEmpty)
+        let reopened = StudyStore(directory: root)
+        XCTAssertTrue(reopened.database.sessions.isEmpty)
+        let exported = try RecordExchange.decode(reopened.export())
+        XCTAssertTrue(exported.purgedIDs?.contains(record.id) == true)
+        let peer = StudyStore(directory: root.appendingPathComponent("peer"))
+        XCTAssertTrue(peer.upsert(record))
+        XCTAssertTrue(peer.importRecords(exported))
+        XCTAssertTrue(peer.database.sessions.isEmpty)
+        XCTAssertFalse(peer.upsert(record))
+    }
     private func sample() -> StudySession {
         StudySession(startedAt: Date(timeIntervalSince1970: 1000), endedAt: Date(timeIntervalSince1970: 4600), activeSeconds: 1800, subject: "数学", focus: "A")
     }
@@ -86,12 +110,12 @@ final class HistoryTests: XCTestCase {
         try original.write(to: file)
         let store = StudyStore(directory: root, observeSystem: false)
         XCTAssertFalse(store.blocked)
-        XCTAssertEqual(store.database.version, 3)
+        XCTAssertEqual(store.database.version, 4)
         XCTAssertEqual(store.database.draft.accumulated, 12)
         XCTAssertEqual(store.sessions.first?.updatedAt, Date(timeIntervalSinceReferenceDate: 60))
         XCTAssertEqual(try Data(contentsOf: root.appendingPathComponent("sessions.v1.backup.json")), original)
         XCTAssertTrue(store.persist())
-        XCTAssertEqual(try JSONDecoder().decode(Database.self, from: Data(contentsOf: file)).version, 3)
+        XCTAssertEqual(try JSONDecoder().decode(Database.self, from: Data(contentsOf: file)).version, 4)
         let unknown = try JSONEncoder().encode(Database(version: 99))
         try unknown.write(to: file)
         let blocked = StudyStore(directory: root, observeSystem: false)

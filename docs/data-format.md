@@ -1,10 +1,10 @@
-# 共享数据协议 v3
+# 共享数据协议 v4
 
-Mac 与 iPhone 使用同一套 `FocusCountCore.RecordExchange` 合并逻辑。Windows 后续实现也必须遵循本文。导入兼容 v1、v2、v3，导出统一为 v3；未知版本拒绝写入。两端都应更新后再交换文件，旧客户端不能读写 v3。
+Mac 与 iPhone 使用同一套 `FocusCountCore.RecordExchange` 合并逻辑。Windows 后续实现也必须遵循本文。导入兼容 v1、v2、v3、v4，导出统一为 v4；未知版本拒绝写入。两端都应更新后再交换文件，旧客户端不能读写 v4。
 
 ## 文件结构
 
-UTF-8 JSON 顶层包含 `version`（3）、`sessions`（记录数组）、`draft`（计时草稿）、可省略的 `pendingEnd`（待保存的结束时间）。Mac 主文件为项目 `data/sessions.json`；iPhone 从内部沙盒状态导出此格式。
+UTF-8 JSON 顶层包含 `version`（4）、`sessions`（记录数组）、`draft`（计时草稿）、可省略的 `pendingEnd`（待保存的结束时间）。Mac 主文件为项目 `data/sessions.json`；iPhone 从内部沙盒状态导出此格式。
 
 每条记录：
 
@@ -22,6 +22,11 @@ UTF-8 JSON 顶层包含 `version`（3）、`sessions`（记录数组）、`draft
 历史快照使用 `sessionID` 对应所属记录，其余字段为 startedAt、endedAt、activeSeconds、subject、focus、updatedAt、deletedAt，不递归包含 history。导入时校验快照字段与所属 ID；无效数据或重复记录 ID 拒绝整份导入。
 
 所有 JSON 日期仍采用从 **2001-01-01T00:00:00Z 起的秒数**，允许小数。Unix 秒数 = JSON 秒数 + 978307200。CSV 使用 ISO 8601 UTC。
+
+## 彻底删除
+顶层可选字段 `purgedIDs` 是 UUID 数组（集合）。彻底删除只允许对最近删除中的记录执行，移除整条记录及全部 history，永久保留该 ID 作为防复活标记，不保存科目或时长。
+合并时先取双方 purgedIDs 的并集，再排除这些 ID 的所有记录，优先于任何修改时间或恢复操作。导出携带标记；旧 v1/v2/v3 文件仍可导入，但无法使记录复活。两端必须更新后使用。
+清空全部作用于所有最近删除记录，不受筛选条件影响；需要界面确认。已有独立备份和外部导出文件不会被追溯擦除。
 
 ## 自动合并规则
 
@@ -50,9 +55,8 @@ UTF-8 JSON 顶层包含 `version`（3）、`sessions`（记录数组）、`draft
 
 ## 迁移
 
-Mac 首次发现项目主文件不存在时，仍支持复制旧 Application Support/FocusCount/sessions.json。读取 v1/v2 文件后，分别保留 sessions.v1.backup.json 或 sessions.v2.backup.json，保留已有修改时间，后续写入 v3。
-
-iPhone 内部 `app-state.json` 版本升级为 2（与共享协议版本独立），兼容旧内部版本 1，升级前保留 app-state.v1.backup.json。旧 iPhone 客户端只认内部版本 1，因此不会覆盖新版历史字段。
+Mac 兼容主文件 v1/v2/v3/v4。升级前保留 sessions.v<旧版本>.backup.json，随后写入 v4。
+iPhone 内部 app-state.json 升级为 3，兼容旧内部版本 1/2，升级前保留 app-state.v<旧版本>.backup.json。旧客户端拒绝新版本，避免丢失彻底删除标记。
 
 ## 计时和统计
 

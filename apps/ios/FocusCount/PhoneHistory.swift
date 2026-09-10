@@ -14,6 +14,7 @@ struct PhoneHistory: View {
     @State private var filters = false
     @State private var editing: StudySession?
     @State private var deleting: StudySession?
+    @State private var purging: Set<UUID> = []
     @State private var selectedDay: Date?
     private var records: [StudySession] {
         let lower = Calendar.current.startOfDay(for: start)
@@ -51,6 +52,8 @@ struct PhoneHistory: View {
                         if isFiltered { Button("重置") { allDates = true; subject = ""; focus = ""; selectedDay = nil } }
                     }
                 }.listRowBackground(Color.clear)
+                if deleted { Section { Button("清空全部", role: .destructive) { purging = Set(store.state.sessions.filter { $0.deletedAt != nil }.map(\.id)) }
+                    .disabled(store.blocked || !store.state.sessions.contains { $0.deletedAt != nil }) } }
                 if !deleted {
                     Section {
                         VStack(alignment: .leading, spacing: 10) {
@@ -97,7 +100,7 @@ struct PhoneHistory: View {
                     }
                     ForEach(records) { session in
                         if deleted {
-                            HStack { row(session); Spacer(); Button("恢复") { store.delete(session, restore: true) }.disabled(store.blocked) }
+                            VStack(alignment: .leading) { row(session); HStack { Button("恢复") { store.delete(session, restore: true) }; Spacer(); Button("彻底删除", role: .destructive) { purging = [session.id] } }.buttonStyle(.borderless).disabled(store.blocked) }
                         } else {
                             Button { editing = session } label: { row(session) }.buttonStyle(.plain)
                                 .disabled(store.blocked)
@@ -107,7 +110,7 @@ struct PhoneHistory: View {
                         }
                     }
                 } header: { Text(deleted ? "最近删除" : "记录明细 · \(records.count) 条") }
-                footer: { if deleted { Text("删除的记录不计入统计，可以恢复，不会自动清空。") } }
+                footer: { if deleted { Text("可恢复或彻底删除。清空全部包含筛选外的记录。") } }
                 if let error = store.error { Section { Text(error).font(.footnote).foregroundStyle(.red) } }
             }
             .navigationTitle("学习记录").navigationBarTitleDisplayMode(.inline)
@@ -117,6 +120,10 @@ struct PhoneHistory: View {
                     Button { editing = StudySession(startedAt: .now.addingTimeInterval(-1800), endedAt: .now, activeSeconds: 1800, subject: "", focus: "A") } label: { Label("补记", systemImage: "plus") }.disabled(store.blocked)
                 }
             }
+        .alert("彻底删除这 \(purging.count) 条记录？", isPresented: Binding(get: { !purging.isEmpty }, set: { if !$0 { purging = [] } })) {
+            Button("取消", role: .cancel) { purging = [] }
+            Button("彻底删除", role: .destructive) { store.permanentlyDelete(purging); purging = [] }
+        } message: { Text("记录及其历史版本将从当前数据中移除，无法在应用内恢复。导入旧文件不会重新出现。已有备份文件不受影响。") }
             .sheet(item: $editing) { session in
                 let isNew = !store.state.sessions.contains { $0.id == session.id }
                 RecordEditor(store: store, session: session, onSave: {

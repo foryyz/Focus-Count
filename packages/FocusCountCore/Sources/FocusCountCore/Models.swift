@@ -59,12 +59,13 @@ public struct TimerState: Codable {
 }
 
 public struct Database: Codable {
-    public var version = 3
+    public var version = 4
+    public var purgedIDs: Set<UUID>?
     public var sessions: [StudySession] = []
     public var draft = TimerState()
     public var pendingEnd: Date?
-    public init(version: Int = 3, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil) {
-        self.version = version; self.sessions = sessions; self.draft = draft; self.pendingEnd = pendingEnd
+    public init(version: Int = 4, purgedIDs: Set<UUID>? = nil, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil) {
+        self.purgedIDs = purgedIDs; self.version = version; self.sessions = sessions; self.draft = draft; self.pendingEnd = pendingEnd
     }
 }
 

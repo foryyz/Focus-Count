@@ -37,7 +37,7 @@ enum Storage {
               FileManager.default.fileExists(atPath: source.path) else { return }
         let contents = try Data(contentsOf: source)
         let database = try JSONDecoder().decode(Database.self, from: contents)
-        guard [1, 2, 3].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
+        guard [1, 2, 3, 4].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
         try contents.write(to: target, options: .atomic)
     }
