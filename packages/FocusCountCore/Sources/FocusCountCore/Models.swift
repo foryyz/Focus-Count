@@ -27,6 +27,15 @@ public struct StudySession: Codable, Identifiable {
     }
 }
 
+/// Runtime-only elapsed time that continues through system sleep.
+public enum StudyClock {
+    private static let origin = ContinuousClock.now
+    public static var now: Double {
+        let elapsed = origin.duration(to: ContinuousClock.now).components
+        return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+    }
+}
+
 public struct TimerState: Codable {
     public var startedAt: Date?
     public var accumulated: Double = 0
@@ -35,10 +44,10 @@ public struct TimerState: Codable {
     enum CodingKeys: String, CodingKey { case startedAt, accumulated }
     public init(startedAt: Date? = nil, accumulated: Double = 0) { self.startedAt = startedAt; self.accumulated = accumulated }
     public var isRunning: Bool { runningSince != nil }
-    public func seconds(now: Double = ProcessInfo.processInfo.systemUptime) -> Double {
+    public func seconds(now: Double = StudyClock.now) -> Double {
         accumulated + (runningSince.map { max(0, now - $0) } ?? 0)
     }
-    public mutating func toggle(date: Date = Date(), now: Double = ProcessInfo.processInfo.systemUptime) {
+    public mutating func toggle(date: Date = Date(), now: Double = StudyClock.now) {
         if let since = runningSince {
             accumulated += max(0, now - since)
             runningSince = nil
@@ -47,10 +56,10 @@ public struct TimerState: Codable {
             runningSince = now
         }
     }
-    public mutating func pause(now: Double = ProcessInfo.processInfo.systemUptime) {
+    public mutating func pause(now: Double = StudyClock.now) {
         if isRunning { toggle(now: now) }
     }
-    public func checkpoint(now: Double = ProcessInfo.processInfo.systemUptime) -> TimerState {
+    public func checkpoint(now: Double = StudyClock.now) -> TimerState {
         var result = self
         result.accumulated = seconds(now: now)
         result.runningSince = nil

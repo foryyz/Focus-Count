@@ -20,6 +20,53 @@ final class FocusCountTests: XCTestCase {
         XCTAssertFalse(recovered.isRunning)
         XCTAssertEqual(recovered.seconds(now: 9999), 25)
     }
+    @MainActor func testSleepWakeAndCancelPreserveRecords() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root, observeSystem: false)
+        let record = StudySession(startedAt: Date().addingTimeInterval(-60), endedAt: Date(), activeSeconds: 30, subject: "已有记录", focus: "A")
+        XCTAssertTrue(store.upsert(record))
+        store.toggle()
+        let anchor = store.database.draft.runningSince
+        store.prepareForSleep()
+        store.refreshAfterWake()
+        XCTAssertEqual(store.database.draft.runningSince, anchor)
+        XCTAssertTrue(store.database.draft.isRunning)
+        // Simulate an elapsed hour without any UI ticks.
+        XCTAssertEqual(store.database.draft.seconds(now: anchor! + 3600), 3600, accuracy: 0.001)
+        store.pause()
+        store.prepareForSleep()
+        store.refreshAfterWake()
+        XCTAssertFalse(store.database.draft.isRunning)
+        XCTAssertTrue(store.cancelTimer())
+        XCTAssertNil(store.database.draft.startedAt)
+        XCTAssertEqual(store.database.draft.seconds(), 0)
+        XCTAssertEqual(store.sessions.map(\.id), [record.id])
+        let reopened = StudyStore(directory: root, observeSystem: false)
+        XCTAssertNil(reopened.database.draft.startedAt)
+        store.toggle()
+        XCTAssertTrue(store.database.draft.isRunning)
+        store.finish()
+        XCTAssertNotNil(store.database.pendingEnd)
+        XCTAssertTrue(store.cancelTimer())
+        XCTAssertNil(store.database.pendingEnd)
+        XCTAssertEqual(store.sessions.count, 1)
+    }
+
+    @MainActor func testCancelFailureKeepsTimer() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root, observeSystem: false)
+        store.toggle()
+        let anchor = store.database.draft.runningSince
+        let file = root.appendingPathComponent("sessions.json")
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: false)
+        XCTAssertFalse(store.cancelTimer())
+        XCTAssertEqual(store.database.draft.runningSince, anchor)
+        XCTAssertTrue(store.database.draft.isRunning)
+    }
+
     func testCSVQuotesUnicodeAndFormulaProtection() {
         let row = StudySession(startedAt: Date(timeIntervalSince1970: 0), endedAt: Date(timeIntervalSince1970: 60), activeSeconds: 30, subject: "=数学,\"练习\"\n第二章", focus: "S")
         let csv = Storage.csv([row])

@@ -54,7 +54,10 @@ import AppKit
             }
         }
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.pause() }
+            MainActor.assumeIsolated { self?.prepareForSleep() }
+        })
+        observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshAfterWake() }
         })
         observers.append(NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { _ = self?.persist() }
@@ -75,6 +78,17 @@ import AppKit
     func writeCSV() throws {
         try FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
         try Data(Storage.csv(database.sessions).utf8).write(to: self.directory.appendingPathComponent("sessions.csv"), options: .atomic)
+    }
+    func prepareForSleep() { _ = persist() }
+    func refreshAfterWake() {
+        objectWillChange.send()
+        _ = persist()
+    }
+    @discardableResult func cancelTimer() -> Bool {
+        commit {
+            $0.draft = TimerState()
+            $0.pendingEnd = nil
+        }
     }
     func toggle() {
         guard !blocked, database.pendingEnd == nil else { return }

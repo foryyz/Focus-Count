@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var hint = ""
     @State private var showHistory = false
     @State private var showData = false
+    @State private var cancellingTimer = false
     @FocusState private var commandFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -70,6 +71,11 @@ struct ContentView: View {
                 .buttonStyle(.plain).foregroundStyle(.secondary)
                 .help("结束本次学习").accessibilityLabel("结束本次学习")
                 .disabled(store.database.draft.startedAt == nil || store.blocked)
+                if store.database.draft.startedAt != nil {
+                    Button("取消计时") { cancellingTimer = true }
+                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
+                        .help("放弃本次计时并归零，不生成记录").disabled(store.blocked)
+                }
                 Rectangle().fill(Color.primary.opacity(0.10)).frame(width: 1, height: 18)
                 Button { showHistory = true } label: {
                     Label("学习记录", systemImage: "chart.bar.xaxis")
@@ -90,6 +96,14 @@ struct ContentView: View {
                 startPoint: .topLeading, endPoint: .bottomTrailing
             ).ignoresSafeArea()
         }
+        .alert("取消本次计时？", isPresented: $cancellingTimer) {
+            Button("保留计时", role: .cancel) {}
+            Button("取消并归零", role: .destructive) {
+                if store.cancelTimer() {
+                    command = ""; subject = ""; hint = ""; commandFocused = true
+                }
+            }
+        } message: { Text("本次未保存的计时将被清除，不生成学习记录。已有学习记录不会受到影响。") }
         .onAppear { commandFocused = true }
         .sheet(isPresented: $showData, onDismiss: { commandFocused = true }) { DataExchangeView(store: store) }
         .sheet(isPresented: $showHistory, onDismiss: { commandFocused = true }) { HistoryView(store: store) }
