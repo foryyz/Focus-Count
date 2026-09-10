@@ -4,7 +4,7 @@ Mac 与 iPhone 使用同一套 `FocusCountCore.RecordExchange` 合并逻辑。Wi
 
 ## 文件结构
 
-UTF-8 JSON 顶层包含 `version`（4）、`sessions`（记录数组）、`draft`（计时草稿）、可省略的 `pendingEnd`（待保存的结束时间）。Mac 主文件为项目 `data/sessions.json`；iPhone 从内部沙盒状态导出此格式。
+UTF-8 JSON 顶层包含 `version`（4）、`sessions`（记录数组）、`draft`（计时草稿）、可省略的 `pendingEnd`（待保存的结束时间）。Mac 主文件为 `~/Library/Application Support/FocusCount/sessions.json`；iPhone 从内部沙盒状态导出此格式。
 
 每条记录：
 
@@ -44,7 +44,7 @@ UTF-8 JSON 顶层包含 `version`（4）、`sessions`（记录数组）、`draft
 两端均由用户选择 JSON 文件、查看预览并确认，然后自动合并；不是云服务或后台目录监听。
 
 - 导入前先验证，再分别备份本地完整状态和导入文件。任何备份失败都不开始合并。
-- Mac 备份在 `data/backups/<UUID>/before-import.json` 与 `incoming.json`，界面可打开目录。
+- Mac 备份在 `~/Library/Application Support/FocusCount/backups/<UUID>/before-import.json` 与 `incoming.json`，界面可打开目录。
 - iPhone 在沙盒 Application Support/FocusCount 内保留 `before-import-<UUID>.json`（完整内部状态）和 `incoming-<UUID>.json`（导入 JSON），可通过 Xcode 下载容器取得。
 - 主文件原子写入，保存失败保留原内存状态。Mac CSV 在 JSON 成功保存后重新生成。
 - 导入不会替换本机当前计时草稿。外部草稿随 incoming.json 备份保留，不能同时接管两个设备的运行计时。
@@ -63,3 +63,7 @@ iPhone 内部 app-state.json 升级为 3，兼容旧内部版本 1/2，升级前
 Mac 使用系统单调时钟，睡眠自动暂停；iPhone 使用持久化日期基准，锁屏和重启应用后继续，手动修改系统时间可能影响正在运行的时长。
 
 日期筛选按本地时区，包含首尾两天，跨午夜全部归入开始日。修改起止时间不自动改变有效时长。CSV 字段保持 `id,started_at,ended_at,active_seconds,subject,focus`，UTF-8 BOM、CRLF 换行、三位小数，文本转义和公式防护保持原规则。CSV 不包含历史版本，不能代替 JSON 备份。
+
+## Mac 独立应用存储
+
+默认数据目录与应用路径无关。旧项目数据仅在首次从项目启动时自动发现，验证并备份双方后合并到 Application Support。迁移标记为 project-storage-migration.json；原项目数据保留。先移动应用的用户可在数据管理中手动导入旧 sessions.json。

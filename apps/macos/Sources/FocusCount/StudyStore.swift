@@ -19,7 +19,9 @@ import AppKit
     init(directory: URL? = nil, observeSystem: Bool = true) {
         customDirectory = directory
         do {
-            if customDirectory == nil { try Storage.migrateLegacyData(from: Storage.legacyDirectory, to: self.directory) }
+            if customDirectory == nil, let executable = Bundle.main.executableURL {
+                try Storage.migrateProjectData(executable: executable, to: self.directory)
+            }
             if try FileManager.default.fileExists(atPath: file.path) {
                 let contents = try Data(contentsOf: file)
                 database = try JSONDecoder().decode(Database.self, from: contents)

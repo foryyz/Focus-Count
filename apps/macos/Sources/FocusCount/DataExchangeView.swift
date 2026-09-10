@@ -36,6 +36,17 @@ struct DataExchangeView: View {
                     } catch { message = error.localizedDescription }
                 }
             }
+            HStack {
+                Text("数据保存在这台 Mac 的应用数据目录。").foregroundStyle(.secondary)
+                Spacer()
+                Button("打开数据目录") {
+                    do {
+                        let directory = Storage.directory
+                        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                        NSWorkspace.shared.open(directory)
+                    } catch { message = error.localizedDescription }
+                }
+            }
             Text("与 iPhone 交换 JSON，自动合并记录并保留不同版本。")
                 .foregroundStyle(.secondary)
             HStack {
