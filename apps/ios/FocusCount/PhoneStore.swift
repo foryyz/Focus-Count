@@ -114,3 +114,26 @@ func phoneDuration(_ seconds: Double) -> String {
     let value = Int(seconds)
     return String(format: "%02d:%02d:%02d", value / 3600, value / 60 % 60, value % 60)
 }
+
+// Coordinate document-provider reads while retaining the selected security scope.
+enum PhoneImportFile {
+    static func read(_ url: URL) throws -> Data {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        var coordinationError: NSError?
+        var result: Result<Data, Error>?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinationError) { readableURL in
+            result = Result {
+                let limit = 20_000_000
+                let size = try readableURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                guard size <= limit else { throw RecordExchange.ExchangeError.invalid("文件超过 20 MB。") }
+                let data = try Data(contentsOf: readableURL)
+                guard data.count <= limit else { throw RecordExchange.ExchangeError.invalid("文件超过 20 MB。") }
+                return data
+            }
+        }
+        if let coordinationError { throw coordinationError }
+        guard let result else { throw RecordExchange.ExchangeError.invalid("文件暂时无法读取，请在“文件”应用中下载后重试。") }
+        return try result.get()
+    }
+}

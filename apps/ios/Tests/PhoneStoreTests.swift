@@ -28,6 +28,29 @@ final class PhoneStoreTests: XCTestCase {
         XCTAssertTrue(peer.state.sessions.isEmpty)
         XCTAssertFalse(peer.save(record))
     }
+
+    @MainActor func testSelectedMacFileImportsAndPersists() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let record = sample()
+        let file = root.appendingPathComponent("Mac-sessions.json")
+        // Mac exports the shared Database, including its own timer draft.
+        let mac = Database(sessions: [record], draft: TimerState(startedAt: Date(), accumulated: 123))
+        try RecordExchange.encode(mac).write(to: file)
+        let selected = try RecordExchange.decode(PhoneImportFile.read(file))
+        let store = PhoneStore(directory: root.appendingPathComponent("phone"))
+        XCTAssertTrue(store.importRecords(selected))
+        XCTAssertEqual(store.sessions.first?.id, record.id)
+        XCTAssertNil(store.state.clock.startedAt)
+        XCTAssertEqual(PhoneStore(directory: root.appendingPathComponent("phone")).sessions.first?.id, record.id)
+        XCTAssertTrue(store.importRecords(selected))
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertThrowsError(try PhoneImportFile.read(root.appendingPathComponent("missing.json")))
+        try Data("invalid JSON".utf8).write(to: file)
+        XCTAssertThrowsError(try RecordExchange.decode(PhoneImportFile.read(file)))
+        XCTAssertEqual(store.sessions.count, 1)
+    }
     private func sample() -> StudySession {
         StudySession(startedAt: Date(timeIntervalSince1970: 100), endedAt: Date(timeIntervalSince1970: 200), activeSeconds: 60, subject: "数学", focus: "S", updatedAt: Date())
     }
