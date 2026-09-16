@@ -65,6 +65,54 @@ final class PhoneStoreTests: XCTestCase {
         XCTAssertTrue(store.importRecords(Database(purgedIDs: [event.id])))
         XCTAssertTrue(store.state.events?.isEmpty == true)
     }
+
+    @MainActor func testEventLifecycleAndCancelTimer() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        XCTAssertTrue(store.save(sample()))
+        store.toggle()
+        let anchor = store.state.clock.runningSince
+        let date = Date(timeIntervalSince1970: 12345)
+        XCTAssertTrue(store.markEvent(at: date))
+        XCTAssertTrue(store.markEvent(at: date))
+        XCTAssertEqual(store.state.events?.count, 2)
+        XCTAssertEqual(store.state.clock.runningSince, anchor)
+        let id = store.state.events![0].id
+        XCTAssertTrue(store.setEventDeleted(id, deleted: true))
+        XCTAssertNotNil(store.state.events!.first { $0.id == id }!.deletedAt)
+        XCTAssertTrue(store.setEventDeleted(id, deleted: false))
+        XCTAssertEqual(store.state.events!.first { $0.id == id }!.occurredAt, date)
+        let backup = try RecordExchange.decode(store.export())
+        XCTAssertTrue(store.setEventDeleted(id, deleted: true))
+        XCTAssertTrue(store.purgeEvents([id]))
+        XCTAssertTrue(store.importRecords(backup))
+        XCTAssertEqual(store.state.events?.count, 1)
+        store.finish()
+        XCTAssertTrue(store.cancelTimer())
+        XCTAssertNil(store.state.clock.startedAt)
+        XCTAssertNil(store.state.clock.pendingEnd)
+        XCTAssertEqual(store.sessions.count, 1)
+        let reopened = PhoneStore(directory: root)
+        XCTAssertEqual(reopened.state.events?.count, 1)
+        XCTAssertNil(reopened.state.clock.startedAt)
+        store.toggle()
+        XCTAssertTrue(store.state.clock.isRunning)
+    }
+    @MainActor func testEventAndCancelWriteFailureKeepsState() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        store.toggle()
+        let anchor = store.state.clock.runningSince
+        let file = root.appendingPathComponent("app-state.json")
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: false)
+        XCTAssertFalse(store.markEvent())
+        XCTAssertTrue(store.state.events?.isEmpty ?? true)
+        XCTAssertFalse(store.cancelTimer())
+        XCTAssertEqual(store.state.clock.runningSince, anchor)
+    }
     private func sample() -> StudySession {
         StudySession(startedAt: Date(timeIntervalSince1970: 100), endedAt: Date(timeIntervalSince1970: 200), activeSeconds: 60, subject: "数学", focus: "S", updatedAt: Date())
     }

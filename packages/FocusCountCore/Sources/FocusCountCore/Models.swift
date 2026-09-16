@@ -19,7 +19,7 @@ public struct StudySession: Codable, Identifiable {
     }
 
     public var validationError: String? {
-        if subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请填写学习科目。" }
+        if subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return "请填写活动名称。" }
         if !["S", "A", "B", "C", "D"].contains(focus) { return "请选择有效专注度。" }
         if endedAt < startedAt { return "结束时间不能早于开始时间。" }
         if !activeSeconds.isFinite || activeSeconds < 0 || activeSeconds > endedAt.timeIntervalSince(startedAt) + 0.001 { return "有效时长须在 0 与起止时间差之间。" }

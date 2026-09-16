@@ -44,7 +44,7 @@ struct PhoneHistory: View {
             List {
                 Section {
                     Picker("记录范围", selection: $deleted) {
-                        Text("学习记录").tag(false); Text("最近删除").tag(true)
+                        Text("专注记录").tag(false); Text("最近删除").tag(true)
                     }.pickerStyle(.segmented).labelsHidden()
                     HStack {
                         Button { filters = true } label: { Label(isFiltered ? "已筛选" : "筛选记录", systemImage: "line.3.horizontal.decrease") }
@@ -57,9 +57,9 @@ struct PhoneHistory: View {
                 if !deleted {
                     Section {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("有效学习时间").font(.caption).foregroundStyle(.secondary)
+                            Text("有效专注时间").font(.caption).foregroundStyle(.secondary)
                             Text(phoneDuration(records.reduce(0) { $0 + $1.activeSeconds })).font(.largeTitle.monospacedDigit().weight(.light))
-                            Text("\(records.count) 次学习 · \(dayTotals.count) 天").font(.subheadline).foregroundStyle(.secondary)
+                            Text("\(records.count) 次专注 · \(dayTotals.count) 天").font(.subheadline).foregroundStyle(.secondary)
                         }.padding(.vertical, 8)
                     }
                     if !records.isEmpty {
@@ -82,21 +82,21 @@ struct PhoneHistory: View {
                             Text("按开始日期统计 · 轻点图表筛选当天")
                                 .font(.caption2).foregroundStyle(.secondary)
                         } header: { Text("每日时长") }
-                        Section("科目分布") {
+                        Section("活动分布") {
                             ForEach(subjectTotals.keys.sorted { subjectTotals[$0]! > subjectTotals[$1]! }, id: \.self) { name in
                                 Button { subject = name } label: {
                                     VStack(spacing: 8) {
                                         HStack { Text(name).foregroundStyle(.primary); Spacer(); Text(phoneDuration(subjectTotals[name] ?? 0)).foregroundStyle(.secondary).monospacedDigit() }.font(.subheadline)
                                         ProgressView(value: subjectTotals[name] ?? 0, total: max(subjectTotals.values.max() ?? 1, 1)).tint(.teal)
                                     }.padding(.vertical, 4)
-                                }.buttonStyle(.plain).accessibilityHint("筛选此科目")
+                                }.buttonStyle(.plain).accessibilityHint("筛选此活动")
                             }
                         }
                     }
                 }
                 Section {
                     if records.isEmpty {
-                        ContentUnavailableView(deleted ? "没有已删除记录" : "还没有匹配的记录", systemImage: deleted ? "trash" : "calendar", description: Text("试试调整筛选，或补记一次学习。"))
+                        ContentUnavailableView(deleted ? "没有已删除记录" : "还没有匹配的记录", systemImage: deleted ? "trash" : "calendar", description: Text("试试调整筛选，或补记一次专注。"))
                     }
                     ForEach(records) { session in
                         if deleted {
@@ -113,7 +113,7 @@ struct PhoneHistory: View {
                 footer: { if deleted { Text("可恢复或彻底删除。清空全部包含筛选外的记录。") } }
                 if let error = store.error { Section { Text(error).font(.footnote).foregroundStyle(.red) } }
             }
-            .navigationTitle("学习记录").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("专注记录").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Label("计时", systemImage: "chevron.left") } }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -131,7 +131,7 @@ struct PhoneHistory: View {
                 })
             }
             .sheet(isPresented: $filters) { filterSheet }
-            .confirmationDialog("删除这条学习记录？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
+            .confirmationDialog("删除这条专注记录？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
                 Button("移至最近删除", role: .destructive) { if let deleting { store.delete(deleting) }; deleting = nil }
             } message: { Text("删除后仍可恢复。") }
         }
@@ -162,8 +162,8 @@ struct PhoneHistory: View {
                     }
                 }
                 Section {
-                    Picker("科目", selection: $subject) {
-                        Text("全部科目").tag("")
+                    Picker("活动", selection: $subject) {
+                        Text("全部活动").tag("")
                         ForEach(Array(Set(store.state.sessions.map(\.subject))).sorted(), id: \.self) { Text($0).tag($0) }
                     }
                     Picker("专注度", selection: $focus) {
@@ -174,5 +174,83 @@ struct PhoneHistory: View {
             }.navigationTitle("筛选记录").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { filters = false } } }
         }.presentationDetents([.medium, .large])
+    }
+}
+
+
+struct PhoneEventHistory: View {
+    @ObservedObject var store: PhoneStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var deleted = false
+    @State private var deleting: TimeEvent?
+    @State private var purging: Set<UUID> = []
+    @State private var message: String?
+    private var events: [TimeEvent] {
+        (store.state.events ?? []).filter { ($0.deletedAt != nil) == deleted }
+            .sorted { $0.occurredAt > $1.occurredAt }
+    }
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        let time = Date()
+                        if store.markEvent(at: time) {
+                            deleted = false
+                            message = "已标记 SEX · " + time.formatted(date: .omitted, time: .standard)
+                        }
+                    } label: { Label("标记 SEX 一次", systemImage: "plus.circle.fill") }
+                        .disabled(store.blocked)
+                    if let message { Text(message).font(.footnote).foregroundStyle(.teal) }
+                } footer: { Text("仅记录当下日期时间，不计时、不影响当前专注。每点一次记录一次，对应 Mac 的 !sex。") }
+                Section {
+                    Picker("范围", selection: $deleted) {
+                        Text("时间标记").tag(false)
+                        Text("最近删除").tag(true)
+                    }.pickerStyle(.segmented).labelsHidden()
+                    if deleted {
+                        Button("清空全部标记", role: .destructive) {
+                            purging = Set(events.map(\.id))
+                        }.disabled(events.isEmpty || store.blocked)
+                    }
+                }
+                Section("\(events.count) 次") {
+                    if events.isEmpty {
+                        ContentUnavailableView(deleted ? "没有已删除标记" : "暂无时间标记", systemImage: "mappin.circle")
+                    }
+                    ForEach(events) { event in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(event.kind).font(.headline)
+                            Text(event.occurredAt.formatted(date: .abbreviated, time: .standard))
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            HStack {
+                                if deleted {
+                                    Button("恢复") { store.setEventDeleted(event.id, deleted: false) }
+                                    Spacer()
+                                    Button("彻底删除", role: .destructive) { purging = [event.id] }
+                                } else {
+                                    Spacer()
+                                    Button("删除", role: .destructive) { deleting = event }
+                                }
+                            }.buttonStyle(.borderless).disabled(store.blocked)
+                        }.padding(.vertical, 5)
+                    }
+                }
+                if let error = store.error { Text(error).foregroundStyle(.red).font(.footnote) }
+            }
+            .navigationTitle("时间标记").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .alert("删除这次时间标记？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+                Button("取消", role: .cancel) { deleting = nil }
+                Button("移至最近删除", role: .destructive) {
+                    if let deleting { store.setEventDeleted(deleting.id, deleted: true) }
+                    deleting = nil
+                }
+            }
+            .alert("彻底删除这 \(purging.count) 次标记？", isPresented: Binding(get: { !purging.isEmpty }, set: { if !$0 { purging = [] } })) {
+                Button("取消", role: .cancel) { purging = [] }
+                Button("彻底删除", role: .destructive) { store.purgeEvents(purging); purging = [] }
+            } message: { Text("无法在应用内恢复，导入旧文件不会重新出现。已有独立备份不受影响。") }
+        }
     }
 }

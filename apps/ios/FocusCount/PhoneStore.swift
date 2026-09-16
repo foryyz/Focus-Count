@@ -54,6 +54,28 @@ struct PhoneState: Codable {
             return true
         } catch { self.error = "保存失败，修改未生效：\(error.localizedDescription)"; return false }
     }
+    @discardableResult func cancelTimer() -> Bool { commit { $0.clock = MobileClock() } }
+    @discardableResult func markEvent(at date: Date = Date()) -> Bool {
+        commit {
+            if $0.events == nil { $0.events = [] }
+            $0.events?.append(TimeEvent(kind: "SEX", occurredAt: date))
+        }
+    }
+    @discardableResult func setEventDeleted(_ id: UUID, deleted: Bool) -> Bool {
+        commit {
+            guard let index = $0.events?.firstIndex(where: { $0.id == id }) else { return }
+            let now = max(Date(), $0.events![index].modified.addingTimeInterval(0.001))
+            $0.events![index].deletedAt = deleted ? now : nil
+            $0.events![index].updatedAt = now
+        }
+    }
+    @discardableResult func purgeEvents(_ ids: Set<UUID>) -> Bool {
+        commit {
+            let removed = Set(($0.events ?? []).filter { ids.contains($0.id) && $0.deletedAt != nil }.map(\.id))
+            $0.purgedIDs = ($0.purgedIDs ?? []).union(removed)
+            $0.events?.removeAll { removed.contains($0.id) }
+        }
+    }
     func toggle() { commit { $0.clock.toggle() } }
     func finish() { commit { $0.clock.finish() } }
     func returnToTimer() { commit { $0.clock.pendingEnd = nil } }

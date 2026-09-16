@@ -40,7 +40,7 @@ struct ExchangeScreen: View {
                         Text("文件包含 \(pending.events?.count ?? 0) 个时间标记，随记录一起合并。")
                         LabeledContent("文件记录", value: "\(pending.sessions.count) 条")
                         LabeledContent("新增记录（含最近删除）", value: "\(added) 条")
-                        LabeledContent("合并后学习记录", value: "\(merged.filter { $0.deletedAt == nil }.count) 条")
+                        LabeledContent("合并后专注记录", value: "\(merged.filter { $0.deletedAt == nil }.count) 条")
                         LabeledContent("合并后最近删除", value: "\(merged.filter { $0.deletedAt != nil }.count) 条")
                         LabeledContent("合并后历史版本", value: "\(RecordExchange.archivedCount(merged)) 个")
                         Text("相同记录不会重复新增；较旧修改保留在历史版本中。彻底删除过的记录不会重新出现。")
@@ -54,7 +54,7 @@ struct ExchangeScreen: View {
                                     before.contains { $0.id == record.id && SessionSnapshot($0) != SessionSnapshot(record) }
                                 }.count
                                 let removedCount = before.filter { record in !after.contains { $0.id == record.id } }.count
-                                message = "新增 \(addedCount) 条，更新 \(changedCount) 条，彻底删除 \(removedCount) 条。\n当前学习记录 \(store.sessions.count) 条，最近删除 \(after.count - store.sessions.count) 条，历史版本 \(RecordExchange.archivedCount(after)) 个。\n相同记录不重复新增，较旧修改请在历史版本中查看。"
+                                message = "新增 \(addedCount) 条，更新 \(changedCount) 条，彻底删除 \(removedCount) 条。\n当前专注记录 \(store.sessions.count) 条，最近删除 \(after.count - store.sessions.count) 条，历史版本 \(RecordExchange.archivedCount(after)) 个。\n时间标记 \((store.state.events ?? []).filter { $0.deletedAt == nil }.count) 次，可在主页“时间标记”查看。\n相同记录不重复新增，较旧修改请在历史版本中查看。"
                                 self.pending = nil
                                 showResult = true
                             } else { failure = store.error ?? "导入未完成，请重试。" }
@@ -151,7 +151,7 @@ struct PhoneVersionHistory: View {
                 .alert("恢复此历史版本？", isPresented: Binding(get: { restoring != nil }, set: { if !$0 { restoring = nil } })) {
                     Button("取消", role: .cancel) { restoring = nil }
                     Button("恢复") { if let restoring { store.restoreVersion(restoring) }; restoring = nil }
-                } message: { Text("恢复科目、时间、专注度及删除状态，当前版本也会保留。") }
+                } message: { Text("恢复活动、时间、专注度及删除状态，当前版本也会保留。") }
         }
     }
 }
