@@ -28,7 +28,7 @@ struct ContentView: View {
         default: return dark ? Color(red: 0.64, green: 0.73, blue: 0.86) : Color(red: 0.34, green: 0.43, blue: 0.56)
         }
     }
-    private var stateTitle: String { phase == 1 ? "正在学习" : phase == 2 ? "休息一下 · 已暂停" : "准备好，开始专注" }
+    private var stateTitle: String { phase == 1 ? "正在专注" : phase == 2 ? "休息一下 · 已暂停" : "准备好，开始专注" }
     private var stateIcon: String { phase == 1 ? "leaf.fill" : phase == 2 ? "pause.circle.fill" : "play.circle.fill" }
     var body: some View {
         VStack(spacing: 16) {
@@ -59,7 +59,7 @@ struct ContentView: View {
             .accessibilityHint(phase == 1 ? "暂停计时" : "开始或继续计时")
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: phase)
             HStack(spacing: 12) {
-                TextField("输入 stop! 结束学习", text: $command)
+                TextField("!stop 结束 · !sex 标记", text: $command)
                     .textFieldStyle(.plain).font(.system(size: 12))
                     .padding(.horizontal, 12).padding(.vertical, 9)
                     .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
@@ -69,7 +69,7 @@ struct ContentView: View {
                         .frame(width: 30, height: 32)
                 }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
-                .help("结束本次学习").accessibilityLabel("结束本次学习")
+                .help("结束本次专注").accessibilityLabel("结束本次专注")
                 .disabled(store.database.draft.startedAt == nil || store.blocked)
                 if store.database.draft.startedAt != nil {
                     Button("取消计时") { cancellingTimer = true }
@@ -78,7 +78,7 @@ struct ContentView: View {
                 }
                 Rectangle().fill(Color.primary.opacity(0.10)).frame(width: 1, height: 18)
                 Button { showHistory = true } label: {
-                    Label("学习记录", systemImage: "chart.bar.xaxis")
+                    Label("专注记录", systemImage: "chart.bar.xaxis")
                         .font(.system(size: 12, weight: .medium)).padding(.vertical, 8)
                 }.buttonStyle(.plain).foregroundStyle(.secondary)
             }
@@ -103,25 +103,25 @@ struct ContentView: View {
                     command = ""; subject = ""; hint = ""; commandFocused = true
                 }
             }
-        } message: { Text("本次未保存的计时将被清除，不生成学习记录。已有学习记录不会受到影响。") }
+        } message: { Text("本次未保存的计时将被清除，不生成专注记录。已有专注记录不会受到影响。") }
         .onAppear { commandFocused = true }
         .sheet(isPresented: $showData, onDismiss: { commandFocused = true }) { DataExchangeView(store: store) }
         .sheet(isPresented: $showHistory, onDismiss: { commandFocused = true }) { HistoryView(store: store) }
         .sheet(isPresented: Binding(get: { store.database.pendingEnd != nil }, set: { _ in })) {
             VStack(alignment: .leading, spacing: 20) {
-                Label("完成本次学习", systemImage: "checkmark.circle.fill")
+                Label("完成本次专注", systemImage: "checkmark.circle.fill")
                     .font(.title2.bold()).foregroundStyle(.teal)
-                Text("有效学习时间  \(duration(store.database.draft.seconds()))").foregroundStyle(.secondary)
-                TextField("学习科目（必填）", text: $subject).textFieldStyle(.roundedBorder)
+                Text("有效专注时间  \(duration(store.database.draft.seconds()))").foregroundStyle(.secondary)
+                TextField("活动名称（必填）", text: $subject).textFieldStyle(.roundedBorder)
                 if !store.subjects.isEmpty {
-                    Menu("选择已有科目") {
+                    Menu("选择已有活动") {
                         ForEach(store.subjects, id: \.self) { item in Button(item) { subject = item } }
                     }.fixedSize()
                 }
                 Picker("专注度", selection: $focus) {
                     ForEach(["S", "A", "B", "C", "D"], id: \.self) { Text($0).tag($0) }
                 }.pickerStyle(.segmented)
-                Text("S 最高 · D 最低，按本次学习的主观感受选择。").font(.caption).foregroundStyle(.secondary)
+                Text("S 最高 · D 最低，按本次专注的主观感受选择。").font(.caption).foregroundStyle(.secondary)
                 if let error = store.error { Text(error).foregroundStyle(.red).font(.caption) }
                 HStack {
                     Button("返回计时") { store.resumeEditingTimer(); commandFocused = true }
@@ -135,10 +135,13 @@ struct ContentView: View {
         }
     }
     private func submit() {
-        let value = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        if value.isEmpty { store.toggle(); hint = "" }
-        else if value == "stop!" { store.finish(); command = ""; hint = "" }
-        else { hint = "结束请输入 stop!；开始或暂停请清空输入后按回车。" }
+        let value = FocusCommand(command)
+        if value == .toggle { store.toggle(); hint = "" }
+        else if value == .stop { store.finish(); command = ""; hint = "" }
+        else if value == .sex {
+            if store.markEvent() { command = ""; hint = "已标记 SEX · " + Date().formatted(date: .omitted, time: .standard) }
+        }
+        else { hint = "!stop 结束专注；!sex 标记一次；空输入回车开始或暂停。" }
     }
 }
 
@@ -153,7 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main struct FocusCountApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
-        Window("FocusCount · 学习计时", id: "main") { ContentView() }
+        Window("FocusCount · 专注计时", id: "main") { ContentView() }
             .windowStyle(.hiddenTitleBar)
             .defaultSize(width: 800, height: 400)
             .windowResizability(.contentSize)

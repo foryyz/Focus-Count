@@ -42,6 +42,7 @@ enum Storage {
         var merged = local ?? incoming
         merged.purgedIDs = (local?.purgedIDs ?? []).union(incoming.purgedIDs ?? [])
         merged.sessions = RecordExchange.merge(local: local?.sessions ?? [], incoming: incoming.sessions, purgedIDs: merged.purgedIDs ?? [])
+        merged.events = RecordExchange.mergeEvents(local: local?.events ?? [], incoming: incoming.events ?? [], purgedIDs: merged.purgedIDs ?? [])
         let backup = destination.appendingPathComponent("backups/storage-migration-\(UUID().uuidString)")
         try fm.createDirectory(at: backup, withIntermediateDirectories: true)
         try incomingBytes.write(to: backup.appendingPathComponent("project-original.json"), options: .atomic)

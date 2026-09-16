@@ -34,7 +34,7 @@ public struct MobileClock: Codable {
 public enum RecordExchange {
     public static func decode(_ data: Data) throws -> Database {
         var database = try JSONDecoder().decode(Database.self, from: data)
-        guard [1, 2, 3, 4].contains(database.version) else { throw ExchangeError.invalid("不支持此数据版本。") }
+        guard [1, 2, 3, 4, 5].contains(database.version) else { throw ExchangeError.invalid("不支持此数据版本。") }
         var ids = Set<UUID>()
         for index in database.sessions.indices {
             let session = database.sessions[index]
@@ -48,7 +48,13 @@ public enum RecordExchange {
             database.sessions[index].updatedAt = session.updatedAt ?? session.endedAt
         }
         database.sessions.removeAll { (database.purgedIDs ?? []).contains($0.id) }
-        database.version = 4
+        for event in database.events ?? [] {
+            guard ids.insert(event.id).inserted, !event.kind.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw ExchangeError.invalid("时间标记无效或 ID 重复。")
+            }
+        }
+        database.events = (database.events ?? []).filter { !(database.purgedIDs ?? []).contains($0.id) }
+        database.version = 5
         return database
     }
     /// Merge is commutative and idempotent: every distinct version travels with the record.
@@ -85,6 +91,22 @@ public enum RecordExchange {
     }
     public static func modified(_ session: StudySession) -> Date {
         max(session.updatedAt ?? session.endedAt, session.deletedAt ?? .distantPast)
+    }
+    public static func mergeEvents(local: [TimeEvent], incoming: [TimeEvent], purgedIDs: Set<UUID> = []) -> [TimeEvent] {
+        var result: [UUID: TimeEvent] = [:]
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        for event in local + incoming where !purgedIDs.contains(event.id) {
+            if let old = result[event.id] {
+                if event.modified < old.modified { continue }
+                if event.modified == old.modified {
+                    let left = (try? encoder.encode(old)) ?? Data()
+                    let right = (try? encoder.encode(event)) ?? Data()
+                    if !left.lexicographicallyPrecedes(right) { continue }
+                }
+            }
+            result[event.id] = event
+        }
+        return result.values.sorted { $0.id.uuidString < $1.id.uuidString }
     }
     public static func encode(_ database: Database) throws -> Data {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

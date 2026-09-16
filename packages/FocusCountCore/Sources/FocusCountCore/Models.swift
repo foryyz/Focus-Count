@@ -68,13 +68,14 @@ public struct TimerState: Codable {
 }
 
 public struct Database: Codable {
-    public var version = 4
+    public var version = 5
+    public var events: [TimeEvent]?
     public var purgedIDs: Set<UUID>?
     public var sessions: [StudySession] = []
     public var draft = TimerState()
     public var pendingEnd: Date?
-    public init(version: Int = 4, purgedIDs: Set<UUID>? = nil, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil) {
-        self.purgedIDs = purgedIDs; self.version = version; self.sessions = sessions; self.draft = draft; self.pendingEnd = pendingEnd
+    public init(version: Int = 5, events: [TimeEvent]? = nil, purgedIDs: Set<UUID>? = nil, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil) {
+        self.events = events; self.purgedIDs = purgedIDs; self.version = version; self.sessions = sessions; self.draft = draft; self.pendingEnd = pendingEnd
     }
 }
 
@@ -102,4 +103,18 @@ public struct SessionSnapshot: Codable, Hashable, Identifiable {
         // All imported versions are validated before use; dates and seconds must be finite.
         return SHA256.hash(data: (try? encoder.encode(self)) ?? Data()).map { String(format: "%02x", $0) }.joined()
     }
+}
+
+/// A point-in-time event, with no duration or focus rating.
+public struct TimeEvent: Codable, Identifiable, Equatable {
+    public var id: UUID
+    public var kind: String
+    public var occurredAt: Date
+    public var updatedAt: Date
+    public var deletedAt: Date?
+    public init(id: UUID = UUID(), kind: String, occurredAt: Date, updatedAt: Date? = nil, deletedAt: Date? = nil) {
+        self.id = id; self.kind = kind; self.occurredAt = occurredAt
+        self.updatedAt = updatedAt ?? occurredAt; self.deletedAt = deletedAt
+    }
+    public var modified: Date { max(updatedAt, deletedAt ?? .distantPast) }
 }

@@ -25,6 +25,7 @@ struct HistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var filter = HistoryFilter()
     @State private var editing: StudySession?
+    @State private var showEvents = false
     @State private var deleting: StudySession?
     @State private var purging: Set<UUID> = []
     private var records: [StudySession] { filter.apply(store.database.sessions) }
@@ -43,23 +44,24 @@ struct HistoryView: View {
                 .buttonStyle(.borderedProminent).tint(.teal)
                 .keyboardShortcut(.cancelAction).help("返回计时（Esc）")
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("学习记录").font(.title2.bold())
+                    Text("专注记录").font(.title2.bold())
                     Text("回顾每一次专注")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                Button("时间标记") { showEvents = true }
                 Button {
                     editing = StudySession(startedAt: Date().addingTimeInterval(-1800), endedAt: Date(), activeSeconds: 1800, subject: "", focus: "A")
                 } label: { Label("补记", systemImage: "plus") }.disabled(store.blocked)
             }
             HStack(spacing: 14) {
                 Picker("记录", selection: $filter.deleted) {
-                    Text("学习记录").tag(false)
+                    Text("专注记录").tag(false)
                     Text("最近删除").tag(true)
                 }.pickerStyle(.segmented).labelsHidden().frame(width: 200)
                 Spacer()
-                Picker("科目", selection: $filter.subject) {
-                    Text("全部科目").tag("")
+                Picker("活动", selection: $filter.subject) {
+                    Text("全部活动").tag("")
                     ForEach(subjects, id: \.self) { Text($0).tag($0) }
                 }.frame(width: 200)
                 Picker("专注度", selection: $filter.focus) {
@@ -82,9 +84,9 @@ struct HistoryView: View {
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 HStack(spacing: 36) {
-                    metric("有效学习时间", value: duration(total))
-                    metric("学习次数", value: "\(records.count) 次")
-                    metric("学习天数", value: "\(days.count) 天")
+                    metric("有效专注时间", value: duration(total))
+                    metric("专注次数", value: "\(records.count) 次")
+                    metric("专注天数", value: "\(days.count) 天")
                 }
                 if !records.isEmpty { charts }
             }
@@ -97,8 +99,8 @@ struct HistoryView: View {
             if records.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: filter.deleted ? "trash" : "calendar").font(.largeTitle)
-                    Text(filter.deleted ? "没有符合筛选条件的已删除记录" : "没有符合筛选条件的学习记录")
-                    Text("可以调整筛选条件，或补记一次学习。").font(.caption)
+                    Text(filter.deleted ? "没有符合筛选条件的已删除记录" : "没有符合筛选条件的专注记录")
+                    Text("可以调整筛选条件，或补记一次专注。").font(.caption)
                 }.foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(records) { session in
@@ -129,6 +131,7 @@ struct HistoryView: View {
             Button("取消", role: .cancel) { purging = [] }
             Button("彻底删除", role: .destructive) { store.permanentlyDelete(purging); purging = [] }
         } message: { Text("记录及其历史版本将从当前数据中移除，无法在应用内恢复。导入旧文件不会重新出现。已有备份文件不受影响。") }
+        .sheet(isPresented: $showEvents) { EventHistoryView(store: store) }
         .sheet(item: $editing) { session in SessionEditor(store: store, session: session) }
         .alert("将这条记录移至最近删除？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("取消", role: .cancel) { deleting = nil }
@@ -155,8 +158,8 @@ struct HistoryView: View {
                 }
             }.frame(maxWidth: .infinity)
             VStack(alignment: .leading, spacing: 8) {
-                Text("科目分布").font(.subheadline.bold())
-                Text("有效学习时长 · 点击科目筛选")
+                Text("活动分布").font(.subheadline.bold())
+                Text("有效专注时长 · 点击活动筛选")
                     .font(.caption2).foregroundStyle(.secondary)
                 SubjectBars(records: records) { filter.subject = $0 }
             }.frame(maxWidth: .infinity)
@@ -216,7 +219,7 @@ struct SubjectBars: View {
                                     .frame(width: max(2, geometry.size.width * (totals[subject] ?? 0) / peak))
                             }.frame(height: 7)
                         }
-                    }.buttonStyle(.plain).help("筛选科目：\(subject)")
+                    }.buttonStyle(.plain).help("筛选活动：\(subject)")
                 }
             }
         }.frame(height: 126)
@@ -247,10 +250,10 @@ struct SessionEditor: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text(isNew ? "补记学习" : "编辑学习记录").font(.title2.bold())
-            TextField("学习科目（必填）", text: $session.subject).textFieldStyle(.roundedBorder)
+            Text(isNew ? "补记专注" : "编辑专注记录").font(.title2.bold())
+            TextField("活动名称（必填）", text: $session.subject).textFieldStyle(.roundedBorder)
             if !store.subjects.isEmpty {
-                Menu("选择已有科目") {
+                Menu("选择已有活动") {
                     ForEach(store.subjects, id: \.self) { subject in Button(subject) { session.subject = subject } }
                 }.fixedSize()
             }

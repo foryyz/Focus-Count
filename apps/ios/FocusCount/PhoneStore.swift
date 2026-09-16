@@ -2,7 +2,8 @@ import SwiftUI
 import FocusCountCore
 
 struct PhoneState: Codable {
-    var version = 3
+    var version = 5
+    var events: [TimeEvent]?
     var purgedIDs: Set<UUID>?
     var sessions: [StudySession] = []
     var clock = MobileClock()
@@ -28,13 +29,15 @@ struct PhoneState: Codable {
             if FileManager.default.fileExists(atPath: file.path) {
                 let data = try Data(contentsOf: file)
                 var loaded = try JSONDecoder().decode(PhoneState.self, from: data)
-                guard [1, 2, 3].contains(loaded.version), loaded.clock.isValid else { throw CocoaError(.fileReadCorruptFile) }
+                guard [1, 2, 3, 4, 5].contains(loaded.version), loaded.clock.isValid else { throw CocoaError(.fileReadCorruptFile) }
                 // Validate the records with the same rules as interchange files.
-                loaded.sessions = try RecordExchange.decode(RecordExchange.encode(Database(purgedIDs: loaded.purgedIDs, sessions: loaded.sessions))).sessions
-                if loaded.version < 3 {
+                let validated = try RecordExchange.decode(RecordExchange.encode(Database(events: loaded.events, purgedIDs: loaded.purgedIDs, sessions: loaded.sessions)))
+                loaded.sessions = validated.sessions
+                loaded.events = validated.events
+                if loaded.version < 5 {
                     let backup = self.directory.appendingPathComponent("app-state.v\(loaded.version).backup.json")
                     if !FileManager.default.fileExists(atPath: backup.path) { try data.write(to: backup, options: .atomic) }
-                    loaded.version = 3
+                    loaded.version = 5
                 }
                 state = loaded
             }
@@ -93,6 +96,7 @@ struct PhoneState: Codable {
             return commit {
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(incoming.purgedIDs ?? [])
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: incoming.sessions, purgedIDs: $0.purgedIDs ?? [])
+                $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: incoming.events ?? [], purgedIDs: $0.purgedIDs ?? [])
             }
         } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
     }
@@ -105,7 +109,7 @@ struct PhoneState: Codable {
     func export() throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("本地数据读取失败，无法导出。") }
         let draft = TimerState(startedAt: state.clock.startedAt, accumulated: state.clock.seconds())
-        return try RecordExchange.encode(Database(purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd))
+        return try RecordExchange.encode(Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd))
     }
 }
 

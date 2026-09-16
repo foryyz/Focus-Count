@@ -25,13 +25,14 @@ import AppKit
             if try FileManager.default.fileExists(atPath: file.path) {
                 let contents = try Data(contentsOf: file)
                 database = try JSONDecoder().decode(Database.self, from: contents)
-                guard [1, 2, 3, 4].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
+                guard [1, 2, 3, 4, 5].contains(database.version) else { throw CocoaError(.fileReadUnknown) }
                 let validated = try RecordExchange.decode(contents)
                 database.sessions = validated.sessions
-                if database.version < 4 {
+                database.events = validated.events
+                if database.version < 5 {
                     let backup = try self.directory.appendingPathComponent("sessions.v\(database.version).backup.json")
                     if !FileManager.default.fileExists(atPath: backup.path) { try contents.write(to: backup, options: .atomic) }
-                    database.version = 4
+                    database.version = 5
                     for index in database.sessions.indices {
                         database.sessions[index].updatedAt = database.sessions[index].updatedAt ?? database.sessions[index].endedAt
                     }
@@ -78,6 +79,27 @@ import AppKit
     func writeCSV() throws {
         try FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
         try Data(Storage.csv(database.sessions).utf8).write(to: self.directory.appendingPathComponent("sessions.csv"), options: .atomic)
+    }
+    @discardableResult func markEvent(kind: String = "SEX", at date: Date = Date()) -> Bool {
+        commit {
+            if $0.events == nil { $0.events = [] }
+            $0.events?.append(TimeEvent(kind: kind, occurredAt: date))
+        }
+    }
+    @discardableResult func setEventDeleted(_ id: UUID, deleted: Bool) -> Bool {
+        commit {
+            guard let index = $0.events?.firstIndex(where: { $0.id == id }) else { return }
+            let now = max(Date(), $0.events![index].modified.addingTimeInterval(0.001))
+            $0.events![index].deletedAt = deleted ? now : nil
+            $0.events![index].updatedAt = now
+        }
+    }
+    @discardableResult func purgeEvents(_ ids: Set<UUID>) -> Bool {
+        commit {
+            let removed = Set(($0.events ?? []).filter { ids.contains($0.id) && $0.deletedAt != nil }.map(\.id))
+            $0.purgedIDs = ($0.purgedIDs ?? []).union(removed)
+            $0.events?.removeAll { removed.contains($0.id) }
+        }
     }
     func prepareForSleep() { _ = persist() }
     func refreshAfterWake() {
@@ -159,6 +181,7 @@ import AppKit
             return commit {
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(validated.purgedIDs ?? [])
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: validated.sessions, purgedIDs: $0.purgedIDs ?? [])
+                $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: validated.events ?? [], purgedIDs: $0.purgedIDs ?? [])
             }
         } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
     }
@@ -175,6 +198,18 @@ import AppKit
             if let index = database.sessions.firstIndex(where: { $0.id == current.id }) {
                 database.sessions[index] = RecordExchange.replacing(current, with: snapshot.session)
             }
+        }
+    }
+}
+
+enum FocusCommand: Equatable {
+    case toggle, stop, sex, unknown
+    init(_ input: String) {
+        switch input.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "": self = .toggle
+        case "!stop": self = .stop
+        case "!sex": self = .sex
+        default: self = .unknown
         }
     }
 }

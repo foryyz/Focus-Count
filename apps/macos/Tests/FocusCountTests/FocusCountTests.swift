@@ -2,6 +2,13 @@ import FocusCountCore
 import XCTest
 @testable import FocusCount
 final class FocusCountTests: XCTestCase {
+    func testCommandSyntax() {
+        XCTAssertEqual(FocusCommand(" !stop "), .stop)
+        XCTAssertEqual(FocusCommand("!sex"), .sex)
+        XCTAssertEqual(FocusCommand(""), .toggle)
+        XCTAssertEqual(FocusCommand("stop!"), .unknown)
+        XCTAssertEqual(FocusCommand("!sex extra"), .unknown)
+    }
     func testPauseResumeExcludesPause() {
         var timer = TimerState()
         timer.toggle(date: Date(timeIntervalSince1970: 10), now: 100)
@@ -67,6 +74,37 @@ final class FocusCountTests: XCTestCase {
         XCTAssertTrue(store.database.draft.isRunning)
     }
 
+
+    @MainActor func testTimeMarkersKeepTimerAndRoundTrip() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root, observeSystem: false)
+        store.toggle()
+        let anchor = store.database.draft.runningSince
+        let time = Date(timeIntervalSince1970: 123456)
+        XCTAssertTrue(store.markEvent(at: time))
+        XCTAssertTrue(store.markEvent(at: time))
+        XCTAssertEqual(store.database.draft.runningSince, anchor)
+        XCTAssertTrue(store.sessions.isEmpty)
+        XCTAssertEqual(store.database.events?.count, 2)
+        let data = try store.export()
+        let exported = try RecordExchange.decode(data)
+        XCTAssertEqual(exported.events?.first?.occurredAt, time)
+        let object = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        let eventJSON = (object["events"] as! [[String: Any]])[0]
+        XCTAssertNil(eventJSON["activeSeconds"])
+        XCTAssertNil(eventJSON["endedAt"])
+        XCTAssertTrue(store.importRecords(exported))
+        XCTAssertEqual(store.database.events?.count, 2)
+        let id = exported.events![0].id
+        XCTAssertTrue(store.setEventDeleted(id, deleted: true))
+        XCTAssertTrue(store.setEventDeleted(id, deleted: false))
+        XCTAssertTrue(store.setEventDeleted(id, deleted: true))
+        XCTAssertTrue(store.purgeEvents([id]))
+        XCTAssertTrue(store.importRecords(exported))
+        XCTAssertEqual(store.database.events?.count, 1)
+        XCTAssertEqual(StudyStore(directory: root, observeSystem: false).database.events?.count, 1)
+    }
     func testCSVQuotesUnicodeAndFormulaProtection() {
         let row = StudySession(startedAt: Date(timeIntervalSince1970: 0), endedAt: Date(timeIntervalSince1970: 60), activeSeconds: 30, subject: "=数学,\"练习\"\n第二章", focus: "S")
         let csv = Storage.csv([row])

@@ -47,7 +47,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 ## 存储与计时行为
 
-手机端本地文件位于应用沙盒 `Library/Application Support/FocusCount/app-state.json`。这是手机的内部状态文件，包含记录以及运行中的手机计时状态，不能直接放到电脑 `data/sessions.json`。应用的导出功能会生成兼容的共享 v4 JSON。
+手机端本地文件位于应用沙盒 `Library/Application Support/FocusCount/app-state.json`。这是手机的内部状态文件，包含记录以及运行中的手机计时状态，不能直接放到电脑 `data/sessions.json`。应用的导出功能会生成兼容的共享 v5 JSON。
 
 手机计时把运行时间基准持久化，不依赖持续后台执行。锁屏或退出进程不会自动暂停，休息时请主动点暂停。手动更改系统时间可能影响运行时长；暂停后的累计时间不会随时钟变化。此版本没有锁屏实时活动、后台音频或结束提醒。
 
@@ -59,7 +59,7 @@ Mac 与 iPhone 都打开首页右上角“数据管理”，选择“导出 JSON
 
 导入前会备份双方数据，当前运行草稿不会被外部草稿替换。iPhone 备份在沙盒 Application Support/FocusCount 的 `before-import-<UUID>.json` 和 `incoming-<UUID>.json`，可以通过 Xcode 下载应用容器取得。备份不自动清理。
 
-两端都需要更新到支持共享 v4 的版本。iPhone 内部状态版本升级为 3，升级前保留 app-state.v<旧版本>.backup.json。当前没有自动云同步，不要用文件直接覆盖代替应用内合并；详见 `docs/data-format.md`。
+两端都需要更新到支持共享 v5 的版本。iPhone 内部状态版本升级为 5，升级前保留 app-state.v<旧版本>.backup.json。当前没有自动云同步，不要用文件直接覆盖代替应用内合并；详见 `docs/data-format.md`。
 
 ## 项目维护
 
@@ -74,3 +74,5 @@ bash scripts/generate-icons.sh
 ### 导入反馈
 
 选中文件后显示读取进度，读取完成后自动回到页面顶部的“请确认导入 · 尚未写入”。点击“确认合并到 iPhone”才保存；完成后弹窗列出新增、更新、彻底删除和当前记录数量。文件读取通过 NSFileCoordinator 协调文档提供方访问，失败信息显示在顶部。
+
+共享 v5 的时间标记在手机端保留并随 JSON 合并、导出，目前仅 Mac 提供标记创建与管理。

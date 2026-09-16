@@ -37,6 +37,7 @@ struct ExchangeScreen: View {
                 if let pending {
                     Section("请确认导入 · 尚未写入") {
                         Text(filename).font(.headline)
+                        Text("文件包含 \(pending.events?.count ?? 0) 个时间标记，随记录一起合并。")
                         LabeledContent("文件记录", value: "\(pending.sessions.count) 条")
                         LabeledContent("新增记录（含最近删除）", value: "\(added) 条")
                         LabeledContent("合并后学习记录", value: "\(merged.filter { $0.deletedAt == nil }.count) 条")
@@ -78,7 +79,7 @@ struct ExchangeScreen: View {
                 } footer: { Text("兼容 Mac 的 sessions.json。导入只合并记录，不接管其他设备的计时草稿；导出包含已删除标记。") }
                 Section {
                     Button { showVersions = true } label: { Label("历史版本与恢复", systemImage: "clock.arrow.circlepath") }
-                } footer: { Text("不同修改会保留为历史版本，不重复计入统计。两端都需更新到支持 v4 的版本。") }
+                } footer: { Text("不同修改会保留为历史版本，不重复计入统计。两端都需更新到支持 v5 的版本。") }
                 if let message { Section { Text(message).foregroundStyle(.teal) } }
                 if let error = store.error { Section { Text(error).foregroundStyle(.red).font(.footnote) } }
             }

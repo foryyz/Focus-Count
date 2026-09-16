@@ -51,6 +51,20 @@ final class PhoneStoreTests: XCTestCase {
         XCTAssertThrowsError(try RecordExchange.decode(PhoneImportFile.read(file)))
         XCTAssertEqual(store.sessions.count, 1)
     }
+
+    @MainActor func testMacEventsSurvivePhoneExchange() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let event = TimeEvent(kind: "SEX", occurredAt: Date())
+        let store = PhoneStore(directory: root)
+        XCTAssertTrue(store.importRecords(Database(events: [event])))
+        XCTAssertTrue(store.importRecords(Database(events: [event])))
+        XCTAssertEqual(try RecordExchange.decode(store.export()).events, [event])
+        XCTAssertTrue(store.sessions.isEmpty)
+        XCTAssertEqual(PhoneStore(directory: root).state.events, [event])
+        XCTAssertTrue(store.importRecords(Database(purgedIDs: [event.id])))
+        XCTAssertTrue(store.state.events?.isEmpty == true)
+    }
     private func sample() -> StudySession {
         StudySession(startedAt: Date(timeIntervalSince1970: 100), endedAt: Date(timeIntervalSince1970: 200), activeSeconds: 60, subject: "数学", focus: "S", updatedAt: Date())
     }
@@ -113,7 +127,7 @@ final class PhoneStoreTests: XCTestCase {
         var changed = original; changed.subject = "Mac 修改"; changed.updatedAt = Date().addingTimeInterval(10)
         XCTAssertTrue(store.importRecords(Database(sessions: [changed])))
         let exported = try RecordExchange.decode(store.export())
-        XCTAssertEqual(exported.version, 4)
+        XCTAssertEqual(exported.version, 5)
         XCTAssertEqual(exported.sessions[0].history?.count, 1)
         XCTAssertTrue(store.importRecords(exported))
         XCTAssertEqual(store.sessions.count, 1)

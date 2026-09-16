@@ -5,6 +5,23 @@ final class CoreTests: XCTestCase {
     func sample(_ id: UUID = UUID(), updated: Double = 100) -> StudySession {
         StudySession(id: id, startedAt: Date(timeIntervalSince1970: 0), endedAt: Date(timeIntervalSince1970: 60), activeSeconds: 30, subject: "数学", focus: "A", updatedAt: Date(timeIntervalSince1970: updated))
     }
+
+    func testEventExchangeAndDeletion() throws {
+        let event = TimeEvent(kind: "SEX", occurredAt: Date(timeIntervalSince1970: 100))
+        var deleted = event
+        deleted.deletedAt = Date(timeIntervalSince1970: 200)
+        deleted.updatedAt = deleted.deletedAt!
+        let first = RecordExchange.mergeEvents(local: [event], incoming: [deleted])
+        XCTAssertEqual(first, RecordExchange.mergeEvents(local: [deleted], incoming: [event]))
+        XCTAssertEqual(first, [deleted])
+        XCTAssertEqual(RecordExchange.mergeEvents(local: first, incoming: first), first)
+        XCTAssertTrue(RecordExchange.mergeEvents(local: first, incoming: [event], purgedIDs: [event.id]).isEmpty)
+        let exported = try RecordExchange.decode(RecordExchange.encode(Database(events: first)))
+        XCTAssertEqual(exported.events, first)
+        XCTAssertTrue(exported.sessions.isEmpty)
+        XCTAssertThrowsError(try RecordExchange.decode(RecordExchange.encode(Database(events: [event, event]))))
+        XCTAssertNil(try RecordExchange.decode(RecordExchange.encode(Database(version: 4))).events?.first)
+    }
     func testMobileClockSurvivesSuspensionAndRelaunch() throws {
         var clock = MobileClock()
         clock.toggle(at: Date(timeIntervalSince1970: 100))
@@ -43,7 +60,7 @@ final class CoreTests: XCTestCase {
     func testImportValidationAndV1Compatibility() throws {
         let session = sample()
         let decoded = try RecordExchange.decode(RecordExchange.encode(Database(version: 1, sessions: [session])))
-        XCTAssertEqual(decoded.version, 4)
+        XCTAssertEqual(decoded.version, 5)
         XCTAssertEqual(decoded.sessions.first?.id, session.id)
         XCTAssertThrowsError(try RecordExchange.decode(RecordExchange.encode(Database(version: 99))))
         XCTAssertThrowsError(try RecordExchange.decode(RecordExchange.encode(Database(sessions: [session, session]))))

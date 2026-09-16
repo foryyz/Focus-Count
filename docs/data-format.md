@@ -1,10 +1,10 @@
-# 共享数据协议 v4
+# 共享数据协议 v5
 
-Mac 与 iPhone 使用同一套 `FocusCountCore.RecordExchange` 合并逻辑。Windows 后续实现也必须遵循本文。导入兼容 v1、v2、v3、v4，导出统一为 v4；未知版本拒绝写入。两端都应更新后再交换文件，旧客户端不能读写 v4。
+Mac 与 iPhone 使用同一套 `FocusCountCore.RecordExchange` 合并逻辑。Windows 后续实现也必须遵循本文。导入兼容 v1、v2、v3、v4、v5，导出统一为 v5；未知版本拒绝写入。两端都应更新后再交换文件，旧客户端不能读写 v5。
 
 ## 文件结构
 
-UTF-8 JSON 顶层包含 `version`（4）、`sessions`（记录数组）、`draft`（计时草稿）、可省略的 `pendingEnd`（待保存的结束时间）。Mac 主文件为 `~/Library/Application Support/FocusCount/sessions.json`；iPhone 从内部沙盒状态导出此格式。
+UTF-8 JSON 顶层包含 `version`（5）、`sessions`（记录数组）、`draft`（计时草稿）、可省略的 `pendingEnd`（待保存的结束时间）。Mac 主文件为 `~/Library/Application Support/FocusCount/sessions.json`；iPhone 从内部沙盒状态导出此格式。
 
 每条记录：
 
@@ -55,8 +55,8 @@ UTF-8 JSON 顶层包含 `version`（4）、`sessions`（记录数组）、`draft
 
 ## 迁移
 
-Mac 兼容主文件 v1/v2/v3/v4。升级前保留 sessions.v<旧版本>.backup.json，随后写入 v4。
-iPhone 内部 app-state.json 升级为 3，兼容旧内部版本 1/2，升级前保留 app-state.v<旧版本>.backup.json。旧客户端拒绝新版本，避免丢失彻底删除标记。
+Mac 兼容主文件 v1/v2/v3/v4/v5。升级前保留 sessions.v<旧版本>.backup.json，随后写入 v5。
+iPhone 内部 app-state.json 升级为 5，兼容旧内部版本 1/2/3/4，升级前保留 app-state.v<旧版本>.backup.json。旧客户端拒绝新版本，避免丢失彻底删除标记。
 
 ## 计时和统计
 
@@ -67,3 +67,9 @@ Mac 使用包含休眠时间的连续单调时钟，熄屏和休眠继续累计�
 ## Mac 独立应用存储
 
 默认数据目录与应用路径无关。旧项目数据仅在首次从项目启动时自动发现，验证并备份双方后合并到 Application Support。迁移标记为 project-storage-migration.json；原项目数据保留。先移动应用的用户可在数据管理中手动导入旧 sessions.json。
+
+## 时间标记（v5）
+
+顶层可选 events 数组，每项包含 id、kind、occurredAt、updatedAt、可选 deletedAt。SEX 的 kind 为 SEX；无起止区间、activeSeconds 或 focus。事件不进入 sessions，因此不计入专注统计或 CSV。
+
+事件按 ID 合并，采用较新修改时间；同时间按 sortedKeys JSON 字节序确定结果。purgedIDs 同时作用于事件，彻底删除优先。普通删除和恢复仅改变删除状态，不改标记时间。v1–v4 数据按无事件导入，未知新版本拒绝，防止旧客户端丢弃 events。iPhone 内部状态升级到 5，旧文件先备份；标记可在手机无损往返交换。

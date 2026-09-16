@@ -62,6 +62,7 @@ struct DataExchangeView: View {
                 let merged = RecordExchange.merge(local: store.database.sessions, incoming: incoming.sessions, purgedIDs: (store.database.purgedIDs ?? []).union(incoming.purgedIDs ?? []))
                 GroupBox("导入预览") {
                     VStack(alignment: .leading, spacing: 12) {
+                        Text("文件包含 \(incoming.events?.count ?? 0) 个时间标记，随记录一起合并。")
                         Text("文件中 \(incoming.sessions.count) 条记录 · 合并后 \(merged.count) 条（含最近删除）")
                         Text("合并后保留 \(RecordExchange.archivedCount(merged)) 个历史版本，不重复计入统计。")
                         Text("彻底删除标记会同步清除对应记录及其历史版本。修改时间较新的版本作为当前记录；时间相同按固定规则选定，两端结果一致。其他版本保留，可恢复。导入前备份双方数据，不替换当前计时。")
@@ -111,7 +112,7 @@ struct DataExchangeView: View {
             }
             if let message { Text(message).font(.callout).textSelection(.enabled) }
             if let error = store.error { Text(error).font(.caption).foregroundStyle(.red) }
-            Text("需要手动选择文件导入；此功能不自动联网同步。两端请都更新到支持 v4 的版本。")
+            Text("需要手动选择文件导入；此功能不自动联网同步。两端请都更新到支持 v5 的版本。")
                 .font(.caption).foregroundStyle(.secondary)
         }.padding(24).frame(width: 720, height: 650)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
