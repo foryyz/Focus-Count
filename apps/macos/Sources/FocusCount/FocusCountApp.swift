@@ -19,88 +19,152 @@ struct ContentView: View {
     @FocusState private var commandFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @StateObject private var focusWindow = FocusWindow()
+    @State private var chromeVisible = true
+    @State private var interaction = Date()
+    @State private var pointerLocation: CGPoint?
+    @State private var encouragement = 0
+    private let greetings = [
+        ("🌱 One small start. One meaningful step.", "You don’t have to finish it all. Just begin."),
+        ("✨ Make a little room for what matters.", "One thing at a time. You’ve got this."),
+        ("☀️ Your next chapter starts here.", "Take a breath. Give this moment your attention."),
+        ("🚀 Start small. Stay curious.", "A little focus can take you a long way.")
+    ]
     private var phase: Int { store.database.draft.isRunning ? 1 : store.database.draft.startedAt == nil ? 0 : 2 }
-    private var stateColor: Color {
-        let dark = colorScheme == .dark
-        switch phase {
-        case 1: return dark ? Color(red: 0.36, green: 0.85, blue: 0.65) : Color(red: 0.08, green: 0.43, blue: 0.31)
-        case 2: return dark ? Color(red: 0.96, green: 0.73, blue: 0.35) : Color(red: 0.57, green: 0.34, blue: 0.08)
-        default: return dark ? Color(red: 0.64, green: 0.73, blue: 0.86) : Color(red: 0.34, green: 0.43, blue: 0.56)
-        }
-    }
-    private var stateTitle: String { phase == 1 ? "正在专注" : phase == 2 ? "休息一下 · 已暂停" : "准备好，开始专注" }
-    private var stateIcon: String { phase == 1 ? "leaf.fill" : phase == 2 ? "pause.circle.fill" : "play.circle.fill" }
+    private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
+    private var backdrop: Color { colorScheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
+    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || !command.isEmpty || showData || showHistory || cancellingTimer || store.error != nil }
     var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("FocusCount")
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(.secondary)
-                Spacer()
-                Button { showData = true } label: { Image(systemName: "arrow.up.arrow.down").frame(width: 28, height: 24) }
-                    .buttonStyle(.plain).foregroundStyle(.secondary)
-                    .help("数据导入、导出与历史版本").accessibilityLabel("数据管理")
+        GeometryReader { geometry in
+            let wide = geometry.size.width > 1000
+            VStack(spacing: 0) {
+                HStack {
+                    HStack(spacing: 8) {
+                        Image(systemName: "circle.hexagongrid.fill").foregroundStyle(.teal)
+                        Text("FOCUSCOUNT").font(.system(size: 11, weight: .semibold)).tracking(2.5)
+                    }.foregroundStyle(.secondary)
+                    Spacer()
+                    Button { focusWindow.toggle(); revealControls() } label: {
+                        Image(systemName: focusWindow.fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                            .frame(width: 32, height: 28)
+                    }.help(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
+                        .accessibilityLabel(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
+                    Menu {
+                        Button("专注记录") { showHistory = true }
+                        Button("数据管理") { showData = true }
+                    } label: { Image(systemName: "ellipsis").frame(width: 30, height: 28) }
+                        .menuStyle(.borderlessButton).fixedSize().help("记录与数据")
+                }.buttonStyle(.plain)
+                    .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
+                Spacer(minLength: 24)
+                Group {
+                    if phase == 0 {
+                        VStack(spacing: 20) {
+                            Text("A MOMENT FOR YOURSELF").font(.system(size: 10, weight: .medium)).tracking(3).foregroundStyle(.secondary)
+                            Text(greetings[encouragement].0)
+                                .font(.system(size: wide ? 38 : 27, weight: .medium, design: .rounded))
+                                .multilineTextAlignment(.center).foregroundStyle(ink)
+                            Text(greetings[encouragement].1).font(.system(size: wide ? 17 : 14)).foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                            HStack {
+                                TextField("这次想专注于什么？（可选）", text: $subject)
+                                    .textFieldStyle(.plain).onSubmit { toggleTimer() }
+                                    .accessibilityLabel("本次活动名称，可选")
+                                if !store.subjects.isEmpty {
+                                    Menu { ForEach(store.subjects, id: \.self) { item in Button(item) { subject = item } } }
+                                    label: { Image(systemName: "clock.arrow.circlepath") }
+                                        .menuStyle(.borderlessButton).fixedSize().help("最近活动")
+                                }
+                            }.padding(12).frame(maxWidth: 330)
+                                .background(ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+                            Button { toggleTimer() } label: {
+                                Label("开始专注", systemImage: "play.fill")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .padding(.horizontal, 26).padding(.vertical, 14)
+                                    .foregroundStyle(.white)
+                                    .background(Color(red: 0.08, green: 0.40, blue: 0.36), in: Capsule())
+                            }.buttonStyle(.plain).disabled(store.blocked)
+                            Text("按回车开始 · 不必等到准备完美").font(.caption).foregroundStyle(.secondary)
+                        }.transition(.opacity)
+                    } else {
+                        VStack(spacing: wide ? 26 : 16) {
+                            HStack(spacing: 8) {
+                                Circle().fill(phase == 1 ? Color.teal : .orange).frame(width: 6, height: 6)
+                                Text(phase == 1 ? "IN FOCUS" : "ON A BREAK").tracking(3)
+                            }.font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                            Text(subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "留给眼前这一件事" : subject)
+                                .font(.system(size: wide ? 22 : 16, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
+                            Button { toggleTimer() } label: {
+                                timerDigits(size: min(180, min(geometry.size.width * 0.12, geometry.size.height * 0.23)))
+                            }.buttonStyle(.plain).disabled(store.blocked)
+                                .accessibilityLabel("专注时间 " + duration(store.database.draft.seconds()))
+                                .accessibilityHint(phase == 1 ? "暂停计时" : "继续计时")
+                            FocusFlow(running: phase == 1, reduceMotion: reduceMotion)
+                                .frame(maxWidth: wide ? 460 : 300)
+                            Text(phase == 1 ? "Stay with this moment. 🌊" : "Take a breath. Come back when you’re ready. 🍃")
+                                .font(.system(size: 13)).foregroundStyle(.secondary)
+                        }.transition(.opacity)
+                    }
+                }.frame(maxWidth: .infinity)
+                Spacer(minLength: 24)
+                VStack(spacing: 12) {
+                    HStack(spacing: 16) {
+                        TextField("!stop 结束 · !sex 标记", text: $command)
+                            .textFieldStyle(.plain).font(.system(size: 12))
+                            .padding(12).frame(maxWidth: 300)
+                            .background(ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+                            .focused($commandFocused).onSubmit { submit() }
+                        if phase != 0 {
+                            Button { toggleTimer() } label: {
+                                Label(phase == 1 ? "暂停" : "继续", systemImage: phase == 1 ? "pause" : "play")
+                            }
+                            Button("结束") { store.finish() }
+                            Menu {
+                                Button("取消本次计时", role: .destructive) { cancellingTimer = true }
+                            } label: { Image(systemName: "ellipsis.circle") }.menuStyle(.borderlessButton).fixedSize()
+                        }
+                        Spacer(minLength: 0)
+                        if !focusWindow.fullScreen {
+                            Button { showHistory = true } label: { Label("专注记录", systemImage: "chart.bar.xaxis") }
+                        }
+                    }.font(.system(size: 12)).buttonStyle(.plain).foregroundStyle(.secondary).disabled(store.blocked)
+                    Text("FULL ATTENTION. ONE THING AT A TIME.").font(.system(size: 9)).tracking(2).foregroundStyle(.tertiary)
+                }.frame(maxWidth: 900).opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
+                if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(.secondary).padding(.top, 10) }
+                if let error = store.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(.top, 8) }
             }
-            Button { store.toggle(); commandFocused = true } label: {
-                VStack(spacing: 14) {
-                    Label(stateTitle, systemImage: stateIcon)
-                        .font(.system(size: 13, weight: .medium))
-                    Text(duration(store.database.draft.seconds()))
-                        .font(.system(size: 84, weight: .light, design: .monospaced))
-                        .lineLimit(1).minimumScaleFactor(0.6)
-                    Text(phase == 1 ? "点击或回车暂停" : phase == 2 ? "点击或回车继续" : "点击或回车开始")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+            .padding(.horizontal, wide ? 64 : 32).padding(.top, 22).padding(.bottom, 24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(backdrop.ignoresSafeArea())
+            .background(FocusWindowReader(controller: focusWindow))
+            .onContinuousHover { hover in
+                if case .active(let location) = hover, pointerLocation != location {
+                    pointerLocation = location
+                    revealControls()
                 }
-                .foregroundStyle(stateColor)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain).disabled(store.blocked)
-            .accessibilityLabel("\(stateTitle)，\(duration(store.database.draft.seconds()))")
-            .accessibilityHint(phase == 1 ? "暂停计时" : "开始或继续计时")
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: phase)
-            HStack(spacing: 12) {
-                TextField("!stop 结束 · !sex 标记", text: $command)
-                    .textFieldStyle(.plain).font(.system(size: 12))
-                    .padding(.horizontal, 12).padding(.vertical, 9)
-                    .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
-                    .focused($commandFocused).onSubmit { submit() }
-                Button { store.finish() } label: {
-                    Image(systemName: "stop.circle").font(.system(size: 20))
-                        .frame(width: 30, height: 32)
-                }
-                .buttonStyle(.plain).foregroundStyle(.secondary)
-                .help("结束本次专注").accessibilityLabel("结束本次专注")
-                .disabled(store.database.draft.startedAt == nil || store.blocked)
-                if store.database.draft.startedAt != nil {
-                    Button("取消计时") { cancellingTimer = true }
-                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
-                        .help("放弃本次计时并归零，不生成记录").disabled(store.blocked)
-                }
-                Rectangle().fill(Color.primary.opacity(0.10)).frame(width: 1, height: 18)
-                Button { showHistory = true } label: {
-                    Label("专注记录", systemImage: "chart.bar.xaxis")
-                        .font(.system(size: 12, weight: .medium)).padding(.vertical, 8)
-                }.buttonStyle(.plain).foregroundStyle(.secondary)
-            }
-            if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(.secondary) }
-            if let error = store.error {
-                Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled)
-                    .lineLimit(2).help(error)
             }
         }
-        .padding(.horizontal, 36).padding(.top, 16).padding(.bottom, 28)
-        .frame(width: 800, height: 400)
-        .background {
-            LinearGradient(
-                colors: [stateColor.opacity(colorScheme == .dark ? 0.16 : 0.09), stateColor.opacity(0.025)],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            ).ignoresSafeArea()
+        .frame(minWidth: 720, minHeight: 520)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: phase)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: visible)
+        .onChange(of: focusWindow.fullScreen) { _ in revealControls() }
+        .onChange(of: phase) { _ in revealControls() }
+        .onChange(of: command) { _ in revealControls() }
+        .task(id: interaction) {
+            guard focusWindow.fullScreen, phase == 1 else { return }
+            do { try await Task.sleep(for: .seconds(4)) } catch { return }
+            chromeVisible = false
+        }
+        .task(id: hint) {
+            guard !hint.isEmpty else { return }
+            do { try await Task.sleep(for: .seconds(6)) } catch { return }
+            hint = ""
         }
         .alert("取消本次计时？", isPresented: $cancellingTimer) {
             Button("保留计时", role: .cancel) {}
             Button("取消并归零", role: .destructive) {
                 if store.cancelTimer() {
-                    command = ""; subject = ""; hint = ""; commandFocused = true
+                    command = ""; subject = ""; hint = ""; encouragement = (encouragement + 1) % greetings.count; commandFocused = true
                 }
             }
         } message: { Text("本次未保存的计时将被清除，不生成专注记录。已有专注记录不会受到影响。") }
@@ -127,16 +191,32 @@ struct ContentView: View {
                     Button("返回计时") { store.resumeEditingTimer(); commandFocused = true }
                     Spacer()
                     Button("保存记录") {
-                        if store.save(subject: subject, focus: focus) { subject = ""; command = ""; commandFocused = true }
+                        let completed = duration(store.database.draft.seconds())
+                        if store.save(subject: subject, focus: focus) {
+                            subject = ""; command = ""; commandFocused = true
+                            encouragement = (encouragement + 1) % greetings.count
+                            hint = "✨ " + completed + " of focus. Well done. Take a little break."
+                        }
                     }.keyboardShortcut(.defaultAction)
                         .disabled(subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }.padding(28).frame(width: 420).interactiveDismissDisabled()
         }
     }
+    private func revealControls() { chromeVisible = true; interaction = Date() }
+    private func toggleTimer() { store.toggle(); commandFocused = true; revealControls() }
+    private func timerDigits(size: CGFloat) -> some View {
+        let parts = duration(store.database.draft.seconds()).split(separator: ":")
+        return HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(String(parts[0]) + ":" + String(parts[1]))
+                .font(.system(size: size, weight: .medium, design: .monospaced)).foregroundStyle(ink)
+            Text(":" + String(parts[2]))
+                .font(.system(size: size * 0.57, weight: .regular, design: .monospaced)).foregroundStyle(.secondary)
+        }.lineLimit(1).minimumScaleFactor(0.5)
+    }
     private func submit() {
         let value = FocusCommand(command)
-        if value == .toggle { store.toggle(); hint = "" }
+        if value == .toggle { toggleTimer(); hint = "" }
         else if value == .stop { store.finish(); command = ""; hint = "" }
         else if value == .sex {
             if store.markEvent() { command = ""; hint = "已标记 SEX · " + Date().formatted(date: .omitted, time: .standard) }
@@ -158,7 +238,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var body: some Scene {
         Window("FocusCount · 专注计时", id: "main") { ContentView() }
             .windowStyle(.hiddenTitleBar)
-            .defaultSize(width: 800, height: 400)
-            .windowResizability(.contentSize)
+            .defaultSize(width: 880, height: 580)
+            .windowResizability(.contentMinSize)
     }
 }
