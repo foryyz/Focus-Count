@@ -63,3 +63,44 @@ struct FocusFlow: View {
         }.frame(height: 54).accessibilityHidden(true).allowsHitTesting(false)
     }
 }
+
+/// A compact foil-like finish; the label stays still and readable as light passes behind it.
+struct PrismaticStartStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hovering = false
+    private let colors = [
+        Color(red: 0.12, green: 0.48, blue: 0.57),
+        Color(red: 0.25, green: 0.39, blue: 0.75),
+        Color(red: 0.53, green: 0.32, blue: 0.72),
+        Color(red: 0.69, green: 0.32, blue: 0.49),
+        Color(red: 0.64, green: 0.43, blue: 0.20)
+    ]
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 28).padding(.vertical, 14)
+            .foregroundStyle(.white)
+            .background {
+                TimelineView(.animation(minimumInterval: 1.0 / 24, paused: reduceMotion || !isEnabled)) { context in
+                    let progress = reduceMotion || !isEnabled ? 0.5 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 7) / 7
+                    Capsule().fill(LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing))
+                        .overlay {
+                            GeometryReader { geometry in
+                                Rectangle()
+                                    .fill(LinearGradient(colors: [.clear, .white.opacity(0.28), .clear], startPoint: .leading, endPoint: .trailing))
+                                    .frame(width: geometry.size.width * 0.55)
+                                    .rotationEffect(.degrees(20))
+                                    .offset(x: geometry.size.width * (progress * 2.2 - 0.7))
+                            }.clipShape(Capsule())
+                        }
+                }.allowsHitTesting(false).accessibilityHidden(true)
+            }
+            .overlay(Capsule().strokeBorder(LinearGradient(colors: [.white.opacity(0.8), .white.opacity(0.15), .white.opacity(0.45)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1))
+            .shadow(color: colors[2].opacity(isEnabled ? (hovering ? 0.28 : 0.17) : 0), radius: hovering ? 13 : 9, y: 4)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(isEnabled ? 1 : 0.45)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: hovering)
+            .onHover { hovering = $0 }
+    }
+}
