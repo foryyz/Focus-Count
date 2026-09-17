@@ -32,6 +32,7 @@ struct ContentView: View {
     ]
     private var phase: Int { store.database.draft.isRunning ? 1 : store.database.draft.startedAt == nil ? 0 : 2 }
     private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
+    private var pauseInk: Color { colorScheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
     private var backdrop: Color { colorScheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
     private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || !command.isEmpty || showData || showHistory || cancellingTimer || store.error != nil }
     var body: some View {
@@ -89,18 +90,35 @@ struct ContentView: View {
                     } else {
                         VStack(spacing: wide ? 26 : 16) {
                             HStack(spacing: 8) {
-                                Circle().fill(phase == 1 ? Color.teal : .orange).frame(width: 6, height: 6)
-                                Text(phase == 1 ? "IN FOCUS" : "ON A BREAK").tracking(3)
-                            }.font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                                Image(systemName: phase == 1 ? "circle.fill" : "pause.fill")
+                                    .font(.system(size: phase == 1 ? 6 : 11, weight: .bold))
+                                Text(phase == 1 ? "IN FOCUS" : "已暂停 · PAUSED").tracking(2)
+                            }.font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(phase == 1 ? Color.teal : pauseInk)
+                                .padding(.horizontal, 14).padding(.vertical, 8)
+                                .background((phase == 1 ? Color.teal : pauseInk).opacity(0.09), in: Capsule())
                             Text(subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "留给眼前这一件事" : subject)
                                 .font(.system(size: wide ? 22 : 16, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
                             Button { toggleTimer() } label: {
                                 timerDigits(size: min(180, min(geometry.size.width * 0.12, geometry.size.height * 0.23)))
                             }.buttonStyle(.plain).disabled(store.blocked)
-                                .accessibilityLabel("专注时间 " + duration(store.database.draft.seconds()))
+                                .accessibilityLabel((phase == 1 ? "正在专注，" : "已暂停，") + duration(store.database.draft.seconds()))
                                 .accessibilityHint(phase == 1 ? "暂停计时" : "继续计时")
-                            FocusFlow(running: phase == 1, reduceMotion: reduceMotion)
-                                .frame(maxWidth: wide ? 460 : 300)
+                            Group {
+                                if phase == 1 {
+                                    FocusFlow(running: true, reduceMotion: reduceMotion)
+                                        .frame(maxWidth: wide ? 460 : 300)
+                                } else {
+                                    Button { toggleTimer() } label: {
+                                        Label("继续专注", systemImage: "play.fill")
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .padding(.horizontal, 24).padding(.vertical, 12)
+                                            .foregroundStyle(pauseInk)
+                                            .background(pauseInk.opacity(0.12), in: Capsule())
+                                            .overlay(Capsule().strokeBorder(pauseInk.opacity(0.22), lineWidth: 1))
+                                    }.buttonStyle(.plain).disabled(store.blocked)
+                                }
+                            }.frame(height: 54)
                             Text(phase == 1 ? "Stay with this moment. 🌊" : "Take a breath. Come back when you’re ready. 🍃")
                                 .font(.system(size: 13)).foregroundStyle(.secondary)
                         }.transition(.opacity)
@@ -209,9 +227,9 @@ struct ContentView: View {
         let parts = duration(store.database.draft.seconds()).split(separator: ":")
         return HStack(alignment: .firstTextBaseline, spacing: 2) {
             Text(String(parts[0]) + ":" + String(parts[1]))
-                .font(.system(size: size, weight: .medium, design: .monospaced)).foregroundStyle(ink)
+                .font(.system(size: size, weight: phase == 1 ? .medium : .light, design: .monospaced)).foregroundStyle(phase == 1 ? ink : pauseInk)
             Text(":" + String(parts[2]))
-                .font(.system(size: size * 0.57, weight: .regular, design: .monospaced)).foregroundStyle(.secondary)
+                .font(.system(size: size * 0.57, weight: phase == 1 ? .regular : .light, design: .monospaced)).foregroundStyle(phase == 1 ? Color.secondary : pauseInk.opacity(0.75))
         }.lineLimit(1).minimumScaleFactor(0.5)
     }
     private func submit() {
