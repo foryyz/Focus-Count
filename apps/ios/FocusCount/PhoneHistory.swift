@@ -185,24 +185,30 @@ struct PhoneEventHistory: View {
     @State private var deleting: TimeEvent?
     @State private var purging: Set<UUID> = []
     @State private var message: String?
+    @State private var command = ""
     private var events: [TimeEvent] {
         (store.state.events ?? []).filter { ($0.deletedAt != nil) == deleted }
             .sorted { $0.occurredAt > $1.occurredAt }
+    }
+    private func addMarker() {
+        let time = Date()
+        if store.markCommand(command, at: time) {
+            deleted = false
+            message = "已标记 " + String(command.trimmingCharacters(in: .whitespacesAndNewlines).dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines).lowercased() + " · " + time.formatted(date: .omitted, time: .standard)
+            command = ""
+        }
     }
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    Button {
-                        let time = Date()
-                        if store.markEvent(at: time) {
-                            deleted = false
-                            message = "已标记 SEX · " + time.formatted(date: .omitted, time: .standard)
-                        }
-                    } label: { Label("标记 SEX 一次", systemImage: "plus.circle.fill") }
-                        .disabled(store.blocked)
+                    TextField("!文字，例如 !sad", text: $command)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .onSubmit { addMarker() }
+                    Button { addMarker() } label: { Label("添加标记", systemImage: "plus.circle.fill") }
+                        .disabled(store.blocked || command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     if let message { Text(message).font(.footnote).foregroundStyle(.teal) }
-                } footer: { Text("仅记录当下日期时间，不计时、不影响当前专注。每点一次记录一次，对应 Mac 的 !sex。") }
+                } footer: { Text("仅记录当下日期时间，不计时、不影响当前专注。使用 ! 加任意文字，英文统一小写；!stop 也仅作为标记。") }
                 Section {
                     Picker("范围", selection: $deleted) {
                         Text("时间标记").tag(false)

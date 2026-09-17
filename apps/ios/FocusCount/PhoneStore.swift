@@ -7,6 +7,7 @@ struct PhoneState: Codable {
     var purgedIDs: Set<UUID>?
     var sessions: [StudySession] = []
     var clock = MobileClock()
+    var activity: String?
 }
 
 @MainActor final class PhoneStore: ObservableObject {
@@ -54,11 +55,25 @@ struct PhoneState: Codable {
             return true
         } catch { self.error = "保存失败，修改未生效：\(error.localizedDescription)"; return false }
     }
-    @discardableResult func cancelTimer() -> Bool { commit { $0.clock = MobileClock() } }
-    @discardableResult func markEvent(at date: Date = Date()) -> Bool {
-        commit {
+    @discardableResult func cancelTimer() -> Bool { commit { $0.clock = MobileClock(); $0.activity = nil } }
+    @discardableResult func start(activity: String) -> Bool {
+        guard state.clock.startedAt == nil else { return false }
+        return commit {
+            $0.activity = activity.trimmingCharacters(in: .whitespacesAndNewlines)
+            $0.clock.toggle()
+        }
+    }
+    @discardableResult func markCommand(_ command: String, at date: Date = Date()) -> Bool {
+        let input = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard input.hasPrefix("!") else { error = "输入 ! 加标记文字，例如 !sad。"; return false }
+        return markEvent(kind: String(input.dropFirst()), at: date)
+    }
+    @discardableResult func markEvent(kind: String = "sex", at date: Date = Date()) -> Bool {
+        let label = kind.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !label.isEmpty else { error = "请在 ! 后填写标记文字。"; return false }
+        return commit {
             if $0.events == nil { $0.events = [] }
-            $0.events?.append(TimeEvent(kind: "SEX", occurredAt: date))
+            $0.events?.append(TimeEvent(kind: label, occurredAt: date))
         }
     }
     @discardableResult func setEventDeleted(_ id: UUID, deleted: Bool) -> Bool {
@@ -89,7 +104,7 @@ struct PhoneState: Codable {
         return commit {
             if let index = $0.sessions.firstIndex(where: { $0.id == edited.id }) { $0.sessions[index] = RecordExchange.replacing($0.sessions[index], with: edited) }
             else { $0.sessions.append(edited) }
-            if completesTimer { $0.clock = MobileClock() }
+            if completesTimer { $0.clock = MobileClock(); $0.activity = nil }
         }
     }
     func delete(_ session: StudySession, restore: Bool = false) {

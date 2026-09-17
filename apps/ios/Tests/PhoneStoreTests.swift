@@ -5,6 +5,53 @@ import FocusCountCore
 final class PhoneStoreTests: XCTestCase {
     private func directory() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString) }
 
+    @MainActor func testCustomMarkersPreserveTimerAndMergeWithMac() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let phone = PhoneStore(directory: root)
+        XCTAssertTrue(phone.markCommand(" !Sad "))
+        XCTAssertNil(phone.state.clock.startedAt)
+        XCTAssertTrue(phone.start(activity: " Reading "))
+        let anchor = phone.state.clock.runningSince
+        XCTAssertTrue(phone.markCommand("!stop"))
+        XCTAssertTrue(phone.markCommand("! 阅读笔记 "))
+        XCTAssertFalse(phone.markCommand("!  "))
+        XCTAssertFalse(phone.markCommand("sad"))
+        XCTAssertEqual(phone.state.events?.map(\.kind), ["sad", "stop", "阅读笔记"])
+        XCTAssertEqual(phone.state.clock.runningSince, anchor)
+        XCTAssertNil(phone.state.clock.pendingEnd)
+        let reopened = PhoneStore(directory: root)
+        XCTAssertEqual(reopened.state.activity, "Reading")
+        XCTAssertEqual(reopened.state.events?.count, 3)
+        let exported = try RecordExchange.decode(phone.export())
+        let peer = PhoneStore(directory: root.appendingPathComponent("peer"))
+        XCTAssertTrue(peer.importRecords(exported))
+        XCTAssertTrue(peer.importRecords(exported))
+        XCTAssertEqual(peer.state.events?.count, 3)
+        XCTAssertTrue(phone.cancelTimer())
+        XCTAssertNil(phone.state.activity)
+    }
+
+    @MainActor func testLegacyStateWithoutActivityLoadsAndCompletionClearsActivity() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let legacy = try JSONEncoder().encode(PhoneState())
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: legacy) as? [String: Any])
+        json.removeValue(forKey: "activity")
+        try JSONSerialization.data(withJSONObject: json).write(to: root.appendingPathComponent("app-state.json"))
+        let phone = PhoneStore(directory: root)
+        XCTAssertFalse(phone.blocked)
+        XCTAssertTrue(phone.start(activity: "Writing"))
+        XCTAssertFalse(phone.start(activity: "Should not overwrite"))
+        phone.finish()
+        phone.returnToTimer()
+        XCTAssertEqual(phone.state.activity, "Writing")
+        XCTAssertTrue(phone.save(sample(), completesTimer: true))
+        XCTAssertNil(phone.state.activity)
+        XCTAssertNil(phone.state.clock.startedAt)
+    }
+
     @MainActor func testPermanentDeletionSurvivesOldImportsAndRelaunch() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
