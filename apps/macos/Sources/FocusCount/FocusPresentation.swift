@@ -44,6 +44,7 @@ struct FocusWindowReader: NSViewRepresentable {
 struct FocusFlow: View {
     let running: Bool
     let reduceMotion: Bool
+    var tint: Color = .teal
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 24, paused: !running || reduceMotion)) { context in
             Canvas { canvas, size in
@@ -57,7 +58,7 @@ struct FocusFlow: View {
                         if step == 0 { path.move(to: CGPoint(x: x, y: y)) }
                         else { path.addLine(to: CGPoint(x: x, y: y)) }
                     }
-                    canvas.stroke(path, with: .color(.teal.opacity(running ? 0.48 - Double(line) * 0.12 : 0.15)), lineWidth: line == 0 ? 2 : 1)
+                    canvas.stroke(path, with: .color(tint.opacity(running ? 0.48 - Double(line) * 0.12 : 0.32 - Double(line) * 0.07)), lineWidth: line == 0 ? 2 : 1)
                 }
             }
         }.frame(height: 54).accessibilityHidden(true).allowsHitTesting(false)
@@ -78,7 +79,7 @@ struct PrismaticStartStyle: ButtonStyle {
     ]
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(.horizontal, 28).padding(.vertical, 14)
+            .padding(.horizontal, 32).padding(.vertical, 15)
             .foregroundStyle(.white)
             .background {
                 TimelineView(.animation(minimumInterval: 1.0 / 24, paused: reduceMotion || !isEnabled)) { context in

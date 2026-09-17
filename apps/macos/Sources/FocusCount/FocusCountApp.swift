@@ -63,12 +63,14 @@ struct ContentView: View {
                 Spacer(minLength: 24)
                 Group {
                     if phase == 0 {
-                        VStack(spacing: 20) {
+                        VStack(spacing: 28) {
+                            VStack(spacing: 12) {
                             Text(greetings[encouragement].0)
-                                .font(.system(size: wide ? 38 : 27, weight: .medium, design: .rounded))
+                                .font(.system(size: min(44, max(30, geometry.size.width * 0.037)), weight: .medium, design: .rounded))
                                 .multilineTextAlignment(.center).foregroundStyle(ink)
-                            Text(greetings[encouragement].1).font(.system(size: wide ? 17 : 14)).foregroundStyle(.secondary)
+                            Text(greetings[encouragement].1).font(.system(size: wide ? 19 : 16)).foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
+                            }.frame(maxWidth: 760).fixedSize(horizontal: false, vertical: true)
                             HStack {
                                 TextField("这次想专注于什么？（可选）", text: $subject)
                                     .textFieldStyle(.plain).onSubmit { submitActivity() }.help("填写活动开始专注，或输入 !文字并回车添加标记")
@@ -78,11 +80,11 @@ struct ContentView: View {
                                     label: { Image(systemName: "clock.arrow.circlepath") }
                                         .menuStyle(.borderlessButton).fixedSize().help("最近活动")
                                 }
-                            }.padding(12).frame(maxWidth: 330)
+                            }.font(.system(size: 15)).padding(14).frame(maxWidth: 360)
                                 .background(ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
                             Button { submitActivity() } label: {
                                 Label("开始专注", systemImage: "play.fill")
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.system(size: 17, weight: .semibold))
                             }.buttonStyle(PrismaticStartStyle()).disabled(store.blocked).keyboardShortcut(.defaultAction)
                         }.transition(.opacity)
                     } else {
@@ -104,21 +106,8 @@ struct ContentView: View {
                             }.buttonStyle(.plain).disabled(store.blocked).keyboardShortcut(.defaultAction)
                                 .accessibilityLabel((phase == 1 ? "正在专注，" : "已暂停，") + duration(store.database.draft.seconds()))
                                 .accessibilityHint(phase == 1 ? "暂停计时" : "继续计时")
-                            Group {
-                                if phase == 1 {
-                                    FocusFlow(running: true, reduceMotion: reduceMotion)
-                                        .frame(maxWidth: wide ? 460 : 300)
-                                } else {
-                                    Button { toggleTimer() } label: {
-                                        Label("继续专注", systemImage: "play.fill")
-                                            .font(.system(size: 14, weight: .semibold))
-                                            .padding(.horizontal, 24).padding(.vertical, 12)
-                                            .foregroundStyle(pauseInk)
-                                            .background(pauseInk.opacity(0.12), in: Capsule())
-                                            .overlay(Capsule().strokeBorder(pauseInk.opacity(0.22), lineWidth: 1))
-                                    }.buttonStyle(.plain).disabled(store.blocked)
-                                }
-                            }.frame(height: 54)
+                            FocusFlow(running: phase == 1, reduceMotion: reduceMotion, tint: phase == 1 ? .teal : pauseInk)
+                                .frame(maxWidth: wide ? 460 : 300)
                             Text(phase == 1 ? "Stay with this moment. 🌊" : "Take a breath. Come back when you’re ready. 🍃")
                                 .font(.system(size: 13)).foregroundStyle(.secondary)
                         }.transition(.opacity)
@@ -277,7 +266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var body: some Scene {
         Window("FocusCount · 专注计时", id: "main") { ContentView() }
             .windowStyle(.hiddenTitleBar)
-            .defaultSize(width: 880, height: 500)
+            .defaultSize(width: 920, height: 560)
             .windowResizability(.contentMinSize)
     }
 }
