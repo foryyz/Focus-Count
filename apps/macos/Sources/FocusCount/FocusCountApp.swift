@@ -46,23 +46,23 @@ struct ContentView: View {
                         Text("FOCUSCOUNT").font(.system(size: 11, weight: .semibold)).tracking(2.5)
                     }.foregroundStyle(.secondary)
                     Spacer()
+                    Button { showHistory = true } label: {
+                        Image(systemName: "chart.bar.xaxis").frame(width: 32, height: 28)
+                    }.help("专注记录").accessibilityLabel("专注记录")
+                    Button { showData = true } label: {
+                        Image(systemName: "arrow.up.arrow.down").frame(width: 32, height: 28)
+                    }.help("数据管理").accessibilityLabel("数据管理")
                     Button { focusWindow.toggle(); revealControls() } label: {
                         Image(systemName: focusWindow.fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                             .frame(width: 32, height: 28)
                     }.help(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
                         .accessibilityLabel(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
-                    Menu {
-                        Button("专注记录") { showHistory = true }
-                        Button("数据管理") { showData = true }
-                    } label: { Image(systemName: "ellipsis").frame(width: 30, height: 28) }
-                        .menuStyle(.borderlessButton).fixedSize().help("记录与数据")
                 }.buttonStyle(.plain)
                     .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
                 Spacer(minLength: 24)
                 Group {
                     if phase == 0 {
                         VStack(spacing: 20) {
-                            Text("A MOMENT FOR YOURSELF").font(.system(size: 10, weight: .medium)).tracking(3).foregroundStyle(.secondary)
                             Text(greetings[encouragement].0)
                                 .font(.system(size: wide ? 38 : 27, weight: .medium, design: .rounded))
                                 .multilineTextAlignment(.center).foregroundStyle(ink)
@@ -70,7 +70,7 @@ struct ContentView: View {
                                 .multilineTextAlignment(.center)
                             HStack {
                                 TextField("这次想专注于什么？（可选）", text: $subject)
-                                    .textFieldStyle(.plain).onSubmit { toggleTimer() }
+                                    .textFieldStyle(.plain).onSubmit { submitActivity() }.help("填写活动开始专注，或输入 !文字并回车添加标记")
                                     .accessibilityLabel("本次活动名称，可选")
                                 if !store.subjects.isEmpty {
                                     Menu { ForEach(store.subjects, id: \.self) { item in Button(item) { subject = item } } }
@@ -79,7 +79,7 @@ struct ContentView: View {
                                 }
                             }.padding(12).frame(maxWidth: 330)
                                 .background(ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
-                            Button { toggleTimer() } label: {
+                            Button { submitActivity() } label: {
                                 Label("开始专注", systemImage: "play.fill")
                                     .font(.system(size: 15, weight: .semibold))
                                     .padding(.horizontal, 26).padding(.vertical, 14)
@@ -98,8 +98,10 @@ struct ContentView: View {
                                 .foregroundStyle(phase == 1 ? Color.teal : pauseInk)
                                 .padding(.horizontal, 14).padding(.vertical, 8)
                                 .background((phase == 1 ? Color.teal : pauseInk).opacity(0.09), in: Capsule())
-                            Text(subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "留给眼前这一件事" : subject)
-                                .font(.system(size: wide ? 22 : 16, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
+                            if !subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                Text(subject)
+                                    .font(.system(size: wide ? 22 : 16, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
+                            }
                             Button { toggleTimer() } label: {
                                 timerDigits(size: min(180, min(geometry.size.width * 0.12, geometry.size.height * 0.23)))
                             }.buttonStyle(.plain).disabled(store.blocked).keyboardShortcut(.defaultAction)
@@ -126,44 +128,36 @@ struct ContentView: View {
                     }
                 }.frame(maxWidth: .infinity)
                 Spacer(minLength: 24)
-                VStack(spacing: 12) {
-                    HStack(spacing: 16) {
-                        if phase != 0 {
-                            Button { toggleTimer() } label: {
-                                Label(phase == 1 ? "暂停" : "继续", systemImage: phase == 1 ? "pause" : "play")
-                            }
-                            Button { store.finish() } label: {
-                                Label("结束", systemImage: "stop.circle")
-                            }.help("结束本次专注并保存记录")
-                        }
-                        Button {
-                            showMarkerInput.toggle()
-                            commandFocused = showMarkerInput
-                            revealControls()
-                        } label: {
-                            Image(systemName: "ellipsis.circle").frame(width: 24, height: 24)
-                        }.help(showMarkerInput ? "收起标记输入框" : "添加时间标记")
-                            .accessibilityLabel(showMarkerInput ? "收起标记输入框" : "添加时间标记")
+                if phase != 0 {
+                    VStack(spacing: 12) {
                         if showMarkerInput {
                             TextField("!文字 标记，例如 !sad", text: $command)
                                 .textFieldStyle(.plain).font(.system(size: 12))
-                                .padding(10).frame(maxWidth: 250)
+                                .padding(10).frame(maxWidth: 280)
                                 .background(ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
                                 .focused($commandFocused).onSubmit { submit() }
                                 .task { commandFocused = true }
                                 .onExitCommand { showMarkerInput = false; commandFocused = false }
                         }
-                        if phase != 0 {
+                        HStack(spacing: 24) {
+                            Button { toggleTimer() } label: {
+                                Label(phase == 1 ? "暂停" : "继续", systemImage: phase == 1 ? "pause" : "play")
+                            }
+                            Button {
+                                showMarkerInput.toggle()
+                                commandFocused = showMarkerInput
+                                revealControls()
+                            } label: { Label("标记", systemImage: "ellipsis.circle") }
+                                .help(showMarkerInput ? "收起标记输入框" : "添加时间标记")
                             Button { cancellingTimer = true } label: {
-                                Image(systemName: "xmark.circle").frame(width: 24, height: 24)
-                            }.help("取消本次计时，不保存记录").accessibilityLabel("取消本次计时")
-                        }
-                        Spacer(minLength: 0)
-                        if !focusWindow.fullScreen {
-                            Button { showHistory = true } label: { Label("专注记录", systemImage: "chart.bar.xaxis") }
-                        }
-                    }.font(.system(size: 12)).buttonStyle(.plain).foregroundStyle(.secondary).disabled(store.blocked)
-                }.frame(maxWidth: 900).opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
+                                Label("取消", systemImage: "xmark.circle")
+                            }.help("取消本次计时，不保存记录")
+                            Button { store.finish() } label: {
+                                Label("结束", systemImage: "stop.circle")
+                            }.help("结束本次专注并保存记录")
+                        }.font(.system(size: 12)).buttonStyle(.plain).foregroundStyle(.secondary).disabled(store.blocked)
+                    }.frame(maxWidth: 900).opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
+                }
                 if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(.secondary).padding(.top, 10) }
                 if let error = store.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(.top, 8) }
             }
@@ -178,7 +172,7 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(minWidth: 720, minHeight: 520)
+        .frame(minWidth: 720, minHeight: phase == 0 ? 440 : 520)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: phase)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: visible)
         .onChange(of: focusWindow.fullScreen) { _ in revealControls() }
@@ -198,7 +192,7 @@ struct ContentView: View {
             Button("保留计时", role: .cancel) {}
             Button("取消并归零", role: .destructive) {
                 if store.cancelTimer() {
-                    command = ""; subject = ""; hint = ""; encouragement = (encouragement + 1) % greetings.count; commandFocused = showMarkerInput
+                    command = ""; subject = ""; hint = ""; showMarkerInput = false; encouragement = (encouragement + 1) % greetings.count; commandFocused = showMarkerInput
                 }
             }
         } message: { Text("本次未保存的计时将被清除，不生成专注记录。已有专注记录不会受到影响。") }
@@ -227,7 +221,7 @@ struct ContentView: View {
                     Button("保存记录") {
                         let completed = duration(store.database.draft.seconds())
                         if store.save(subject: subject, focus: focus) {
-                            subject = ""; command = ""; commandFocused = showMarkerInput
+                            subject = ""; command = ""; showMarkerInput = false; commandFocused = false
                             encouragement = (encouragement + 1) % greetings.count
                             hint = "✨ " + completed + " of focus. Well done. Take a little break."
                         }
@@ -248,18 +242,26 @@ struct ContentView: View {
                 .font(.system(size: size * 0.57, weight: phase == 1 ? .regular : .light, design: .monospaced)).foregroundStyle(phase == 1 ? Color.secondary : pauseInk.opacity(0.75))
         }.lineLimit(1).minimumScaleFactor(0.5)
     }
+    private func submitActivity() {
+        if subject.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("!") {
+            if saveMarker(subject) { subject = "" }
+        } else { toggleTimer() }
+    }
+    @discardableResult private func saveMarker(_ input: String) -> Bool {
+        guard case .mark(let label) = FocusCommand(input) else {
+            hint = "输入 ! 加标记文字，例如 !sex、!sad。"
+            return false
+        }
+        let time = Date()
+        guard store.markEvent(kind: label, at: time) else { return false }
+        hint = "已标记 " + label + " · " + time.formatted(date: .omitted, time: .standard)
+        return true
+    }
     private func submit() {
-        switch FocusCommand(command) {
-        case .mark(let label):
-            let time = Date()
-            if store.markEvent(kind: label, at: time) {
-                command = ""
-                showMarkerInput = false
-                commandFocused = false
-                hint = "已标记 " + label + " · " + time.formatted(date: .omitted, time: .standard)
-            }
-        case .unknown:
-            hint = "输入 ! 加标记文字，例如 !sex、!sad；结束专注请点击结束按钮。"
+        if saveMarker(command) {
+            command = ""
+            showMarkerInput = false
+            commandFocused = false
         }
     }
 
@@ -278,7 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var body: some Scene {
         Window("FocusCount · 专注计时", id: "main") { ContentView() }
             .windowStyle(.hiddenTitleBar)
-            .defaultSize(width: 880, height: 580)
+            .defaultSize(width: 880, height: 500)
             .windowResizability(.contentMinSize)
     }
 }
