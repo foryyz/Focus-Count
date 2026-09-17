@@ -203,13 +203,11 @@ import AppKit
 }
 
 enum FocusCommand: Equatable {
-    case toggle, stop, sex, unknown
+    case mark(String), unknown
     init(_ input: String) {
-        switch input.trimmingCharacters(in: .whitespacesAndNewlines) {
-        case "": self = .toggle
-        case "!stop": self = .stop
-        case "!sex": self = .sex
-        default: self = .unknown
-        }
+        let value = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.hasPrefix("!") else { self = .unknown; return }
+        let label = String(value.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self = label.isEmpty ? .unknown : .mark(label)
     }
 }

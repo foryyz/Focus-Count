@@ -3,11 +3,29 @@ import XCTest
 @testable import FocusCount
 final class FocusCountTests: XCTestCase {
     func testCommandSyntax() {
-        XCTAssertEqual(FocusCommand(" !stop "), .stop)
-        XCTAssertEqual(FocusCommand("!sex"), .sex)
-        XCTAssertEqual(FocusCommand(""), .toggle)
+        XCTAssertEqual(FocusCommand(" !stop "), .mark("stop"))
+        XCTAssertEqual(FocusCommand("!sex"), .mark("sex"))
+        XCTAssertEqual(FocusCommand("!Sad"), .mark("sad"))
+        XCTAssertEqual(FocusCommand("!深度阅读"), .mark("深度阅读"))
+        XCTAssertEqual(FocusCommand("!good day"), .mark("good day"))
+        XCTAssertEqual(FocusCommand(""), .unknown)
+        XCTAssertEqual(FocusCommand("!  "), .unknown)
         XCTAssertEqual(FocusCommand("stop!"), .unknown)
-        XCTAssertEqual(FocusCommand("!sex extra"), .unknown)
+    }
+    @MainActor func testCustomStopMarkerDoesNotFinishTimer() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root, observeSystem: false)
+        store.toggle()
+        let anchor = store.database.draft.runningSince
+        for input in ["!stop", "!Sad"] {
+            guard case .mark(let kind) = FocusCommand(input) else { return XCTFail("Missing marker") }
+            XCTAssertTrue(store.markEvent(kind: kind))
+        }
+        XCTAssertEqual(store.database.draft.runningSince, anchor)
+        XCTAssertNil(store.database.pendingEnd)
+        XCTAssertEqual(store.database.events?.map(\.kind), ["stop", "sad"])
+        XCTAssertEqual(try RecordExchange.decode(store.export()).events?.map(\.kind), ["stop", "sad"])
     }
     func testPauseResumeExcludesPause() {
         var timer = TimerState()

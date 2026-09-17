@@ -10,6 +10,7 @@ func duration(_ seconds: Double) -> String {
 struct ContentView: View {
     @StateObject private var store = StudyStore()
     @State private var command = ""
+    @State private var showMarkerInput = false
     @State private var subject = ""
     @State private var focus = "A"
     @State private var hint = ""
@@ -34,7 +35,7 @@ struct ContentView: View {
     private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { colorScheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
     private var backdrop: Color { colorScheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
-    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || !command.isEmpty || showData || showHistory || cancellingTimer || store.error != nil }
+    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showData || showHistory || cancellingTimer || store.error != nil }
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 1000
@@ -84,7 +85,7 @@ struct ContentView: View {
                                     .padding(.horizontal, 26).padding(.vertical, 14)
                                     .foregroundStyle(.white)
                                     .background(Color(red: 0.08, green: 0.40, blue: 0.36), in: Capsule())
-                            }.buttonStyle(.plain).disabled(store.blocked)
+                            }.buttonStyle(.plain).disabled(store.blocked).keyboardShortcut(.defaultAction)
                             Text("按回车开始 · 不必等到准备完美").font(.caption).foregroundStyle(.secondary)
                         }.transition(.opacity)
                     } else {
@@ -101,7 +102,7 @@ struct ContentView: View {
                                 .font(.system(size: wide ? 22 : 16, weight: .medium)).foregroundStyle(.secondary).lineLimit(1)
                             Button { toggleTimer() } label: {
                                 timerDigits(size: min(180, min(geometry.size.width * 0.12, geometry.size.height * 0.23)))
-                            }.buttonStyle(.plain).disabled(store.blocked)
+                            }.buttonStyle(.plain).disabled(store.blocked).keyboardShortcut(.defaultAction)
                                 .accessibilityLabel((phase == 1 ? "正在专注，" : "已暂停，") + duration(store.database.draft.seconds()))
                                 .accessibilityHint(phase == 1 ? "暂停计时" : "继续计时")
                             Group {
@@ -127,26 +128,41 @@ struct ContentView: View {
                 Spacer(minLength: 24)
                 VStack(spacing: 12) {
                     HStack(spacing: 16) {
-                        TextField("!stop 结束 · !sex 标记", text: $command)
-                            .textFieldStyle(.plain).font(.system(size: 12))
-                            .padding(12).frame(maxWidth: 300)
-                            .background(ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
-                            .focused($commandFocused).onSubmit { submit() }
                         if phase != 0 {
                             Button { toggleTimer() } label: {
                                 Label(phase == 1 ? "暂停" : "继续", systemImage: phase == 1 ? "pause" : "play")
                             }
-                            Button("结束") { store.finish() }
-                            Menu {
-                                Button("取消本次计时", role: .destructive) { cancellingTimer = true }
-                            } label: { Image(systemName: "ellipsis.circle") }.menuStyle(.borderlessButton).fixedSize()
+                            Button { store.finish() } label: {
+                                Label("结束", systemImage: "stop.circle")
+                            }.help("结束本次专注并保存记录")
+                        }
+                        Button {
+                            showMarkerInput.toggle()
+                            commandFocused = showMarkerInput
+                            revealControls()
+                        } label: {
+                            Image(systemName: "ellipsis.circle").frame(width: 24, height: 24)
+                        }.help(showMarkerInput ? "收起标记输入框" : "添加时间标记")
+                            .accessibilityLabel(showMarkerInput ? "收起标记输入框" : "添加时间标记")
+                        if showMarkerInput {
+                            TextField("!文字 标记，例如 !sad", text: $command)
+                                .textFieldStyle(.plain).font(.system(size: 12))
+                                .padding(10).frame(maxWidth: 250)
+                                .background(ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+                                .focused($commandFocused).onSubmit { submit() }
+                                .task { commandFocused = true }
+                                .onExitCommand { showMarkerInput = false; commandFocused = false }
+                        }
+                        if phase != 0 {
+                            Button { cancellingTimer = true } label: {
+                                Image(systemName: "xmark.circle").frame(width: 24, height: 24)
+                            }.help("取消本次计时，不保存记录").accessibilityLabel("取消本次计时")
                         }
                         Spacer(minLength: 0)
                         if !focusWindow.fullScreen {
                             Button { showHistory = true } label: { Label("专注记录", systemImage: "chart.bar.xaxis") }
                         }
                     }.font(.system(size: 12)).buttonStyle(.plain).foregroundStyle(.secondary).disabled(store.blocked)
-                    Text("FULL ATTENTION. ONE THING AT A TIME.").font(.system(size: 9)).tracking(2).foregroundStyle(.tertiary)
                 }.frame(maxWidth: 900).opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
                 if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(.secondary).padding(.top, 10) }
                 if let error = store.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(.top, 8) }
@@ -182,13 +198,13 @@ struct ContentView: View {
             Button("保留计时", role: .cancel) {}
             Button("取消并归零", role: .destructive) {
                 if store.cancelTimer() {
-                    command = ""; subject = ""; hint = ""; encouragement = (encouragement + 1) % greetings.count; commandFocused = true
+                    command = ""; subject = ""; hint = ""; encouragement = (encouragement + 1) % greetings.count; commandFocused = showMarkerInput
                 }
             }
         } message: { Text("本次未保存的计时将被清除，不生成专注记录。已有专注记录不会受到影响。") }
-        .onAppear { commandFocused = true }
-        .sheet(isPresented: $showData, onDismiss: { commandFocused = true }) { DataExchangeView(store: store) }
-        .sheet(isPresented: $showHistory, onDismiss: { commandFocused = true }) { HistoryView(store: store) }
+        .onAppear { commandFocused = showMarkerInput }
+        .sheet(isPresented: $showData, onDismiss: { commandFocused = showMarkerInput }) { DataExchangeView(store: store) }
+        .sheet(isPresented: $showHistory, onDismiss: { commandFocused = showMarkerInput }) { HistoryView(store: store) }
         .sheet(isPresented: Binding(get: { store.database.pendingEnd != nil }, set: { _ in })) {
             VStack(alignment: .leading, spacing: 20) {
                 Label("完成本次专注", systemImage: "checkmark.circle.fill")
@@ -206,12 +222,12 @@ struct ContentView: View {
                 Text("S 最高 · D 最低，按本次专注的主观感受选择。").font(.caption).foregroundStyle(.secondary)
                 if let error = store.error { Text(error).foregroundStyle(.red).font(.caption) }
                 HStack {
-                    Button("返回计时") { store.resumeEditingTimer(); commandFocused = true }
+                    Button("返回计时") { store.resumeEditingTimer(); commandFocused = showMarkerInput }
                     Spacer()
                     Button("保存记录") {
                         let completed = duration(store.database.draft.seconds())
                         if store.save(subject: subject, focus: focus) {
-                            subject = ""; command = ""; commandFocused = true
+                            subject = ""; command = ""; commandFocused = showMarkerInput
                             encouragement = (encouragement + 1) % greetings.count
                             hint = "✨ " + completed + " of focus. Well done. Take a little break."
                         }
@@ -222,7 +238,7 @@ struct ContentView: View {
         }
     }
     private func revealControls() { chromeVisible = true; interaction = Date() }
-    private func toggleTimer() { store.toggle(); commandFocused = true; revealControls() }
+    private func toggleTimer() { store.toggle(); commandFocused = showMarkerInput; revealControls() }
     private func timerDigits(size: CGFloat) -> some View {
         let parts = duration(store.database.draft.seconds()).split(separator: ":")
         return HStack(alignment: .firstTextBaseline, spacing: 2) {
@@ -233,14 +249,20 @@ struct ContentView: View {
         }.lineLimit(1).minimumScaleFactor(0.5)
     }
     private func submit() {
-        let value = FocusCommand(command)
-        if value == .toggle { toggleTimer(); hint = "" }
-        else if value == .stop { store.finish(); command = ""; hint = "" }
-        else if value == .sex {
-            if store.markEvent() { command = ""; hint = "已标记 SEX · " + Date().formatted(date: .omitted, time: .standard) }
+        switch FocusCommand(command) {
+        case .mark(let label):
+            let time = Date()
+            if store.markEvent(kind: label, at: time) {
+                command = ""
+                showMarkerInput = false
+                commandFocused = false
+                hint = "已标记 " + label + " · " + time.formatted(date: .omitted, time: .standard)
+            }
+        case .unknown:
+            hint = "输入 ! 加标记文字，例如 !sex、!sad；结束专注请点击结束按钮。"
         }
-        else { hint = "!stop 结束专注；!sex 标记一次；空输入回车开始或暂停。" }
     }
+
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {

@@ -23,7 +23,7 @@ struct EventHistoryView: View {
                 Text("时间标记").tag(false)
                 Text("最近删除").tag(true)
             }.pickerStyle(.segmented).labelsHidden()
-            Text("输入 !sex 并回车，记录一次 SEX 及当下时间；不计时，也不影响正在进行的专注。")
+            Text("点击计时页的 … 输入 !文字并回车，记录标记和当下时间；不影响专注计时。")
                 .font(.caption).foregroundStyle(.secondary)
             if events.isEmpty {
                 Text(deleted ? "没有已删除的时间标记" : "暂无时间标记")
