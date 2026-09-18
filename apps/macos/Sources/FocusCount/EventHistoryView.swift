@@ -5,13 +5,13 @@ import FocusCountCore
 struct EventHistoryView: View {
     @ObservedObject var store: StudyStore
     @Environment(\.dismiss) private var dismiss
-    @State private var range = 90
+    @State private var range = -1
     @State private var kind: String?
     @State private var search = ""
     @State private var page = 0
     @StateObject private var colors = MarkerColors()
     @State private var visibleKinds: Set<String> = []
-    @State private var cumulative = true
+    @State private var scatter = false
     @State private var selectedHour: Int?
     @State private var hoveredDate: Date?
     @State private var selectedBucket: Date?
@@ -38,7 +38,25 @@ struct EventHistoryView: View {
     private var chartStart: Date {
         EventAnalytics.periodStart(range: range) ?? calendar.startOfDay(for: scoped.last?.occurredAt ?? Date())
     }
-    private var chartEnd: Date { calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: max(Date(), scoped.first?.occurredAt ?? Date())))! }
+    private var chartEnd: Date {
+        if range == -1 { return calendar.date(byAdding: .day, value: 7, to: chartStart)! }
+        return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: max(Date(), scoped.first?.occurredAt ?? Date())))!
+    }
+    private var weekDays: [Date] { (0..<7).map { calendar.date(byAdding: .day, value: $0, to: chartStart)! } }
+    private func midpoint(_ date: Date) -> Date {
+        guard range == -1 else { return date }
+        let interval = calendar.dateInterval(of: .day, for: date)!
+        return interval.start.addingTimeInterval(interval.duration / 2)
+    }
+    private func dateLabel(_ date: Date) -> String {
+        range == -1 ? ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][calendar.component(.weekday, from: date) - 1] : date.formatted(date: .abbreviated, time: .omitted)
+    }
+    private var maximumCount: Int { max(1, shown.flatMap { points($0) }.map(\.count).max() ?? 1) }
+    private var countTicks: [Int] { Array(stride(from: 0, through: maximumCount, by: max(1, Int(ceil(Double(maximumCount) / 4))))) }
+    private func hoverCount(_ name: String, at date: Date) -> String {
+        if range == -1 && date >= chartTodayEnd { return "尚未到来" }
+        return String(points(name).last(where: { $0.date <= date })?.count ?? 0) + " 次"
+    }
     private var component: Calendar.Component {
         let days = calendar.dateComponents([.day], from: chartStart, to: chartEnd).day ?? 0
         return days > 730 ? .month : days > 90 ? .weekOfYear : .day
@@ -163,7 +181,7 @@ struct EventHistoryView: View {
         }
     }
     private func points(_ name: String) -> [EventAnalytics.TrendPoint] {
-        EventAnalytics.trend(scoped.filter { EventAnalytics.label($0.kind) == name }, start: chartStart, end: chartEnd, cumulative: cumulative, component: component)
+        EventAnalytics.trend(scoped.filter { EventAnalytics.label($0.kind) == name }, start: chartStart, end: range == -1 ? chartTodayEnd : chartEnd, cumulative: false, component: component)
     }
     private var overview: some View {
         ScrollView {
@@ -177,21 +195,21 @@ struct EventHistoryView: View {
                     HStack {
                         Text("内容与次数").font(.headline)
                         Spacer()
-                        Picker("曲线", selection: $cumulative) {
-                            Text("累计次数").tag(true)
+                        Picker("曲线", selection: $scatter) {
+                            Text("散点图").tag(true)
                             Text("频率变化").tag(false)
                         }.pickerStyle(.segmented).labelsHidden().frame(width: 200)
                     }
-                    Text(chartStart.formatted(date: .abbreviated, time: .omitted) + " — " + chartEnd.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted) + (range == -1 ? " · 周一开始" : ""))
+                    Text(range == -1 ? "本周 · 周一至周日，统计截至今天" : chartStart.formatted(date: .abbreviated, time: .omitted) + " — " + chartEnd.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted))
                         .font(.caption).foregroundStyle(.secondary)
                     trendChart
                     if let date = hoveredDate {
-                        Text(date.formatted(date: .abbreviated, time: .omitted) + "  ·  " + shown.map { name in
-                            name + " " + String(points(name).last(where: { $0.date <= date })?.count ?? 0) + " 次"
+                        Text(dateLabel(date) + "  ·  " + shown.map { name in
+                            name + " " + hoverCount(name, at: date)
                         }.joined(separator: "    "))
                         .font(.caption).foregroundStyle(.secondary).lineLimit(2).frame(height: 30, alignment: .topLeading)
                     } else {
-                        Text(cumulative ? "曲线从本周期的 0 开始，水平表示没有新增标记。悬停查看次数。" : (component == .day ? "每天的次数，未记录日期为 0。" : component == .weekOfYear ? "每周的次数，未记录周为 0；首尾周可能不完整。" : "每月的次数，未记录月份为 0；首尾月可能不完整。"))
+                        Text(component == .day ? "每个点代表当天总次数，不累计；未来日期留空。" : component == .weekOfYear ? "每个点代表当周总次数；首尾周可能不完整。" : "每个点代表当月总次数；首尾月可能不完整。")
                             .font(.caption).foregroundStyle(.secondary).frame(height: 30, alignment: .topLeading)
                     }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), alignment: .leading)], alignment: .leading, spacing: 8) {
@@ -209,14 +227,28 @@ struct EventHistoryView: View {
     }
     private var trendChart: some View {
         Chart {
+            if range == -1 {
+                ForEach(Array(weekDays.enumerated()), id: \.offset) { index, date in
+                    RectangleMark(xStart: .value("区间开始", date), xEnd: .value("区间结束", calendar.date(byAdding: .day, value: 1, to: date)!), yStart: .value("底部", 0), yEnd: .value("顶部", maximumCount))
+                        .foregroundStyle(Color.teal.opacity(index % 2 == 0 ? 0.07 : 0.025))
+                        .accessibilityHidden(true)
+                }
+            }
             ForEach(shown, id: \.self) { name in
                 ForEach(points(name)) { point in
-                    LineMark(x: .value("日期", point.date), y: .value("次数", point.count), series: .value("标记", name))
+                    if !scatter {
+                        LineMark(x: .value("日期", midpoint(point.date)), y: .value("次数", point.count), series: .value("标记", name))
+                            .foregroundStyle(by: .value("标记", name))
+                            .interpolationMethod(.linear)
+                            .lineStyle(StrokeStyle(lineWidth: kind == name ? 3 : 2))
+                            .opacity(kind == nil || kind == name ? 1 : 0.25)
+                    }
+                    PointMark(x: .value("日期", midpoint(point.date)), y: .value("次数", point.count))
                         .foregroundStyle(by: .value("标记", name))
-                        .interpolationMethod(cumulative ? .stepEnd : .linear)
-                        .lineStyle(StrokeStyle(lineWidth: kind == name ? 3 : 2))
+                        .symbol(by: .value("标记", name))
+                        .symbolSize(scatter ? 65 : 30)
                         .opacity(kind == nil || kind == name ? 1 : 0.25)
-                        .accessibilityLabel(name + " " + point.date.formatted(date: .abbreviated, time: .omitted))
+                        .accessibilityLabel(name + " " + dateLabel(point.date))
                         .accessibilityValue("\(point.count) 次")
                 }
             }
@@ -225,8 +257,10 @@ struct EventHistoryView: View {
         .chartForegroundStyleScale(domain: shown, range: shown.map { colors.color($0) })
         .chartLegend(.hidden)
         .chartXScale(domain: chartStart...chartEnd)
-        .chartYScale(domain: 0...max(1, shown.flatMap { points($0) }.map(\.count).max() ?? 1))
-        .chartYAxis { AxisMarks(values: .automatic(desiredCount: 4)) { value in
+        .chartYScale(domain: 0...maximumCount)
+        .chartXAxis { markerDateAxis }
+        .chartPlotStyle { plot in plot.overlay(Rectangle().stroke(Color.secondary.opacity(0.25), lineWidth: 1)) }
+        .chartYAxis { AxisMarks(values: countTicks) { value in
             if let number = value.as(Int.self) { AxisGridLine(); AxisValueLabel { Text("\(number)") } }
         } }
         .chartOverlay { proxy in
@@ -242,6 +276,23 @@ struct EventHistoryView: View {
             }
         }.frame(height: 160)
         .overlay { if shown.isEmpty { Text("在左侧勾选要比较的标记").font(.caption).foregroundStyle(.secondary) } }
+    }
+    @AxisContentBuilder private var markerDateAxis: some AxisContent {
+        if range == -1 {
+            AxisMarks(values: weekDays) { _ in AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(Color.secondary.opacity(0.25)) }
+            AxisMarks(values: weekDays.map { midpoint($0) }) { value in
+                AxisTick(length: 5)
+                AxisValueLabel {
+                    if let date = value.as(Date.self) { Text(dateLabel(date)).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.primary) }
+                }
+            }
+        } else {
+            AxisMarks { _ in
+                AxisGridLine(stroke: StrokeStyle(lineWidth: 1)).foregroundStyle(Color.secondary.opacity(0.22))
+                AxisTick(length: 6)
+                AxisValueLabel()
+            }
+        }
     }
     private var heatmap: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -293,6 +344,7 @@ struct EventHistoryView: View {
                     .accessibilityValue("\(bucket.count) 次")
             }
             .chartXScale(domain: chartStart...chartEnd)
+            .chartXAxis { markerDateAxis }
             .chartYScale(domain: 0...max(1, buckets.map(\.count).max() ?? 1))
             .chartYAxis { AxisMarks(values: .automatic(desiredCount: 3)) { value in
                 if let number = value.as(Int.self) { AxisGridLine(); AxisValueLabel { Text("\(number)") } }
