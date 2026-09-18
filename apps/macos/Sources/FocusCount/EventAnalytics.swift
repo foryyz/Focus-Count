@@ -40,4 +40,42 @@ struct EventAnalytics {
             .map { Bucket(interval: calendar.dateInterval(of: component, for: $0.key)!, count: $0.value.count) }
             .sorted { $0.id < $1.id }
     }
+    static func periodStart(range: Int, now: Date = Date(), calendar: Calendar = .current) -> Date? {
+        guard range != 0 else { return nil }
+        let today = calendar.startOfDay(for: now)
+        if range == -1 {
+            let weekday = calendar.component(.weekday, from: today)
+            return calendar.date(byAdding: .day, value: -((weekday + 5) % 7), to: today)!
+        }
+        return calendar.date(byAdding: .day, value: 1 - range, to: today)!
+    }
+    static func hours(_ events: [TimeEvent], calendar: Calendar = .current) -> [Int] {
+        var counts = Array(repeating: 0, count: 24)
+        for event in events where event.deletedAt == nil { counts[calendar.component(.hour, from: event.occurredAt)] += 1 }
+        return counts
+    }
+    struct TrendPoint: Identifiable {
+        let id: Int
+        let date: Date
+        let count: Int
+    }
+    static func trend(_ events: [TimeEvent], start: Date, end: Date, cumulative: Bool, component: Calendar.Component, calendar: Calendar = .current) -> [TrendPoint] {
+        let sorted = events.filter { $0.deletedAt == nil && $0.occurredAt >= start && $0.occurredAt < end }.sorted { $0.occurredAt < $1.occurredAt }
+        if cumulative {
+            var points = [TrendPoint(id: 0, date: start, count: 0)]
+            for (index, event) in sorted.enumerated() { points.append(TrendPoint(id: index + 1, date: event.occurredAt, count: index + 1)) }
+            points.append(TrendPoint(id: points.count, date: end, count: sorted.count))
+            return points
+        }
+        let counts = Dictionary(uniqueKeysWithValues: buckets(sorted, component: component, calendar: calendar).map { ($0.id, $0.count) })
+        var date = calendar.dateInterval(of: component, for: start)!.start
+        var points: [TrendPoint] = []
+        while date < end {
+            points.append(TrendPoint(id: points.count, date: max(date, start), count: counts[date] ?? 0))
+            guard let next = calendar.dateInterval(of: component, for: date)?.end, next > date else { break }
+            date = next
+        }
+        return points
+    }
+
 }

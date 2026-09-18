@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import FocusCountCore
 @testable import FocusCount
 
@@ -39,4 +40,43 @@ final class EventAnalyticsTests: XCTestCase {
         XCTAssertEqual(sameTime.first?.weeksPerOccurrence, 0)
         XCTAssertEqual(EventAnalytics.buckets([], component: .day).count, 0)
     }
+    func testWeekAlwaysStartsMondayAndHandlesSunday() {
+        XCTAssertEqual(EventAnalytics.periodStart(range: -1, now: date(20), calendar: calendar), date(14, hour: 0))
+        XCTAssertEqual(EventAnalytics.periodStart(range: -1, now: date(21), calendar: calendar), date(21, hour: 0))
+        XCTAssertNil(EventAnalytics.periodStart(range: 0, now: date(20), calendar: calendar))
+    }
+    func testTrendResetsAtRangeStartAndIncludesZeroFrequencyDays() {
+        let events = [TimeEvent(kind: "a", occurredAt: date(1)), TimeEvent(kind: "a", occurredAt: date(3)), TimeEvent(kind: "a", occurredAt: date(3))]
+        let cumulative = EventAnalytics.trend(events, start: date(2, hour: 0), end: date(5, hour: 0), cumulative: true, component: .day, calendar: calendar)
+        XCTAssertEqual(cumulative.map(\.count), [0, 1, 2, 2])
+        let frequency = EventAnalytics.trend(events, start: date(2, hour: 0), end: date(5, hour: 0), cumulative: false, component: .day, calendar: calendar)
+        XCTAssertEqual(frequency.map(\.count), [0, 2, 0])
+    }
+    func testHourDistributionUsesLocalTimeAndExcludesTrash() {
+        var deleted = TimeEvent(kind: "a", occurredAt: date(1, hour: 23)); deleted.deletedAt = date(2)
+        let counts = EventAnalytics.hours([TimeEvent(kind: "a", occurredAt: date(1, hour: 0)), TimeEvent(kind: "a", occurredAt: date(2, hour: 23)), deleted], calendar: calendar)
+        XCTAssertEqual(counts.count, 24)
+        XCTAssertEqual(counts[0], 1); XCTAssertEqual(counts[23], 1)
+        XCTAssertEqual(counts.reduce(0, +), 2)
+    }
+    @MainActor func testColorsPersistAndNewLabelsDoNotRecolorExistingOnes() {
+        let suite = "FocusCount-tests-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let colors = MarkerColors(defaults: defaults)
+        colors.ensure(["sex", "健身"])
+        let original = colors.values
+        colors.ensure(["冥想", "sex", "健身"])
+        XCTAssertEqual(colors.values["sex"], original["sex"])
+        XCTAssertEqual(Set(colors.values.values).count, 3)
+        colors.set(.red, for: "sex")
+        let reopened = MarkerColors(defaults: defaults)
+        XCTAssertEqual(reopened.values["sex"], colors.values["sex"])
+        XCTAssertNotEqual(reopened.values["sex"], original["sex"])
+        reopened.ensure(["sex", "新标记"])
+        XCTAssertEqual(reopened.values["sex"], colors.values["sex"])
+        var used: Set<String> = []
+        for _ in 0..<40 { let next = MarkerColors.nextColor(used: used); XCTAssertFalse(used.contains(next)); used.insert(next) }
+    }
+
 }
