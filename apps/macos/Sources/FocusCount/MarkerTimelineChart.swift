@@ -16,7 +16,7 @@ struct MarkerTimelineChart: View {
     private var calendar: Calendar { .current }
     private var recordedDays: Int { max(1, calendar.dateComponents([.day], from: start, to: end).day ?? 1) }
     private var days: Int { isWeek ? 7 : recordedDays }
-    private var minZoom: Double { line ? 1 : max(1, Double(days) / 4) }
+    private var minZoom: Double { 1 }
     private var maxZoom: Double { max(1, Double(days)) }
     private var visible: Double { Double(days) / zoom }
     private var maxOffset: Double { max(0, Double(days) - visible) }
@@ -48,7 +48,7 @@ struct MarkerTimelineChart: View {
                 Button { updateZoom(zoom / 1.5) } label: { Image(systemName: "minus.magnifyingglass") }.disabled(zoom <= minZoom).help("缩小")
                 Text(zoom.formatted(.number.precision(.fractionLength(1))) + "×").font(.caption.monospacedDigit()).frame(width: 45)
                 Button { updateZoom(zoom * 1.5) } label: { Image(systemName: "plus.magnifyingglass") }.disabled(zoom >= maxZoom).help("放大")
-                Button(line ? "完整时间轴" : "最近标记") { resetWindow() }
+                Button("完整时间轴") { resetWindow() }
             }
             Text(start.formatted(date: .abbreviated, time: .omitted) + " — " + end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted) + " · 统计 \(recordedDays) 天")
                 .font(.caption).foregroundStyle(.secondary)
@@ -138,7 +138,7 @@ struct MarkerTimelineChart: View {
             }.frame(minHeight: 240, maxHeight: .infinity)
             }
             if !line {
-                MarkerRangeNavigator(days: days, start: start, visible: visible, offset: offset) { position, span in
+                MarkerRangeNavigator(days: days, start: start, visible: visible, offset: offset, maximumSpan: Double(days)) { position, span in
                     zoom = min(maxZoom, max(minZoom, Double(days) / span))
                     offset = min(maxOffset, max(0, position))
                 }
