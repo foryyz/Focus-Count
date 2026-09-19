@@ -7,7 +7,7 @@ struct EventHistoryView: View {
     @State private var range = -1
     @State private var kind: String?
     @State private var search = ""
-    @State private var page = 0
+    @State private var page = 2
     @StateObject private var colors = MarkerColors()
     @State private var selectedHour: Int?
     @State private var deleting: TimeEvent?
@@ -15,8 +15,12 @@ struct EventHistoryView: View {
     private var source: [TimeEvent] { store.database.events ?? [] }
     private var scoped: [TimeEvent] {
         let start = EventAnalytics.periodStart(range: range)
-        return EventAnalytics.records(source, days: nil).filter { start == nil || ($0.occurredAt >= start! && $0.occurredAt < todayEnd) }
+        return EventAnalytics.records(source, days: nil).filter { ($0.occurredAt >= (start ?? .distantPast) && $0.occurredAt < todayEnd) }
     }
+    private var periodStart: Date {
+        EventAnalytics.periodStart(range: range) ?? calendar.startOfDay(for: EventAnalytics.records(source, days: nil).last(where: { $0.occurredAt < todayEnd })?.occurredAt ?? Date())
+    }
+    private func weekly(_ count: Int) -> String { EventAnalytics.weeklyText(EventAnalytics.weeklyRate(count: count, start: periodStart)) }
     private var todayEnd: Date { calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))! }
     private var allNames: [String] {
         var seen: Set<String> = []
@@ -47,14 +51,15 @@ struct EventHistoryView: View {
                 }
                 Spacer()
                 Picker("页面", selection: $page) {
+                    Text("可视化").tag(2)
                     Text("时间轴").tag(0)
                     Text("最近删除").tag(1)
-                }.pickerStyle(.segmented).labelsHidden().frame(width: 190)
+                }.pickerStyle(.segmented).labelsHidden().frame(width: 260)
             }
             if page == 1 { trashView }
             else {
                 HStack(alignment: .top, spacing: 24) {
-                    sidebar.frame(width: 200)
+                    sidebar.frame(width: 250)
                     Divider()
                     VStack(alignment: .leading, spacing: 18) {
                         HStack {
@@ -63,15 +68,18 @@ struct EventHistoryView: View {
                             Picker("日期", selection: $range) {
                                 Text("本周").tag(-1)
                                 Text("30 天").tag(30)
-                                Text("90 天").tag(90)
                                 Text("全部").tag(0)
                             }.pickerStyle(.segmented).labelsHidden().frame(width: 280)
                         }
                         HStack(spacing: 28) {
                             metric("标记次数", "\(records.count) 次")
-                            metric("平均间隔", kind == nil ? "选择一种标记" : EventAnalytics.intervalText(EventAnalytics.frequencies(records).first?.weeksPerOccurrence))
+                            metric("平均频率", weekly(records.count))
                             metric("最近一次", records.first?.occurredAt.formatted(date: .abbreviated, time: .omitted) ?? "—")
                         }
+                        if page == 2 {
+                            MarkerTimelineChart(events: records, start: periodStart, end: todayEnd, colors: colors, isWeek: range == -1)
+                                .id(String(range))
+                        } else {
                         heatmap
                         Divider()
                         HStack {
@@ -83,6 +91,7 @@ struct EventHistoryView: View {
                             Text("\(timeline.count) 次").font(.caption).foregroundStyle(.secondary)
                         }
                         timelineView.id(selectionTitle + (kind ?? "") + String(range))
+                        }
                     }.frame(maxWidth: .infinity)
                 }
             }
@@ -124,10 +133,13 @@ struct EventHistoryView: View {
                                     .labelsHidden().help("调整 " + item.id + " 的颜色")
 
                             }
+                            TextField("—", text: Binding(get: { colors.emojis[item.id] ?? "" }, set: { colors.setEmoji($0, for: item.id) }))
+                                .textFieldStyle(.roundedBorder).frame(width: 40).help("手动设置 emoji；留空使用标记颜色")
+                                .accessibilityLabel(item.id + " 的 emoji")
                             Button { kind = kind == item.id ? nil : item.id } label: {
                                 VStack(alignment: .leading, spacing: 7) {
                                     HStack { Text(item.id).fontWeight(.medium).lineLimit(1); Spacer(); Text("\(item.count) 次").foregroundStyle(.secondary) }
-                                    Text(EventAnalytics.intervalText(item.weeksPerOccurrence)).font(.caption).foregroundStyle(.secondary)
+                                    Text(weekly(item.count)).font(.caption).foregroundStyle(.secondary)
                                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                             }.buttonStyle(.plain).help(item.id)
                         }.padding(10).background(kind == item.id ? colors.color(item.id).opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 9))
@@ -135,7 +147,7 @@ struct EventHistoryView: View {
                     if frequencies.isEmpty { Text("没有匹配的标记").font(.caption).foregroundStyle(.secondary).padding(.top) }
                 }
             }
-            Text("平均间隔 = 同种标记相邻两次的平均时间。按当前日期范围计算，至少需要两次。数值越小，越频繁。")
+            Text("平均每周次数 = 范围内次数 ÷ 范围天数 × 7。本周按周一至今天计算；30 天按 30 天；全部按最早标记至今天计算，包含无记录的日期。")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Text("点击名称查看时段分布；点击色块调整颜色。颜色保存在这台 Mac，旧标记颜色不会因新标记加入而变化。")
                 .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

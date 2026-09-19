@@ -4,11 +4,18 @@ import AppKit
 /// Local presentation preferences, separate from exchanged event data.
 @MainActor final class MarkerColors: ObservableObject {
     @Published private(set) var values: [String: String]
+    @Published private(set) var emojis: [String: String]
     private let defaults: UserDefaults
     private let key = "marker-colors-v1"
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         values = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
+        emojis = defaults.dictionary(forKey: "marker-emojis-v1") as? [String: String] ?? [:]
+    }
+    func setEmoji(_ value: String, for name: String) {
+        let emoji = String(value.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1))
+        if emoji.isEmpty { emojis.removeValue(forKey: name) } else { emojis[name] = emoji }
+        defaults.set(emojis, forKey: "marker-emojis-v1")
     }
     func ensure(_ names: [String]) {
         var next = values

@@ -6,7 +6,6 @@ struct EventAnalytics {
     struct Frequency: Identifiable {
         let id: String
         let count: Int
-        let weeksPerOccurrence: Double?
     }
     static func label(_ kind: String) -> String {
         kind.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -19,16 +18,8 @@ struct EventAnalytics {
     }
     static func frequencies(_ events: [TimeEvent]) -> [Frequency] {
         Dictionary(grouping: events.filter { $0.deletedAt == nil }, by: { label($0.kind) }).map { kind, values in
-            let dates = values.map(\.occurredAt).sorted()
-            let average = dates.count > 1 ? dates.last!.timeIntervalSince(dates.first!) / Double(dates.count - 1) / (7 * 86400) : nil
-            return Frequency(id: kind, count: dates.count, weeksPerOccurrence: average)
+            return Frequency(id: kind, count: values.count)
         }.sorted { $0.count == $1.count ? $0.id < $1.id : $0.count > $1.count }
-    }
-    static func intervalText(_ weeks: Double?) -> String {
-        guard let weeks else { return "暂无间隔" }
-        if weeks == 0 { return "0 周／次" }
-        if weeks < 0.01 { return "< 0.01 周／次" }
-        return weeks.formatted(.number.precision(.fractionLength(0...2))) + " 周／次"
     }
     static func periodStart(range: Int, now: Date = Date(), calendar: Calendar = .current) -> Date? {
         guard range != 0 else { return nil }
@@ -43,5 +34,27 @@ struct EventAnalytics {
         var counts = Array(repeating: 0, count: 24)
         for event in events where event.deletedAt == nil { counts[calendar.component(.hour, from: event.occurredAt)] += 1 }
         return counts
+    }
+    static func weeklyRate(count: Int, start: Date, now: Date = Date(), calendar: Calendar = .current) -> Double {
+        let days = max(1, (calendar.dateComponents([.day], from: calendar.startOfDay(for: start), to: calendar.startOfDay(for: now)).day ?? 0) + 1)
+        return Double(count) * 7 / Double(days)
+    }
+    static func weeklyText(_ value: Double) -> String {
+        "每周 " + value.formatted(.number.precision(.fractionLength(0...2))) + " 次"
+    }
+    struct DailyCount: Identifiable {
+        var id: String { kind + "-" + String(day.timeIntervalSinceReferenceDate) }
+        let kind: String
+        let day: Date
+        let count: Int
+    }
+    static func dailyCounts(_ events: [TimeEvent], calendar: Calendar = .current) -> [DailyCount] {
+        let groups = Dictionary(grouping: events.filter { $0.deletedAt == nil }, by: { label($0.kind) })
+        var result: [DailyCount] = []
+        for (kind, values) in groups {
+            let days = Dictionary(grouping: values, by: { calendar.startOfDay(for: $0.occurredAt) })
+            for (day, entries) in days { result.append(DailyCount(kind: kind, day: day, count: entries.count)) }
+        }
+        return result.sorted { $0.day == $1.day ? $0.kind < $1.kind : $0.day < $1.day }
     }
 }

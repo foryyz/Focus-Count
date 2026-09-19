@@ -12,14 +12,11 @@ final class EventAnalyticsTests: XCTestCase {
     private func date(_ day: Int, hour: Int = 12) -> Date {
         calendar.date(from: DateComponents(year: 2026, month: 9, day: day, hour: hour))!
     }
-    func testFrequencyUsesIntervalsAndNormalizesLegacyCase() {
+    func testCountsNormalizeLegacyCase() {
         let events = [TimeEvent(kind: "SEX", occurredAt: date(1)), TimeEvent(kind: "sex", occurredAt: date(8)), TimeEvent(kind: " sex ", occurredAt: date(15)), TimeEvent(kind: "sad", occurredAt: date(2))]
         let result = EventAnalytics.frequencies(events)
         XCTAssertEqual(result.first?.id, "sex")
         XCTAssertEqual(result.first?.count, 3)
-        XCTAssertEqual(result.first?.weeksPerOccurrence, 1)
-        XCTAssertNil(result.last?.weeksPerOccurrence)
-        XCTAssertEqual(EventAnalytics.intervalText(nil), "暂无间隔")
     }
     func testDateRangeIncludesLocalWholeDaysAndExcludesDeleted() {
         var deleted = TimeEvent(kind: "sex", occurredAt: date(18))
@@ -61,6 +58,31 @@ final class EventAnalyticsTests: XCTestCase {
         XCTAssertEqual(reopened.values["sex"], colors.values["sex"])
         var used: Set<String> = []
         for _ in 0..<40 { let next = MarkerColors.nextColor(used: used); XCTAssertFalse(used.contains(next)); used.insert(next) }
+    }
+
+    func testWeeklyRateCountsEmptyDaysAndSingleOccurrences() {
+        XCTAssertEqual(EventAnalytics.weeklyRate(count: 6, start: date(14), now: date(19), calendar: calendar), 7)
+        XCTAssertEqual(EventAnalytics.weeklyRate(count: 3, start: date(1), now: date(30), calendar: calendar), 0.7, accuracy: 0.00001)
+        XCTAssertEqual(EventAnalytics.weeklyRate(count: 1, start: date(1), now: date(1), calendar: calendar), 7)
+        XCTAssertEqual(EventAnalytics.weeklyRate(count: 0, start: date(1), now: date(30), calendar: calendar), 0)
+    }
+    func testDailyPointsAreAggregatedAndZeroDaysAreAbsent() {
+        var removed = TimeEvent(kind: "sex", occurredAt: date(2)); removed.deletedAt = date(3)
+        let events = [TimeEvent(kind: "SEX", occurredAt: date(1)), TimeEvent(kind: "sex", occurredAt: date(1, hour: 23)), TimeEvent(kind: "sex", occurredAt: date(3)), removed]
+        let points = EventAnalytics.dailyCounts(events, calendar: calendar)
+        XCTAssertEqual(points.map(\.count), [2, 1])
+        XCTAssertEqual(points.map(\.day), [date(1, hour: 0), date(3, hour: 0)])
+    }
+    @MainActor func testEmojiIsOptionalPersistentAndClearable() {
+        let suite = "FocusCount-emoji-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let prefs = MarkerColors(defaults: defaults)
+        XCTAssertNil(prefs.emojis["健身"])
+        prefs.setEmoji("🏋️‍♀️", for: "健身")
+        XCTAssertEqual(MarkerColors(defaults: defaults).emojis["健身"], "🏋️‍♀️")
+        prefs.setEmoji("", for: "健身")
+        XCTAssertNil(MarkerColors(defaults: defaults).emojis["健身"])
     }
 
 }
