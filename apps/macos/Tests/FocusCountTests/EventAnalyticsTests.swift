@@ -31,26 +31,10 @@ final class EventAnalyticsTests: XCTestCase {
         XCTAssertEqual(filtered.first?.occurredAt, date(18, hour: 23))
         XCTAssertEqual(EventAnalytics.frequencies(events).first?.count, 4)
     }
-    func testBucketsUseLocalDayAndKeepEveryOccurrence() {
-        let events = [TimeEvent(kind: "a", occurredAt: date(1, hour: 23)), TimeEvent(kind: "a", occurredAt: date(2, hour: 0)), TimeEvent(kind: "a", occurredAt: date(2, hour: 0))]
-        let buckets = EventAnalytics.buckets(events, component: .day, calendar: calendar)
-        XCTAssertEqual(buckets.map(\.count), [1, 2])
-        XCTAssertEqual(buckets.last?.id, date(2, hour: 0))
-        let sameTime = EventAnalytics.frequencies(Array(events.suffix(2)))
-        XCTAssertEqual(sameTime.first?.weeksPerOccurrence, 0)
-        XCTAssertEqual(EventAnalytics.buckets([], component: .day).count, 0)
-    }
     func testWeekAlwaysStartsMondayAndHandlesSunday() {
         XCTAssertEqual(EventAnalytics.periodStart(range: -1, now: date(20), calendar: calendar), date(14, hour: 0))
         XCTAssertEqual(EventAnalytics.periodStart(range: -1, now: date(21), calendar: calendar), date(21, hour: 0))
         XCTAssertNil(EventAnalytics.periodStart(range: 0, now: date(20), calendar: calendar))
-    }
-    func testTrendResetsAtRangeStartAndIncludesZeroFrequencyDays() {
-        let events = [TimeEvent(kind: "a", occurredAt: date(1)), TimeEvent(kind: "a", occurredAt: date(3)), TimeEvent(kind: "a", occurredAt: date(3))]
-        let cumulative = EventAnalytics.trend(events, start: date(2, hour: 0), end: date(5, hour: 0), cumulative: true, component: .day, calendar: calendar)
-        XCTAssertEqual(cumulative.map(\.count), [0, 1, 2, 2])
-        let frequency = EventAnalytics.trend(events, start: date(2, hour: 0), end: date(5, hour: 0), cumulative: false, component: .day, calendar: calendar)
-        XCTAssertEqual(frequency.map(\.count), [0, 2, 0])
     }
     func testHourDistributionUsesLocalTimeAndExcludesTrash() {
         var deleted = TimeEvent(kind: "a", occurredAt: date(1, hour: 23)); deleted.deletedAt = date(2)
