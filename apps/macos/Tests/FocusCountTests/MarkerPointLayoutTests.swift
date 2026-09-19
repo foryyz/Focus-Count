@@ -31,7 +31,26 @@ final class MarkerPointLayoutTests: XCTestCase {
         let events = [TimeEvent(kind: "a", occurredAt: start), TimeEvent(kind: "b", occurredAt: start.addingTimeInterval(23 * 3600 + 59 * 60)), TimeEvent(kind: "c", occurredAt: start.addingTimeInterval(86400)), deleted]
         let items = MarkerPointLayout.items(events: events, start: start, offset: 0, visibleDays: 1, width: 200, calendar: calendar)
         XCTAssertEqual(items.flatMap(\.events).count, 2)
-        XCTAssertEqual(items.map(\.y).min(), 0)
-        XCTAssertEqual(items.map(\.y).max()!, 719.5, accuracy: 0.001)
+        XCTAssertEqual(items.map(\.anchorY).min(), 0)
+        XCTAssertEqual(items.map(\.anchorY).max()!, 719.5, accuracy: 0.001)
     }
+    func testCrowdingGroupsByKindAndSizesByCount() {
+        let time = start.addingTimeInterval(12 * 3600)
+        let events = (0..<5).map { _ in TimeEvent(kind: "健身", occurredAt: time) } + (0..<2).map { _ in TimeEvent(kind: "冥想", occurredAt: time) }
+        let items = MarkerPointLayout.items(events: events, start: start, offset: 0, visibleDays: 4, width: 560, hourHeight: 12, calendar: calendar)
+        XCTAssertEqual(items.count, 2)
+        XCTAssertTrue(items.allSatisfy { Set($0.events.map(\.kind)).count == 1 })
+        let large = items.first { $0.events.count == 5 }!
+        let small = items.first { $0.events.count == 2 }!
+        XCTAssertGreaterThan(large.diameter, small.diameter)
+        XCTAssertEqual(Set(items.flatMap(\.events).map(\.id)), Set(events.map(\.id)))
+        XCTAssertTrue(abs(large.x - small.x) >= (large.diameter + small.diameter) / 2 || abs(large.y - small.y) >= (large.diameter + small.diameter) / 2)
+    }
+    func testSeparateRecordsArePreferredWhenTheyFit() {
+        let events = (0..<4).map { _ in TimeEvent(kind: "same", occurredAt: start.addingTimeInterval(12 * 3600)) }
+        let items = MarkerPointLayout.items(events: events, start: start, offset: 0, visibleDays: 4, width: 560, hourHeight: 12, calendar: calendar)
+        XCTAssertEqual(items.count, 4)
+        XCTAssertTrue(items.allSatisfy { !$0.grouped })
+    }
+
 }

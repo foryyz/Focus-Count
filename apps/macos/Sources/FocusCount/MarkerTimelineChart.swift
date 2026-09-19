@@ -16,6 +16,7 @@ struct MarkerTimelineChart: View {
     private var calendar: Calendar { .current }
     private var recordedDays: Int { max(1, calendar.dateComponents([.day], from: start, to: end).day ?? 1) }
     private var days: Int { isWeek ? 7 : recordedDays }
+    private var minZoom: Double { line ? 1 : max(1, Double(days) / 4) }
     private var maxZoom: Double { max(1, Double(days)) }
     private var visible: Double { Double(days) / zoom }
     private var maxOffset: Double { max(0, Double(days) - visible) }
@@ -30,8 +31,14 @@ struct MarkerTimelineChart: View {
     }
     private func updateZoom(_ value: Double) {
         let center = offset + visible / 2
-        zoom = min(maxZoom, max(1, value))
+        zoom = min(maxZoom, max(minZoom, value))
         offset = min(maxOffset, max(0, center - visible / 2))
+        hoverDay = nil
+    }
+    private func resetWindow() {
+        zoom = minZoom
+        let recent = events.map { dayIndex($0.occurredAt) }.max() ?? recordedDays - 1
+        offset = line ? 0 : min(maxOffset, max(0, Double(recent + 1) - visible))
         hoverDay = nil
     }
     var body: some View {
@@ -42,10 +49,10 @@ struct MarkerTimelineChart: View {
                     Text("线图").tag(true)
                 }.pickerStyle(.segmented).labelsHidden().frame(width: 160)
                 Spacer()
-                Button { updateZoom(zoom / 1.5) } label: { Image(systemName: "minus.magnifyingglass") }.disabled(zoom <= 1).help("缩小")
+                Button { updateZoom(zoom / 1.5) } label: { Image(systemName: "minus.magnifyingglass") }.disabled(zoom <= minZoom).help("缩小")
                 Text(zoom.formatted(.number.precision(.fractionLength(1))) + "×").font(.caption.monospacedDigit()).frame(width: 45)
                 Button { updateZoom(zoom * 1.5) } label: { Image(systemName: "plus.magnifyingglass") }.disabled(zoom >= maxZoom).help("放大")
-                Button("完整时间轴") { zoom = 1; offset = 0; hoverDay = nil }
+                Button(line ? "完整时间轴" : "最近标记") { resetWindow() }
             }
             Text(start.formatted(date: .abbreviated, time: .omitted) + " — " + end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted) + " · 统计 \(recordedDays) 天")
                 .font(.caption).foregroundStyle(.secondary)
@@ -134,7 +141,13 @@ struct MarkerTimelineChart: View {
                 .accessibilityLabel("每日标记次数，可使用下方日期滑块浏览。具体记录见时间轴页。")
             }.frame(minHeight: 240, maxHeight: .infinity)
             }
-            if maxOffset > 0 {
+            if !line {
+                MarkerRangeNavigator(days: days, start: start, visible: visible, offset: offset) { position, span in
+                    zoom = min(maxZoom, max(minZoom, Double(days) / span))
+                    offset = min(maxOffset, max(0, position))
+                }
+            }
+            if line && maxOffset > 0 {
                 HStack {
                     Text("浏览日期").font(.caption)
                     Slider(value: $offset, in: 0...maxOffset).accessibilityLabel("时间轴位置")
@@ -145,7 +158,7 @@ struct MarkerTimelineChart: View {
                 Text(date(hoverDay).formatted(date: .abbreviated, time: .omitted) + " · " + (hoverDay >= recordedDays ? "尚未到来" : entries.isEmpty ? "无标记" : entries.map { ($0.kind) + " \($0.count) 次" }.joined(separator: "    ")))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(2).frame(height: 32, alignment: .topLeading)
             } else {
-                Text(line ? "线图按每天总次数显示；放大后拖动或使用滑块浏览。" : "每条标记独立显示。上下滚动查看 24 小时；拥挤时点击 +数字 展开，放大后逐条显示。")
+                Text(line ? "线图按每天总次数显示；放大后拖动或使用滑块浏览。" : "全天一屏 · 优先逐条显示；拥挤时同种标记合为更大的图标，点击查看次数与时间。")
                     .font(.caption).foregroundStyle(.secondary).frame(height: 32, alignment: .topLeading)
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -161,5 +174,7 @@ struct MarkerTimelineChart: View {
             }
             if data.isEmpty { Text("此范围没有标记；可以切换日期或标记。").font(.caption).foregroundStyle(.secondary) }
         }.padding(16).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
+            .onAppear { resetWindow() }
+            .onChange(of: line) { _ in resetWindow() }
     }
 }

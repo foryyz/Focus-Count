@@ -11,7 +11,6 @@ struct MarkerPointTimeline: View {
     @ObservedObject var colors: MarkerColors
     let zoomTo: (Date, Date) -> Void
     @State private var expanded: MarkerPointLayout.Item?
-    private let hourHeight = 30.0
     private let calendar = Calendar.current
     private func date(_ day: Int) -> Date { calendar.date(byAdding: .day, value: day, to: start)! }
     private func label(_ day: Int) -> String {
@@ -22,6 +21,8 @@ struct MarkerPointTimeline: View {
         GeometryReader { geometry in
             let width = max(1, geometry.size.width - 48)
             let dayWidth = width / visibleDays
+            let hourHeight = max(1, geometry.size.height - 60) / 24
+            let items = MarkerPointLayout.items(events: events, start: start, offset: offset, visibleDays: visibleDays, width: width, hourHeight: hourHeight)
             let step = max(1, Int(ceil(45 / dayWidth)))
             VStack(spacing: 0) {
                 ZStack(alignment: .topLeading) {
@@ -33,15 +34,14 @@ struct MarkerPointTimeline: View {
                         }
                     }
                 }.frame(height: 28).clipped()
-                ScrollViewReader { reader in
-                ScrollView(.vertical) {
+
                     ZStack(alignment: .topLeading) {
                         Canvas { context, size in
                             for hour in 0...24 {
                                 let y = 14 + Double(hour) * hourHeight
                                 var path = Path(); path.move(to: CGPoint(x: 48, y: y)); path.addLine(to: CGPoint(x: size.width, y: y))
                                 context.stroke(path, with: .color(.secondary.opacity(hour % 6 == 0 ? 0.3 : 0.13)), lineWidth: 1)
-                                context.draw(Text(String(format: "%02d:00", hour)).font(.system(size: 10)).foregroundColor(.secondary), at: CGPoint(x: 42, y: y), anchor: .trailing)
+                                if hour % 6 == 0 { context.draw(Text(String(format: "%02d:00", hour)).font(.system(size: 10)).foregroundColor(.secondary), at: CGPoint(x: 42, y: y), anchor: .trailing) }
                             }
                             for day in max(0, Int(floor(offset)))..<min(days, Int(ceil(offset + visibleDays))) {
                                 let left = 48 + (Double(day) - offset) * dayWidth
@@ -52,38 +52,37 @@ struct MarkerPointTimeline: View {
                                 if left >= 48 { context.stroke(path, with: .color(.secondary.opacity(0.2)), lineWidth: 1) }
                             }
                         }.frame(height: 24 * hourHeight + 28)
-                        VStack(spacing: 0) {
-                            ForEach(0..<24, id: \.self) { hour in
-                                Color.clear.frame(height: hourHeight).id(hour)
+                        ZStack(alignment: .topLeading) {
+                        Canvas { context, _ in
+                            for item in items where abs(item.y - item.anchorY) > 2 {
+                                let color = colors.color(EventAnalytics.label(item.events[0].kind))
+                                let anchor = CGPoint(x: 48 + item.x, y: 14 + item.anchorY)
+                                var path = Path(); path.move(to: anchor); path.addLine(to: CGPoint(x: 48 + item.x, y: 14 + item.y))
+                                context.stroke(path, with: .color(color.opacity(0.45)), lineWidth: 1)
+                                context.fill(Path(ellipseIn: CGRect(x: anchor.x - 2, y: anchor.y - 2, width: 4, height: 4)), with: .color(color))
                             }
-                        }.padding(.top, 14).allowsHitTesting(false)
-                        ForEach(MarkerPointLayout.items(events: events, start: start, offset: offset, visibleDays: visibleDays, width: width)) { item in
+                        }.allowsHitTesting(false)
+                        ForEach(items) { item in
                             Button { expanded = item } label: {
-                                if item.grouped {
-                                    Text("+\(item.events.count)").font(.system(size: 10, weight: .semibold)).padding(.horizontal, 4).frame(height: 22)
-                                        .background(.regularMaterial, in: Capsule()).overlay(Capsule().stroke(Color.secondary.opacity(0.3)))
+                                let name = EventAnalytics.label(item.events[0].kind)
+                                if let emoji = colors.emojis[name], !emoji.isEmpty {
+                                    Text(emoji).font(.system(size: item.diameter - 2)).frame(width: item.diameter, height: item.diameter)
                                 } else {
-                                    let name = EventAnalytics.label(item.events[0].kind)
-                                    if let emoji = colors.emojis[name], !emoji.isEmpty { Text(emoji).font(.system(size: 20)).frame(width: 24, height: 24) }
-                                    else { Circle().fill(colors.color(name)).frame(width: 12, height: 12).frame(width: 24, height: 24) }
+                                    Circle().fill(colors.color(name)).frame(width: item.diameter * 0.65, height: item.diameter * 0.65).frame(width: item.diameter, height: item.diameter)
                                 }
                             }.buttonStyle(.plain)
                                 .help(item.events.map { $0.kind + " · " + $0.occurredAt.formatted(date: .abbreviated, time: .standard) }.joined(separator: "\n"))
-                                .accessibilityLabel(item.grouped ? "展开 \(item.events.count) 条标记" : item.events[0].kind + " " + item.events[0].occurredAt.formatted(date: .abbreviated, time: .standard))
+                                .accessibilityLabel(item.grouped ? item.events[0].kind + "，共 \(item.events.count) 次，展开" : item.events[0].kind + " " + item.events[0].occurredAt.formatted(date: .abbreviated, time: .standard))
                                 .position(x: 48 + item.x, y: 14 + item.y)
                         }
+                        }.mask(Rectangle().padding(.leading, 48))
                     }.frame(height: 24 * hourHeight + 28).clipped()
-                }.task {
-                    await Task.yield()
-                    let firstHour = events.map { calendar.component(.hour, from: $0.occurredAt) }.min() ?? 0
-                    reader.scrollTo(min(16, max(0, firstHour - 1)), anchor: .top)
-                }
-                }
+
             }
         }.frame(minHeight: 240)
             .popover(item: $expanded) { item in
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(item.grouped ? "\(item.events.count) 条标记" : "时间标记").font(.headline)
+                    Text(item.grouped ? item.events[0].kind + " · \(item.events.count) 次" : "时间标记").font(.headline)
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
                             ForEach(item.events.sorted { $0.occurredAt < $1.occurredAt }) { event in
