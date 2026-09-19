@@ -7,7 +7,7 @@ struct MarkerTimelineChart: View {
     let end: Date
     @ObservedObject var colors: MarkerColors
     let isWeek: Bool
-    @State private var line = false
+    let line: Bool
     @State private var zoom = 1.0
     @State private var offset = 0.0
     @State private var hoverDay: Int?
@@ -44,10 +44,6 @@ struct MarkerTimelineChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Picker("显示方式", selection: $line) {
-                    Text("点图").tag(false)
-                    Text("线图").tag(true)
-                }.pickerStyle(.segmented).labelsHidden().frame(width: 160)
                 Spacer()
                 Button { updateZoom(zoom / 1.5) } label: { Image(systemName: "minus.magnifyingglass") }.disabled(zoom <= minZoom).help("缩小")
                 Text(zoom.formatted(.number.precision(.fractionLength(1))) + "×").font(.caption.monospacedDigit()).frame(width: 45)

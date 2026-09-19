@@ -86,6 +86,17 @@ import AppKit
             $0.events?.append(TimeEvent(kind: kind, occurredAt: date))
         }
     }
+    @discardableResult func updateEvent(_ id: UUID, kind: String, at date: Date) -> Bool {
+        let name = kind.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, date <= Date(), database.events?.contains(where: { $0.id == id && $0.deletedAt == nil }) == true else { return false }
+        return commit {
+            guard let index = $0.events?.firstIndex(where: { $0.id == id }) else { return }
+            let modified = max(Date(), $0.events![index].modified.addingTimeInterval(0.001))
+            $0.events![index].kind = name
+            $0.events![index].occurredAt = date
+            $0.events![index].updatedAt = modified
+        }
+    }
     @discardableResult func setEventDeleted(_ id: UUID, deleted: Bool) -> Bool {
         commit {
             guard let index = $0.events?.firstIndex(where: { $0.id == id }) else { return }

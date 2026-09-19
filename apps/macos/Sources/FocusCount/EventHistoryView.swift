@@ -10,6 +10,8 @@ struct EventHistoryView: View {
     @State private var page = 2
     @StateObject private var colors = MarkerColors()
     @State private var selectedHour: Int?
+    @State private var editing: TimeEvent?
+    @State private var editingStyle: String?
     @State private var deleting: TimeEvent?
     @State private var purging: TimeEvent?
     private var source: [TimeEvent] { store.database.events ?? [] }
@@ -71,13 +73,15 @@ struct EventHistoryView: View {
                                 Text("全部").tag(0)
                             }.pickerStyle(.segmented).labelsHidden().frame(width: 280)
                         }
+                        if kind != nil || page != 2 {
                         HStack(spacing: 28) {
                             metric("标记次数", "\(records.count) 次")
                             metric("平均频率", weekly(records.count))
                             metric("最近一次", records.first?.occurredAt.formatted(date: .abbreviated, time: .omitted) ?? "—")
                         }
+                        }
                         if page == 2 {
-                            MarkerTimelineChart(events: records, start: periodStart, end: todayEnd, colors: colors, isWeek: range == -1)
+                            MarkerVisualizationPanel(events: records, start: periodStart, end: todayEnd, colors: colors, isWeek: range == -1, edit: { editing = $0 }, delete: { deleting = $0 })
                                 .id(String(range))
                         } else {
                         heatmap
@@ -102,6 +106,9 @@ struct EventHistoryView: View {
             .onChange(of: allNames) { _ in colors.ensure(allNames) }
             .onChange(of: range) { _ in selectedHour = nil }
             .onChange(of: kind) { _ in selectedHour = nil }
+            .sheet(item: $editing) { event in
+                MarkerEventEditor(event: event, store: store)
+            }
             .alert("删除这次时间标记？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
                 Button("取消", role: .cancel) { deleting = nil }
                 Button("移至最近删除", role: .destructive) {
@@ -128,14 +135,21 @@ struct EventHistoryView: View {
                 LazyVStack(spacing: 6) {
                     ForEach(frequencies) { item in
                         HStack(spacing: 8) {
-                            VStack(spacing: 6) {
-                                ColorPicker("颜色", selection: Binding(get: { colors.color(item.id) }, set: { colors.set($0, for: item.id) }), supportsOpacity: false)
-                                    .labelsHidden().help("调整 " + item.id + " 的颜色")
-
-                            }
-                            TextField("—", text: Binding(get: { colors.emojis[item.id] ?? "" }, set: { colors.setEmoji($0, for: item.id) }))
-                                .textFieldStyle(.roundedBorder).frame(width: 40).help("手动设置 emoji；留空使用标记颜色")
-                                .accessibilityLabel(item.id + " 的 emoji")
+                            Button { editingStyle = item.id } label: {
+                                ZStack {
+                                    Circle().fill(colors.color(item.id).opacity(0.2)).frame(width: 30, height: 30)
+                                    if let emoji = colors.emojis[item.id], !emoji.isEmpty { Text(emoji) }
+                                    else { Circle().fill(colors.color(item.id)).frame(width: 10, height: 10) }
+                                }
+                            }.buttonStyle(.plain).help("设置颜色与 emoji")
+                                .popover(isPresented: Binding(get: { editingStyle == item.id }, set: { if !$0 { editingStyle = nil } })) {
+                                    VStack(alignment: .leading, spacing: 14) {
+                                        Text(item.id).font(.headline)
+                                        ColorPicker("颜色", selection: Binding(get: { colors.color(item.id) }, set: { colors.set($0, for: item.id) }), supportsOpacity: false)
+                                        TextField("Emoji（可留空）", text: Binding(get: { colors.emojis[item.id] ?? "" }, set: { colors.setEmoji($0, for: item.id) }))
+                                            .textFieldStyle(.roundedBorder)
+                                    }.padding(18).frame(width: 220)
+                                }
                             Button { kind = kind == item.id ? nil : item.id } label: {
                                 VStack(alignment: .leading, spacing: 7) {
                                     HStack { Text(item.id).fontWeight(.medium).lineLimit(1); Spacer(); Text("\(item.count) 次").foregroundStyle(.secondary) }
@@ -149,7 +163,7 @@ struct EventHistoryView: View {
             }
             Text("平均每周次数 = 范围内次数 ÷ 范围天数 × 7。本周按周一至今天计算；30 天按 30 天；全部按最早标记至今天计算，包含无记录的日期。")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            Text("点击名称查看时段分布；点击色块调整颜色。颜色保存在这台 Mac，旧标记颜色不会因新标记加入而变化。")
+            Text("点击名称筛选；点击图标设置颜色与 emoji。颜色保存在这台 Mac，旧标记颜色不会因新标记加入而变化。")
                 .font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }

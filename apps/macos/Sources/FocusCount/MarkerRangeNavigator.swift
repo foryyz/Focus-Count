@@ -1,10 +1,14 @@
 import SwiftUI
+import FocusCountCore
 
 struct MarkerRangeNavigator: View {
     let days: Int
     let start: Date
     let visible: Double
     let offset: Double
+    var maximumSpan: Double = 4
+    var events: [TimeEvent] = []
+    var colors: MarkerColors? = nil
     let change: (Double, Double) -> Void
     @State private var initialOffset: Double?
     @State private var initialVisible: Double?
@@ -14,6 +18,20 @@ struct MarkerRangeNavigator: View {
                 let unit = geometry.size.width / Double(max(1, days))
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.1))
+                    Canvas { context, size in
+                        let counts = EventAnalytics.dailyCounts(events)
+                        let totals = Dictionary(grouping: counts, by: \.day).mapValues { $0.reduce(0) { $0 + $1.count } }
+                        let maximum = max(1, totals.values.max() ?? 1)
+                        var bases: [Date: Double] = [:]
+                        for entry in counts {
+                            let day = Calendar.current.dateComponents([.day], from: start, to: entry.day).day ?? 0
+                            let height = Double(entry.count) / Double(maximum) * size.height
+                            let base = bases[entry.day] ?? 0
+                            let rect = CGRect(x: Double(day) * unit, y: size.height - base - height, width: max(1, unit - 1), height: height)
+                            context.fill(Path(rect), with: .color((colors?.color(entry.kind) ?? .teal).opacity(0.45)))
+                            bases[entry.day] = base + height
+                        }
+                    }.allowsHitTesting(false)
                     RoundedRectangle(cornerRadius: 6).fill(Color.teal.opacity(0.18))
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.teal.opacity(0.55)))
                         .frame(width: max(8, visible * unit)).offset(x: offset * unit)
@@ -30,11 +48,11 @@ struct MarkerRangeNavigator: View {
                                 let oldVisible = initialVisible ?? visible
                                 let delta = value.translation.width / unit
                                 if right {
-                                    let span = min(min(4, Double(days) - oldOffset), max(1, oldVisible + delta))
+                                    let span = min(min(maximumSpan, Double(days) - oldOffset), max(1, oldVisible + delta))
                                     change(oldOffset, span)
                                 } else {
                                     let end = oldOffset + oldVisible
-                                    let left = min(end - 1, max(max(0, end - 4), oldOffset + delta))
+                                    let left = min(end - 1, max(max(0, end - maximumSpan), oldOffset + delta))
                                     change(left, end - left)
                                 }
                             }.onEnded { _ in initialOffset = nil; initialVisible = nil })
