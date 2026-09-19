@@ -16,7 +16,7 @@ struct MarkerTimelineChart: View {
     private var calendar: Calendar { .current }
     private var recordedDays: Int { max(1, calendar.dateComponents([.day], from: start, to: end).day ?? 1) }
     private var days: Int { isWeek ? 7 : recordedDays }
-    private var maxZoom: Double { max(1, Double(days) / 3) }
+    private var maxZoom: Double { max(1, Double(days)) }
     private var visible: Double { Double(days) / zoom }
     private var maxOffset: Double { max(0, Double(days) - visible) }
     private var data: [EventAnalytics.DailyCount] { EventAnalytics.dailyCounts(events) }
@@ -49,6 +49,14 @@ struct MarkerTimelineChart: View {
             }
             Text(start.formatted(date: .abbreviated, time: .omitted) + " — " + end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted) + " · 统计 \(recordedDays) 天")
                 .font(.caption).foregroundStyle(.secondary)
+            if !line {
+                MarkerPointTimeline(events: events, start: start, days: days, offset: offset, visibleDays: visible, isWeek: isWeek, colors: colors) { first, last in
+                    let firstDay = dayIndex(calendar.startOfDay(for: first))
+                    let lastDay = dayIndex(calendar.startOfDay(for: last))
+                    updateZoom(Double(days) / Double(max(1, lastDay - firstDay + 1)))
+                    offset = min(maxOffset, max(0, Double(firstDay)))
+                }
+            } else {
             GeometryReader { geometry in
                 Canvas { context, size in
                     let plot = CGRect(x: 35, y: 25, width: max(1, size.width - 55), height: max(1, size.height - 70))
@@ -125,18 +133,19 @@ struct MarkerTimelineChart: View {
                 }.onEnded { _ in pinchStart = nil })
                 .accessibilityLabel("每日标记次数，可使用下方日期滑块浏览。具体记录见时间轴页。")
             }.frame(minHeight: 240, maxHeight: .infinity)
+            }
             if maxOffset > 0 {
                 HStack {
                     Text("浏览日期").font(.caption)
                     Slider(value: $offset, in: 0...maxOffset).accessibilityLabel("时间轴位置")
                 }
             }
-            if let hoverDay {
+            if line, let hoverDay {
                 let entries = data.filter { dayIndex($0.day) == hoverDay }
                 Text(date(hoverDay).formatted(date: .abbreviated, time: .omitted) + " · " + (hoverDay >= recordedDays ? "尚未到来" : entries.isEmpty ? "无标记" : entries.map { ($0.kind) + " \($0.count) 次" }.joined(separator: "    ")))
                     .font(.caption).foregroundStyle(.secondary).lineLimit(2).frame(height: 32, alignment: .topLeading)
             } else {
-                Text("点越大表示当天次数越多，0 次不显示点。放大后可拖动浏览，或使用日期滑块。")
+                Text(line ? "线图按每天总次数显示；放大后拖动或使用滑块浏览。" : "每条标记独立显示。上下滚动查看 24 小时；拥挤时点击 +数字 展开，放大后逐条显示。")
                     .font(.caption).foregroundStyle(.secondary).frame(height: 32, alignment: .topLeading)
             }
             ScrollView(.horizontal, showsIndicators: false) {
