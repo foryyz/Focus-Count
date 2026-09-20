@@ -100,7 +100,9 @@ struct EventHistoryView: View {
                 }
             }
             if let error = store.error { Text(error).foregroundStyle(.red).font(.caption) }
-        }.padding(24).frame(width: 1000, height: 700)
+        }.padding(24)
+            .frame(minWidth: 1000, idealWidth: 1000, maxWidth: .infinity,
+                   minHeight: 700, idealHeight: 700, maxHeight: .infinity)
             .background(Color(nsColor: .windowBackgroundColor))
             .onAppear { colors.ensure(allNames) }
             .onChange(of: allNames) { _ in colors.ensure(allNames) }
