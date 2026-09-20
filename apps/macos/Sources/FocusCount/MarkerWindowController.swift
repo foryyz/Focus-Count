@@ -14,7 +14,7 @@ import SwiftUI
             return
         }
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1000, height: 700),
+            contentRect: NSRect(x: 0, y: 0, width: 1440, height: 810),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false
         )
@@ -28,7 +28,8 @@ import SwiftUI
             self?.window?.performClose(nil)
         }))
         window.center()
-        window.setFrameAutosaveName("FocusCountMarkerWindow")
+        // Start once with the new 16:9 default, then retain subsequent user resizing.
+        window.setFrameAutosaveName("FocusCountMarkerWindowWide")
         window.delegate = self
         self.window = window
         window.makeKeyAndOrderFront(nil)

@@ -46,7 +46,7 @@ struct MarkerPointLayout {
                 }
                 for (index, group) in groups.enumerated() {
                     let anchor = group.map(y).reduce(0, +) / Double(group.count)
-                    let diameter = group.count == 1 ? 24.0 : min(42, 24 + sqrt(Double(group.count - 1)) * 6)
+                    let diameter = group.count == 1 ? 24.0 : min(72, 34 + sqrt(Double(group.count - 1)) * 10)
                     let columns = max(1, Int((dayWidth - 10) / (diameter + 4)))
                     let preferredLane = lanes.count == cluster.count ? lanes[index] : index % columns
                     let usedColumns = lanes.count == cluster.count ? max(1, (lanes.max() ?? 0) + 1) : columns

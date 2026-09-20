@@ -66,7 +66,19 @@ struct MarkerPointTimeline: View {
                             Button { expanded = item } label: {
                                 let name = EventAnalytics.label(item.events[0].kind)
                                 if let emoji = colors.emojis[name], !emoji.isEmpty {
-                                    Text(emoji).font(.system(size: item.diameter - 2)).frame(width: item.diameter, height: item.diameter)
+                                    if item.grouped {
+                                        ZStack {
+                                            Circle().fill(Color(nsColor: .windowBackgroundColor).opacity(0.92))
+                                            Circle().strokeBorder(colors.color(name).opacity(0.85), lineWidth: 2)
+                                            Text(emoji).font(.system(size: item.diameter - 10))
+                                                .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 0, x: 1, y: 0)
+                                                .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 0, x: -1, y: 0)
+                                                .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 0, x: 0, y: 1)
+                                                .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 0, x: 0, y: -1)
+                                        }.frame(width: item.diameter, height: item.diameter)
+                                    } else {
+                                        Text(emoji).font(.system(size: item.diameter - 2)).frame(width: item.diameter, height: item.diameter)
+                                    }
                                 } else {
                                     Circle().fill(colors.color(name)).frame(width: item.diameter * 0.65, height: item.diameter * 0.65).frame(width: item.diameter, height: item.diameter)
                                 }
