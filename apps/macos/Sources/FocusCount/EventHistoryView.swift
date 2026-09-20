@@ -3,6 +3,7 @@ import FocusCountCore
 
 struct EventHistoryView: View {
     @ObservedObject var store: StudyStore
+    var onReturn: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var range = -1
     @State private var kind: String?
@@ -45,7 +46,7 @@ struct EventHistoryView: View {
     var body: some View {
         VStack(spacing: 20) {
             HStack(spacing: 16) {
-                Button { dismiss() } label: { Label("返回记录", systemImage: "arrow.left") }
+                Button { if let onReturn { onReturn() } else { dismiss() } } label: { Label("返回记录", systemImage: "arrow.left") }
                     .keyboardShortcut(.cancelAction)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("时间标记").font(.title2.weight(.semibold))

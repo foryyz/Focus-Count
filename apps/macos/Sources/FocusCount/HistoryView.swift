@@ -25,7 +25,6 @@ struct HistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var filter = HistoryFilter()
     @State private var editing: StudySession?
-    @State private var showEvents = false
     @State private var deleting: StudySession?
     @State private var purging: Set<UUID> = []
     private var records: [StudySession] { filter.apply(store.database.sessions) }
@@ -49,7 +48,7 @@ struct HistoryView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("时间标记") { showEvents = true }
+                Button("时间标记") { MarkerWindowController.shared.show(store: store) }
                 Button {
                     editing = StudySession(startedAt: Date().addingTimeInterval(-1800), endedAt: Date(), activeSeconds: 1800, subject: "", focus: "A")
                 } label: { Label("补记", systemImage: "plus") }.disabled(store.blocked)
@@ -131,7 +130,6 @@ struct HistoryView: View {
             Button("取消", role: .cancel) { purging = [] }
             Button("彻底删除", role: .destructive) { store.permanentlyDelete(purging); purging = [] }
         } message: { Text("记录及其历史版本将从当前数据中移除，无法在应用内恢复。导入旧文件不会重新出现。已有备份文件不受影响。") }
-        .sheet(isPresented: $showEvents) { EventHistoryView(store: store) }
         .sheet(item: $editing) { session in SessionEditor(store: store, session: session) }
         .alert("将这条记录移至最近删除？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
             Button("取消", role: .cancel) { deleting = nil }
