@@ -9,9 +9,12 @@ struct MarkerFrequencyOverview: View {
     @ObservedObject var colors: MarkerColors
     let edit: (TimeEvent) -> Void
     let delete: (TimeEvent) -> Void
+    var compact = false
     @State private var granularity: MarkerGranularity = .automatic
     @State private var offset = 0.0
     @State private var span = 0.0
+    @State private var pendingEdit: TimeEvent?
+    @State private var pendingDelete: TimeEvent?
     @State private var selected: MarkerOverviewData.Cell?
     @State private var brush: CGFloat?
     @State private var brushEnd: CGFloat?
@@ -46,6 +49,7 @@ struct MarkerFrequencyOverview: View {
         let snapshot = data
         let sizing = scale(snapshot, width: chartWidth)
         VStack(alignment: .leading, spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
             HStack {
                 Picker("统计粒度", selection: $granularity) {
                     ForEach(MarkerGranularity.allCases) { Text($0.rawValue).tag($0) }
@@ -56,15 +60,19 @@ struct MarkerFrequencyOverview: View {
                 Button { zoom(visible / 1.7) } label: { Image(systemName: "plus.magnifyingglass") }.disabled(visible <= 1).help("放大")
                 Button("查看全貌") { span = 0; offset = 0 }.disabled(visible >= Double(days))
             }
+            }
             Text("正在查看 " + date(floor(offset)).formatted(date: .abbreviated, time: .omitted) + " — " + date(ceil(offset + visible) - 1).formatted(date: .abbreviated, time: .omitted))
                 .font(.caption).foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 12) {
                 chart(snapshot)
+                #if os(macOS)
                 if let selected { inspector(selected).frame(width: 220) }
+                #endif
             }
-            MarkerRangeNavigator(days: days, start: start, visible: visible, offset: offset, maximumSpan: Double(days), events: events, colors: colors) { position, length in
+            MarkerRangeNavigator(days: days, start: start, visible: visible, offset: offset, compact: compact, maximumSpan: Double(days), events: events, colors: colors) { position, length in
                 span = length; offset = position
             }
+            if !compact {
             HStack(spacing: 12) {
                 Text("面积 = 次数").font(.caption)
                 ForEach([1, 3, 10], id: \.self) { count in
@@ -77,7 +85,17 @@ struct MarkerFrequencyOverview: View {
             }.foregroundStyle(.secondary).frame(height: 44)
             Text("* 尺寸封顶，图中显示实际次数 · 空白表示无记录 · 底线表示未完整周期 · 拖选日期栏放大 · 点击气泡查看原始记录")
                 .font(.caption2).foregroundStyle(.secondary)
-        }.onChange(of: events) { _ in
+            }
+        }
+        #if os(iOS)
+        .sheet(item: $selected, onDismiss: {
+            if let event = pendingEdit { pendingEdit = nil; edit(event) }
+            if let event = pendingDelete { pendingDelete = nil; delete(event) }
+        }) { cell in
+            inspector(cell).padding().presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }
+        #endif
+        .onChange(of: events) { _ in
             if let selection = selected {
                 selected = MarkerOverviewData(events: events, start: selection.bucket.start, end: selection.bucket.end, granularity: granularity).cells.first { $0.kind == selection.kind }
             }
@@ -167,7 +185,7 @@ struct MarkerFrequencyOverview: View {
                 if pinchSpan == nil { pinchSpan = visible }
                 zoom((pinchSpan ?? visible) / value)
             }.onEnded { _ in pinchSpan = nil })
-        }.frame(minHeight: 190, maxHeight: .infinity)
+        }.frame(minHeight: compact ? 90 : 190, maxHeight: .infinity)
     }
     private func bubble(_ cell: MarkerOverviewData.Cell, unit: Double, limit: Double) -> some View {
         let diameter = MarkerOverviewData.diameter(count: cell.events.count, unit: unit, limit: limit)
@@ -185,8 +203,15 @@ struct MarkerFrequencyOverview: View {
             .help(cell.kind + " · \(cell.events.count) 次\n" + cell.bucket.start.formatted(date: .abbreviated, time: .omitted) + " — " + cell.bucket.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted) + (cell.bucket.partial ? "\n未完整周期" : ""))
             .accessibilityLabel(cell.kind + "，" + cell.bucket.start.formatted(date: .abbreviated, time: .omitted) + "，\(cell.events.count) 次，查看详情")
     }
+    private func actionIcon(_ name: String) -> some View {
+        #if os(iOS)
+        Image(systemName: name).frame(minWidth: 44, minHeight: 44)
+        #else
+        Image(systemName: name)
+        #endif
+    }
     private func inspector(_ cell: MarkerOverviewData.Cell) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: compact ? 6 : 12) {
             HStack {
                 Text((colors.emojis[cell.kind] ?? "") + " " + cell.kind).font(.headline).lineLimit(1)
                 Spacer()
@@ -221,8 +246,20 @@ struct MarkerFrequencyOverview: View {
                         HStack {
                             Text(event.occurredAt.formatted(date: .abbreviated, time: .shortened)).font(.caption)
                             Spacer()
-                            Button { edit(event) } label: { Image(systemName: "pencil") }.help("编辑标记")
-                            Button { delete(event) } label: { Image(systemName: "trash") }.help("移至最近删除")
+                            Button {
+                                #if os(iOS)
+                                pendingEdit = event; selected = nil
+                                #else
+                                edit(event)
+                                #endif
+                            } label: { actionIcon("pencil") }.help("编辑标记")
+                            Button {
+                                #if os(iOS)
+                                pendingDelete = event; selected = nil
+                                #else
+                                delete(event)
+                                #endif
+                            } label: { actionIcon("trash") }.help("移至最近删除")
                         }.buttonStyle(.borderless)
                     }
                 }

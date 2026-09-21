@@ -1,5 +1,9 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 /// Local presentation preferences, separate from exchanged event data.
 @MainActor final class MarkerColors: ObservableObject {
@@ -28,7 +32,11 @@ import AppKit
         if let available = palette.first(where: { !used.contains($0) }) { return available }
         // Extend the palette with evenly distributed hues before reusing any exact color.
         for index in 0..<360 {
+            #if os(macOS)
             let color = NSColor(calibratedHue: (Double(index) * 0.61803398875).truncatingRemainder(dividingBy: 1), saturation: 0.55, brightness: 0.75, alpha: 1)
+            #else
+            let color = UIColor(hue: (Double(index) * 0.61803398875).truncatingRemainder(dividingBy: 1), saturation: 0.55, brightness: 0.75, alpha: 1)
+            #endif
             let hex = encode(color)
             if !used.contains(hex) { return hex }
         }
@@ -39,10 +47,22 @@ import AppKit
         return Color(red: Double((hex >> 16) & 255) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255)
     }
     func set(_ color: Color, for name: String) {
+        #if os(macOS)
         guard let rgb = NSColor(color).usingColorSpace(.sRGB) else { return }
+        #else
+        let rgb = UIColor(color)
+        #endif
         values[name] = Self.encode(rgb); defaults.set(values, forKey: key)
     }
+    #if os(macOS)
     private static func encode(_ color: NSColor) -> String {
         String(format: "%02X%02X%02X", Int((color.redComponent * 255).rounded()), Int((color.greenComponent * 255).rounded()), Int((color.blueComponent * 255).rounded()))
     }
+    #else
+    private static func encode(_ color: UIColor) -> String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return String(format: "%02X%02X%02X", Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
+    }
+    #endif
 }

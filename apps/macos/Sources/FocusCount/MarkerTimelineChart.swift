@@ -8,6 +8,7 @@ struct MarkerTimelineChart: View {
     @ObservedObject var colors: MarkerColors
     let isWeek: Bool
     let line: Bool
+    var compact = false
     @State private var zoom = 1.0
     @State private var offset = 0.0
     @State private var hoverDay: Int?
@@ -42,7 +43,7 @@ struct MarkerTimelineChart: View {
         hoverDay = nil
     }
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: compact ? 6 : 14) {
             HStack {
                 Spacer()
                 Button { updateZoom(zoom / 1.5) } label: { Image(systemName: "minus.magnifyingglass") }.disabled(zoom <= minZoom).help("缩小")
@@ -53,7 +54,7 @@ struct MarkerTimelineChart: View {
             Text(start.formatted(date: .abbreviated, time: .omitted) + " — " + end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted) + " · 统计 \(recordedDays) 天")
                 .font(.caption).foregroundStyle(.secondary)
             if !line {
-                MarkerPointTimeline(events: events, start: start, days: days, offset: offset, visibleDays: visible, isWeek: isWeek, colors: colors) { first, last in
+                MarkerPointTimeline(events: events, start: start, days: days, offset: offset, visibleDays: visible, isWeek: isWeek, colors: colors, minimumHeight: compact ? 90 : 240) { first, last in
                     let firstDay = dayIndex(calendar.startOfDay(for: first))
                     let lastDay = dayIndex(calendar.startOfDay(for: last))
                     updateZoom(Double(days) / Double(max(1, lastDay - firstDay + 1)))
@@ -125,6 +126,12 @@ struct MarkerTimelineChart: View {
                     case .ended: hoverDay = nil
                     }
                 }
+                #if os(iOS)
+                .onTapGesture(coordinateSpace: .local) { location in
+                    let fraction = (location.x - 35) / max(1, geometry.size.width - 55)
+                    hoverDay = fraction >= 0 && fraction <= 1 ? min(days - 1, max(0, Int(floor(offset + fraction * visible)))) : nil
+                }
+                #endif
                 .gesture(DragGesture().onChanged { value in
                     if dragStart == nil { dragStart = offset }
                     offset = min(maxOffset, max(0, (dragStart ?? offset) - value.translation.width / max(1, geometry.size.width - 55) * visible))
@@ -135,10 +142,10 @@ struct MarkerTimelineChart: View {
                     updateZoom((pinchStart ?? zoom) * value)
                 }.onEnded { _ in pinchStart = nil })
                 .accessibilityLabel("每日标记次数，可使用下方日期滑块浏览。具体记录见时间轴页。")
-            }.frame(minHeight: 240, maxHeight: .infinity)
+            }.frame(minHeight: compact ? 90 : 240, maxHeight: .infinity)
             }
             if !line {
-                MarkerRangeNavigator(days: days, start: start, visible: visible, offset: offset, maximumSpan: Double(days)) { position, span in
+                MarkerRangeNavigator(days: days, start: start, visible: visible, offset: offset, compact: compact, maximumSpan: Double(days)) { position, span in
                     zoom = min(maxZoom, max(minZoom, Double(days) / span))
                     offset = min(maxOffset, max(0, position))
                 }
@@ -149,6 +156,7 @@ struct MarkerTimelineChart: View {
                     Slider(value: $offset, in: 0...maxOffset).accessibilityLabel("时间轴位置")
                 }
             }
+            if !compact {
             if line, let hoverDay {
                 let entries = data.filter { dayIndex($0.day) == hoverDay }
                 Text(date(hoverDay).formatted(date: .abbreviated, time: .omitted) + " · " + (hoverDay >= recordedDays ? "尚未到来" : entries.isEmpty ? "无标记" : entries.map { ($0.kind) + " \($0.count) 次" }.joined(separator: "    ")))
@@ -168,8 +176,9 @@ struct MarkerTimelineChart: View {
                     }
                 }
             }
+            }
             if data.isEmpty { Text("此范围没有标记；可以切换日期或标记。").font(.caption).foregroundStyle(.secondary) }
-        }.padding(16).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
+        }.padding(compact ? 4 : 16).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 12))
             .onAppear { resetWindow() }
             .onChange(of: line) { _ in resetWindow() }
     }

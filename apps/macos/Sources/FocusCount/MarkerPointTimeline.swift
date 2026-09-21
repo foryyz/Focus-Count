@@ -9,8 +9,16 @@ struct MarkerPointTimeline: View {
     let visibleDays: Double
     let isWeek: Bool
     @ObservedObject var colors: MarkerColors
+    var minimumHeight: CGFloat = 240
     let zoomTo: (Date, Date) -> Void
     @State private var expanded: MarkerPointLayout.Item?
+    private var markerBackground: Color {
+        #if os(macOS)
+        Color(nsColor: .windowBackgroundColor)
+        #else
+        Color(uiColor: .systemBackground)
+        #endif
+    }
     private let calendar = Calendar.current
     private func date(_ day: Int) -> Date { calendar.date(byAdding: .day, value: day, to: start)! }
     private func label(_ day: Int) -> String {
@@ -68,13 +76,13 @@ struct MarkerPointTimeline: View {
                                 if let emoji = colors.emojis[name], !emoji.isEmpty {
                                     if item.grouped {
                                         ZStack {
-                                            Circle().fill(Color(nsColor: .windowBackgroundColor).opacity(0.92))
+                                            Circle().fill(markerBackground.opacity(0.92))
                                             Circle().strokeBorder(colors.color(name).opacity(0.85), lineWidth: 2)
                                             Text(emoji).font(.system(size: item.diameter - 10))
-                                                .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 0, x: 1, y: 0)
-                                                .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 0, x: -1, y: 0)
-                                                .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 0, x: 0, y: 1)
-                                                .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 0, x: 0, y: -1)
+                                                .shadow(color: markerBackground, radius: 0, x: 1, y: 0)
+                                                .shadow(color: markerBackground, radius: 0, x: -1, y: 0)
+                                                .shadow(color: markerBackground, radius: 0, x: 0, y: 1)
+                                                .shadow(color: markerBackground, radius: 0, x: 0, y: -1)
                                         }.frame(width: item.diameter, height: item.diameter)
                                     } else {
                                         Text(emoji).font(.system(size: item.diameter - 2)).frame(width: item.diameter, height: item.diameter)
@@ -91,7 +99,7 @@ struct MarkerPointTimeline: View {
                     }.frame(height: 24 * hourHeight + 28).clipped()
 
             }
-        }.frame(minHeight: 240)
+        }.frame(minHeight: minimumHeight)
             .popover(item: $expanded) { item in
                 VStack(alignment: .leading, spacing: 12) {
                     Text(item.grouped ? item.events[0].kind + " · \(item.events.count) 次" : "时间标记").font(.headline)
@@ -115,6 +123,11 @@ struct MarkerPointTimeline: View {
                         }
                     }
                 }.padding(18).frame(width: 280)
+                #if os(iOS)
+                    .presentationCompactAdaptation(.sheet)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                #endif
             }
     }
 }

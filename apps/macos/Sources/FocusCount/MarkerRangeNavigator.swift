@@ -6,6 +6,7 @@ struct MarkerRangeNavigator: View {
     let start: Date
     let visible: Double
     let offset: Double
+    var compact = false
     var maximumSpan: Double = 4
     var events: [TimeEvent] = []
     var colors: MarkerColors? = nil
@@ -59,6 +60,7 @@ struct MarkerRangeNavigator: View {
                     }
                 }
             }.frame(height: 28).padding(.horizontal, 8)
+            if !compact {
             HStack {
                 Text(start.formatted(date: .abbreviated, time: .omitted))
                 Spacer()
@@ -66,6 +68,7 @@ struct MarkerRangeNavigator: View {
                 Spacer()
                 Text(Calendar.current.date(byAdding: .day, value: days - 1, to: start)!.formatted(date: .abbreviated, time: .omitted))
             }.font(.caption2).foregroundStyle(.secondary)
+            }
             if Double(days) > visible {
                 Slider(value: Binding(get: { offset }, set: { change($0, visible) }), in: 0...max(0.001, Double(days) - visible))
                     .accessibilityLabel("浏览完整日期范围")
