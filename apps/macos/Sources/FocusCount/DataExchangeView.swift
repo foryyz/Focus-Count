@@ -71,7 +71,14 @@ struct DataExchangeView: View {
                             Button("取消") { self.incoming = nil }
                             Spacer()
                             Button("确认合并") {
-                                if store.importRecords(incoming) { self.incoming = nil; message = "合并完成，备份与历史版本已保留。" }
+                                let sessionIDs = Set(store.database.sessions.map(\.id))
+                                let eventIDs = Set((store.database.events ?? []).map(\.id))
+                                if store.importRecords(incoming) {
+                                    let addedSessions = store.database.sessions.filter { !sessionIDs.contains($0.id) }.count
+                                    let addedEvents = (store.database.events ?? []).filter { !eventIDs.contains($0.id) }.count
+                                    self.incoming = nil
+                                    message = "合并完成，新增 \(addedSessions + addedEvents) 个（专注记录 \(addedSessions) 个，时间标记 \(addedEvents) 个，含最近删除）。备份与历史版本已保留。"
+                                }
                             }.buttonStyle(.borderedProminent).tint(.teal)
                         }
                     }.padding(8).frame(maxWidth: .infinity, alignment: .leading)
