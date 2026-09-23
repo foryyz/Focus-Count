@@ -96,7 +96,7 @@ struct TimerScreen: View {
                 }.tint(.teal)
             }
             .sheet(isPresented: $exchange) { ExchangeScreen(store: store) }
-            .sheet(isPresented: Binding(get: { store.state.clock.pendingEnd != nil }, set: { _ in })) {
+            .sheet(isPresented: Binding(get: { store.state.clock.pendingEnd != nil && !exchange && !history }, set: { _ in })) {
                 if let start = store.state.clock.startedAt, let end = store.state.clock.pendingEnd {
                     RecordEditor(store: store, session: StudySession(startedAt: start, endedAt: end, activeSeconds: store.state.clock.seconds(), subject: store.state.activity ?? "", focus: "A"), completesTimer: true) {
                         message = "✨ A little focus, a meaningful step. Well done."

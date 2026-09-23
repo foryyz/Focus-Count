@@ -182,10 +182,12 @@ struct ContentView: View {
                 }
             }
         } message: { Text("本次未保存的计时将被清除，不生成专注记录。已有专注记录不会受到影响。") }
-        .onAppear { commandFocused = showMarkerInput }
+        .onAppear { commandFocused = showMarkerInput; subject = store.database.activity ?? "" }
+        .onChange(of: subject) { value in store.setActivity(value) }
+        .onChange(of: store.database.activity) { value in subject = value ?? "" }
         .sheet(isPresented: $showData, onDismiss: { commandFocused = showMarkerInput }) { DataExchangeView(store: store) }
         .sheet(isPresented: $showHistory, onDismiss: { commandFocused = showMarkerInput }) { HistoryView(store: store) }
-        .sheet(isPresented: Binding(get: { store.database.pendingEnd != nil }, set: { _ in })) {
+        .sheet(isPresented: Binding(get: { store.database.pendingEnd != nil && !showData && !showHistory }, set: { _ in })) {
             VStack(alignment: .leading, spacing: 20) {
                 Label("完成本次专注", systemImage: "checkmark.circle.fill")
                     .font(.title2.bold()).foregroundStyle(.teal)

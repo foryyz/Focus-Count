@@ -8,6 +8,7 @@ struct PhoneState: Codable {
     var sessions: [StudySession] = []
     var clock = MobileClock()
     var activity: String?
+    var timerID: UUID?
 }
 
 @MainActor final class PhoneStore: ObservableObject {
@@ -41,6 +42,7 @@ struct PhoneState: Codable {
                     loaded.version = 5
                 }
                 state = loaded
+                if state.clock.startedAt != nil && state.timerID == nil { _ = commit { $0.timerID = UUID() } }
             }
         } catch { blocked = true; self.error = "无法读取本地数据，已停止写入保护原文件。\n\(error.localizedDescription)" }
     }
@@ -55,10 +57,11 @@ struct PhoneState: Codable {
             return true
         } catch { self.error = "保存失败，修改未生效：\(error.localizedDescription)"; return false }
     }
-    @discardableResult func cancelTimer() -> Bool { commit { $0.clock = MobileClock(); $0.activity = nil } }
+    @discardableResult func cancelTimer() -> Bool { commit { $0.clock = MobileClock(); $0.activity = nil; $0.timerID = nil } }
     @discardableResult func start(activity: String) -> Bool {
         guard state.clock.startedAt == nil else { return false }
         return commit {
+            $0.timerID = UUID()
             $0.activity = activity.trimmingCharacters(in: .whitespacesAndNewlines)
             $0.clock.toggle()
         }
@@ -102,20 +105,21 @@ struct PhoneState: Codable {
             $0.events?.removeAll { removed.contains($0.id) }
         }
     }
-    func toggle() { commit { $0.clock.toggle() } }
+    func toggle() { commit { if $0.clock.startedAt == nil { $0.timerID = UUID() }; $0.clock.toggle() } }
     func finish() { commit { $0.clock.finish() } }
     func returnToTimer() { commit { $0.clock.pendingEnd = nil } }
     func checkpoint() { commit { _ in } }
     func save(_ session: StudySession, completesTimer: Bool = false) -> Bool {
-        guard !(state.purgedIDs ?? []).contains(session.id) else { error = "此记录已彻底删除。"; return false }
+        guard !(state.purgedIDs ?? []).contains(completesTimer ? (state.timerID ?? session.id) : session.id) else { error = "此记录已彻底删除。"; return false }
         var edited = session
+        if completesTimer, let id = state.timerID { edited.id = id }
         edited.subject = edited.subject.trimmingCharacters(in: .whitespacesAndNewlines)
         if let issue = edited.validationError { error = issue; return false }
         edited.updatedAt = Date()
         return commit {
             if let index = $0.sessions.firstIndex(where: { $0.id == edited.id }) { $0.sessions[index] = RecordExchange.replacing($0.sessions[index], with: edited) }
             else { $0.sessions.append(edited) }
-            if completesTimer { $0.clock = MobileClock(); $0.activity = nil }
+            if completesTimer { $0.clock = MobileClock(); $0.activity = nil; $0.timerID = nil }
         }
     }
     func delete(_ session: StudySession, restore: Bool = false) {
@@ -133,10 +137,16 @@ struct PhoneState: Codable {
             $0.sessions.removeAll { removed.contains($0.id) }
         }
     }
-    func importRecords(_ database: Database) -> Bool {
+    func importRecords(_ database: Database, syncTimer: Bool = false) -> Bool {
         guard !blocked else { return false }
         do {
             let incoming = try RecordExchange.decode(RecordExchange.encode(database))
+            if syncTimer && incoming.timerTransfer == nil { throw RecordExchange.ExchangeError.invalid("此文件不含可同步的计时状态，请在新版应用重新导出。") }
+            if syncTimer, let id = incoming.timerTransfer?.timerID,
+               state.sessions.contains(where: { $0.id == id }) || incoming.sessions.contains(where: { $0.id == id }) ||
+                (state.purgedIDs ?? []).union(incoming.purgedIDs ?? []).contains(id) {
+                throw RecordExchange.ExchangeError.invalid("文件中的计时已保存或彻底删除，请关闭同步计时，只合并记录。")
+            }
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let identifier = UUID().uuidString
             try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("before-import-\(identifier).json"), options: .atomic)
@@ -145,6 +155,11 @@ struct PhoneState: Codable {
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(incoming.purgedIDs ?? [])
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: incoming.sessions, purgedIDs: $0.purgedIDs ?? [])
                 $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: incoming.events ?? [], purgedIDs: $0.purgedIDs ?? [])
+                if syncTimer, let timer = incoming.timerTransfer {
+                    $0.timerID = timer.timerID ?? (timer.startedAt == nil ? nil : UUID())
+                    $0.clock = timer.mobileClock()
+                    $0.activity = timer.activity
+                }
             }
         } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
     }
@@ -156,8 +171,11 @@ struct PhoneState: Codable {
     }
     func export() throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("本地数据读取失败，无法导出。") }
-        let draft = TimerState(startedAt: state.clock.startedAt, accumulated: state.clock.seconds())
-        return try RecordExchange.encode(Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd))
+        let capturedAt = Date()
+        let draft = TimerState(startedAt: state.clock.startedAt, accumulated: state.clock.seconds(at: capturedAt))
+        let transfer = TimerTransfer(capturedAt: capturedAt, startedAt: draft.startedAt, accumulated: draft.accumulated,
+            isRunning: state.clock.isRunning, pendingEnd: state.clock.pendingEnd, activity: state.activity, timerID: state.timerID)
+        return try RecordExchange.encode(Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd, timerTransfer: transfer, activity: state.activity))
     }
 }
 

@@ -35,6 +35,9 @@ public enum RecordExchange {
     public static func decode(_ data: Data) throws -> Database {
         var database = try JSONDecoder().decode(Database.self, from: data)
         guard [1, 2, 3, 4, 5].contains(database.version) else { throw ExchangeError.invalid("不支持此数据版本。") }
+        if let timer = database.timerTransfer, !timer.isValid {
+            throw ExchangeError.invalid("文件中的计时状态无效。")
+        }
         var ids = Set<UUID>()
         for index in database.sessions.indices {
             let session = database.sessions[index]

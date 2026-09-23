@@ -43,6 +43,7 @@ import AppKit
             self.error = "无法读取数据，已停止写入以保护原文件。请检查数据目录：\(error.localizedDescription)"
         }
         if !blocked {
+            if database.draft.startedAt != nil && database.timerID == nil { database.timerID = UUID(); persist() }
             do { try writeCSV() } catch { self.error = "CSV 更新失败：\(error.localizedDescription)" }
         }
         guard observeSystem else { return }
@@ -120,11 +121,19 @@ import AppKit
     @discardableResult func cancelTimer() -> Bool {
         commit {
             $0.draft = TimerState()
+            $0.activity = nil
+            $0.timerID = nil
             $0.pendingEnd = nil
         }
     }
+    func setActivity(_ activity: String) {
+        guard !blocked, database.activity != activity else { return }
+        database.activity = activity
+        persist()
+    }
     func toggle() {
         guard !blocked, database.pendingEnd == nil else { return }
+        if database.draft.startedAt == nil { database.timerID = UUID() }
         database.draft.toggle()
         persist()
     }
@@ -138,10 +147,13 @@ import AppKit
     func resumeEditingTimer() { database.pendingEnd = nil; persist() }
     func save(subject: String, focus: String) -> Bool {
         guard !blocked, let start = database.draft.startedAt, let end = database.pendingEnd else { return false }
-        let session = StudySession(startedAt: start, endedAt: end, activeSeconds: database.draft.seconds(), subject: subject.trimmingCharacters(in: .whitespacesAndNewlines), focus: focus, updatedAt: Date())
+        if let id = database.timerID, (database.purgedIDs ?? []).contains(id) { error = "此次专注已彻底删除，请取消计时。"; return false }
+        let session = StudySession(id: database.timerID ?? UUID(), startedAt: start, endedAt: end, activeSeconds: database.draft.seconds(), subject: subject.trimmingCharacters(in: .whitespacesAndNewlines), focus: focus, updatedAt: Date())
         return commit { database in
-            database.sessions.append(session)
+            database.sessions = RecordExchange.merge(local: database.sessions, incoming: [session], purgedIDs: database.purgedIDs ?? [])
+            database.timerID = nil
             database.draft = TimerState()
+            database.activity = nil
             database.pendingEnd = nil
         }
     }
@@ -181,10 +193,16 @@ import AppKit
             $0.sessions.removeAll { removed.contains($0.id) }
         }
     }
-    func importRecords(_ incoming: Database) -> Bool {
+    func importRecords(_ incoming: Database, syncTimer: Bool = false) -> Bool {
         guard !blocked else { return false }
         do {
             let validated = try RecordExchange.decode(RecordExchange.encode(incoming))
+            if syncTimer && validated.timerTransfer == nil { throw RecordExchange.ExchangeError.invalid("此文件不含可同步的计时状态，请在新版应用重新导出。") }
+            if syncTimer, let id = validated.timerTransfer?.timerID,
+               database.sessions.contains(where: { $0.id == id }) || validated.sessions.contains(where: { $0.id == id }) ||
+                (database.purgedIDs ?? []).union(validated.purgedIDs ?? []).contains(id) {
+                throw RecordExchange.ExchangeError.invalid("文件中的计时已保存或彻底删除，请关闭同步计时，只合并记录。")
+            }
             let backupFolder = try directory.appendingPathComponent("backups/\(UUID().uuidString)", isDirectory: true)
             try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
             try export().write(to: backupFolder.appendingPathComponent("before-import.json"), options: .atomic)
@@ -193,13 +211,23 @@ import AppKit
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(validated.purgedIDs ?? [])
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: validated.sessions, purgedIDs: $0.purgedIDs ?? [])
                 $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: validated.events ?? [], purgedIDs: $0.purgedIDs ?? [])
+                if syncTimer, let timer = validated.timerTransfer {
+                    $0.timerID = timer.timerID ?? (timer.startedAt == nil ? nil : UUID())
+                    $0.draft = timer.timerState()
+                    $0.pendingEnd = timer.pendingEnd
+                    $0.activity = timer.activity
+                }
             }
         } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
     }
     func export() throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("数据读取失败，无法导出。") }
         var snapshot = database
+        let capturedAt = Date()
         snapshot.draft = database.draft.checkpoint()
+        snapshot.timerTransfer = TimerTransfer(capturedAt: capturedAt, startedAt: snapshot.draft.startedAt,
+            accumulated: snapshot.draft.accumulated, isRunning: database.draft.isRunning,
+            pendingEnd: database.pendingEnd, activity: database.activity, timerID: database.timerID)
         return try RecordExchange.encode(snapshot)
     }
     func restoreVersion(_ snapshot: SessionSnapshot) -> Bool {

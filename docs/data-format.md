@@ -47,8 +47,8 @@ UTF-8 JSON 顶层包含 `version`（5）、`sessions`（记录数组）、`draft
 - Mac 备份在 `~/Library/Application Support/FocusCount/backups/<UUID>/before-import.json` 与 `incoming.json`，界面可打开目录。
 - iPhone 在沙盒 Application Support/FocusCount 内保留 `before-import-<UUID>.json`（完整内部状态）和 `incoming-<UUID>.json`（导入 JSON），可通过 Xcode 下载容器取得。
 - 主文件原子写入，保存失败保留原内存状态。Mac CSV 在 JSON 成功保存后重新生成。
-- 导入不会替换本机当前计时草稿。外部草稿随 incoming.json 备份保留，不能同时接管两个设备的运行计时。
-- 导出包含所有当前记录、删除标记、历史版本，以及本机草稿的暂停快照；导出不暂停本机运行。
+- 默认只合并记录。明确选择同步计时后，用 `timerTransfer` 替换本机计时；先备份，保存失败回滚。缺少该字段的旧文件不能接续计时。
+- 导出包含所有记录、删除标记、历史版本，以及兼容旧版的 `draft` 暂停快照和新版的 `timerTransfer` 完整状态；导出不暂停本机运行。
 - 备份与历史版本不自动清理。请定期导出到独立位置防止设备损坏或文件被外部删除。
 
 不要用同步工具直接覆盖正在运行客户端的主文件。直接覆盖文件不等于调用合并功能，多进程同时写同一主文件也不在本协议支持范围内。
@@ -73,3 +73,15 @@ Mac 使用包含休眠时间的连续单调时钟，熄屏和休眠继续累计�
 顶层可选 events 数组，每项包含 id、kind、occurredAt、updatedAt、可选 deletedAt。SEX 的 kind 为 SEX；无起止区间、activeSeconds 或 focus。事件不进入 sessions，因此不计入专注统计或 CSV。
 
 事件按 ID 合并，采用较新修改时间；同时间按 sortedKeys JSON 字节序确定结果。purgedIDs 同时作用于事件，彻底删除优先。普通删除和恢复仅改变删除状态，不改标记时间。v1–v4 数据按无事件导入，未知新版本拒绝，防止旧客户端丢弃 events。iPhone 内部状态升级到 5，旧文件先备份；标记可在手机无损往返交换。
+
+## 可选计时接续扩展（Mac 1.11.0 / iPhone 1.2.0）
+
+仍使用 v5，通过可选字段向后兼容；旧客户端忽略此扩展，重新导出会丢失接续信息。两端都需升级。
+
+`timerTransfer` 包含 `timerID`（同一次专注的 UUID）、`capturedAt`（导出时间）、`startedAt`、`accumulated`（导出时有效秒数）、`isRunning`、`pendingEnd` 和 `activity`。日期编码沿用本协议。有限非负秒数、状态互斥、起止顺序和时长上限均在导入时验证，无效快照拒绝整份文件。
+
+运行时：接收累计秒数 = accumulated + max(0, 接收时间 − capturedAt)，再从接收时刻继续计时。Mac 使用新的本机单调时钟锚点；iPhone 使用新的日期锚点。暂停和待保存不增加传递期间时长。未开始快照会清空本机计时。重复接收同一运行快照从原始导出时间重建，不会相加或重复累计。
+
+Mac 本地额外保存可选 `activity` 和 `timerID`；iPhone 内部状态保存同名字段。新开始生成 ID，接续沿用；完成保存使用这个 ID 作为 session ID，取消或保存后清除本机计时 ID。计时 ID 已存在于任一侧记录或 purgedIDs 中时，不允许再次导入其运行快照，只能关闭同步计时后合并记录。
+
+同步计时每次必须明确选择，不依据文件新旧自动覆盖，也不合并两个独立计时。源设备不会收到远程暂停或结束指令；取消、暂停和未完成草稿并非实时同步。接收旧暂停快照会恢复该快照，用户需核对导出时间。Mac 本地重启恢复暂停的原策略不变。

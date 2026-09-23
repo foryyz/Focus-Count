@@ -2,6 +2,58 @@ import FocusCountCore
 import XCTest
 @testable import FocusCount
 final class FocusCountTests: XCTestCase {
+    @MainActor func testCompletedHandoffCannotBeResurrected() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = StudyStore(directory: root, observeSystem: false)
+        source.toggle()
+        source.setActivity("阅读")
+        let file = try RecordExchange.decode(source.export())
+        let peer = StudyStore(directory: root.appendingPathComponent("peer"), observeSystem: false)
+        XCTAssertTrue(peer.importRecords(file, syncTimer: true))
+        XCTAssertEqual(peer.database.timerID, source.database.timerID)
+        peer.finish()
+        XCTAssertTrue(peer.save(subject: "阅读", focus: "A"))
+        XCTAssertEqual(peer.sessions.first?.id, file.timerTransfer?.timerID)
+        XCTAssertFalse(peer.importRecords(file, syncTimer: true))
+        XCTAssertNil(peer.database.draft.startedAt)
+        source.finish()
+        XCTAssertTrue(source.save(subject: "阅读", focus: "A"))
+        XCTAssertTrue(peer.importRecords(try RecordExchange.decode(source.export())))
+        XCTAssertEqual(peer.sessions.count, 1)
+    }
+    @MainActor func testTimerHandoffIsExplicitAndPersists() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root, observeSystem: false)
+        let now = Date()
+        let transfer = TimerTransfer(capturedAt: now.addingTimeInterval(-20), startedAt: now.addingTimeInterval(-120),
+            accumulated: 60, isRunning: true, pendingEnd: nil, activity: "阅读")
+        let incoming = Database(timerTransfer: transfer)
+        XCTAssertTrue(store.importRecords(incoming))
+        XCTAssertNil(store.database.draft.startedAt)
+        XCTAssertTrue(store.importRecords(incoming, syncTimer: true))
+        XCTAssertTrue(store.database.draft.isRunning)
+        XCTAssertEqual(store.database.draft.seconds(), 80, accuracy: 2)
+        XCTAssertEqual(store.database.activity, "阅读")
+        XCTAssertTrue(store.importRecords(incoming, syncTimer: true))
+        XCTAssertEqual(store.database.draft.seconds(), 80, accuracy: 2)
+        let outgoing = try RecordExchange.decode(store.export()).timerTransfer!
+        XCTAssertTrue(outgoing.isRunning)
+        XCTAssertEqual(outgoing.mobileClock().seconds(), store.database.draft.seconds(), accuracy: 0.1)
+        let reopened = StudyStore(directory: root, observeSystem: false)
+        XCTAssertFalse(reopened.database.draft.isRunning) // Existing Mac relaunch policy.
+        XCTAssertEqual(reopened.database.activity, "阅读")
+        XCTAssertFalse(store.importRecords(Database(), syncTimer: true))
+        XCTAssertTrue(store.database.draft.isRunning)
+        var paused = transfer; paused.isRunning = false; paused.pendingEnd = now.addingTimeInterval(-30)
+        XCTAssertTrue(store.importRecords(Database(timerTransfer: paused), syncTimer: true))
+        XCTAssertEqual(store.database.pendingEnd, paused.pendingEnd)
+        XCTAssertEqual(store.database.draft.seconds(), 60, accuracy: 0.01)
+        let backupRoot = root.appendingPathComponent("backups")
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: backupRoot.path).isEmpty)
+    }
+
     func testCommandSyntax() {
         XCTAssertEqual(FocusCommand(" !stop "), .mark("stop"))
         XCTAssertEqual(FocusCommand("!sex"), .mark("sex"))

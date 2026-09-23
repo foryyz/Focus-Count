@@ -38,7 +38,7 @@ for mode in ['Debug','Release']:
  INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
  TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
  SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
- CURRENT_PROJECT_VERSION = 2; MARKETING_VERSION = 1.1.0; CODE_SIGN_STYLE = Automatic;
+ CURRENT_PROJECT_VERSION = 3; MARKETING_VERSION = 1.2.0; CODE_SIGN_STYLE = Automatic;
  ENABLE_DEBUG_DYLIB = NO; ENABLE_TESTABILITY = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "{'-Onone' if mode=='Debug' else '-O'}";
  SWIFT_ACTIVE_COMPILATION_CONDITIONS = "{'DEBUG' if mode=='Debug' else ''}";
  }};''')

@@ -69,12 +69,16 @@ public struct TimerState: Codable {
 
 public struct Database: Codable {
     public var version = 5
+    public var timerTransfer: TimerTransfer?
+    public var timerID: UUID?
+    public var activity: String?
     public var events: [TimeEvent]?
     public var purgedIDs: Set<UUID>?
     public var sessions: [StudySession] = []
     public var draft = TimerState()
     public var pendingEnd: Date?
-    public init(version: Int = 5, events: [TimeEvent]? = nil, purgedIDs: Set<UUID>? = nil, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil) {
+    public init(version: Int = 5, events: [TimeEvent]? = nil, purgedIDs: Set<UUID>? = nil, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil, timerTransfer: TimerTransfer? = nil, activity: String? = nil) {
+        self.timerTransfer = timerTransfer; self.activity = activity
         self.events = events; self.purgedIDs = purgedIDs; self.version = version; self.sessions = sessions; self.draft = draft; self.pendingEnd = pendingEnd
     }
 }
@@ -117,4 +121,47 @@ public struct TimeEvent: Codable, Identifiable, Equatable {
         self.updatedAt = updatedAt ?? occurredAt; self.deletedAt = deletedAt
     }
     public var modified: Date { max(updatedAt, deletedAt ?? .distantPast) }
+}
+
+/// Explicit handoff snapshot. Runtime monotonic anchors never cross devices.
+public struct TimerTransfer: Codable {
+    public var timerID: UUID?
+    public var capturedAt: Date
+    public var startedAt: Date?
+    public var accumulated: Double
+    public var isRunning: Bool
+    public var pendingEnd: Date?
+    public var activity: String?
+
+    public init(capturedAt: Date = Date(), startedAt: Date?, accumulated: Double, isRunning: Bool, pendingEnd: Date?, activity: String?, timerID: UUID? = nil) {
+        self.timerID = timerID
+        self.capturedAt = capturedAt; self.startedAt = startedAt; self.accumulated = accumulated
+        self.isRunning = isRunning; self.pendingEnd = pendingEnd; self.activity = activity
+    }
+    public var status: String {
+        startedAt == nil ? "未开始" : pendingEnd != nil ? "待保存" : isRunning ? "运行中" : "已暂停"
+    }
+    public var isValid: Bool {
+        guard capturedAt.timeIntervalSinceReferenceDate.isFinite, accumulated.isFinite, accumulated >= 0 else { return false }
+        guard let start = startedAt else { return accumulated == 0 && !isRunning && pendingEnd == nil }
+        guard start.timeIntervalSinceReferenceDate.isFinite, start <= capturedAt else { return false }
+        if let end = pendingEnd {
+            guard end.timeIntervalSinceReferenceDate.isFinite, end >= start, end <= capturedAt, !isRunning else { return false }
+        }
+        return accumulated <= (pendingEnd ?? capturedAt).timeIntervalSince(start) + 1
+    }
+    public func seconds(at date: Date) -> Double {
+        accumulated + (isRunning ? max(0, date.timeIntervalSince(capturedAt)) : 0)
+    }
+    public func mobileClock(at date: Date = Date()) -> MobileClock {
+        var clock = MobileClock()
+        clock.startedAt = startedAt; clock.accumulated = seconds(at: date)
+        clock.runningSince = isRunning ? date : nil; clock.pendingEnd = pendingEnd
+        return clock
+    }
+    public func timerState(at date: Date = Date(), now: Double = StudyClock.now) -> TimerState {
+        var timer = TimerState(startedAt: startedAt, accumulated: seconds(at: date))
+        timer.runningSince = isRunning ? now : nil
+        return timer
+    }
 }

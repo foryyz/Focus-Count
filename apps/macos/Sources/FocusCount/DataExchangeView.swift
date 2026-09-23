@@ -13,6 +13,7 @@ struct ExchangeDocument: FileDocument {
 struct DataExchangeView: View {
     @ObservedObject var store: StudyStore
     @Environment(\.dismiss) private var dismiss
+    @State private var syncTimer = false
     @State private var importing = false
     @State private var exporting = false
     @State private var document = ExchangeDocument(data: Data())
@@ -65,19 +66,30 @@ struct DataExchangeView: View {
                         Text("文件包含 \(incoming.events?.count ?? 0) 个时间标记，随记录一起合并。")
                         Text("文件中 \(incoming.sessions.count) 条记录 · 合并后 \(merged.count) 条（含最近删除）")
                         Text("合并后保留 \(RecordExchange.archivedCount(merged)) 个历史版本，不重复计入统计。")
-                        Text("彻底删除标记会同步清除对应记录及其历史版本。修改时间较新的版本作为当前记录；时间相同按固定规则选定，两端结果一致。其他版本保留，可恢复。导入前备份双方数据，不替换当前计时。")
+                        Text("彻底删除标记会同步清除对应记录及其历史版本。修改时间较新的版本作为当前记录；时间相同按固定规则选定，两端结果一致。其他版本保留，可恢复。导入前备份双方数据，可选择是否同步计时。")
                             .font(.caption).foregroundStyle(.secondary)
+                        if let timer = incoming.timerTransfer {
+                            Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
+                            Text("导出于 \(timer.capturedAt.formatted(date: .abbreviated, time: .standard)) · \(duration(timer.accumulated)) · \(timer.activity ?? "未填写活动")")
+                                .font(.caption).foregroundStyle(.secondary)
+                            if syncTimer {
+                                Text("将替换本机当前计时（替换前会备份原状态）。运行中的计时会补上文件传递期间的时间；原设备不会自动停止。请勿在两端分别保存同一次专注。")
+                                    .font(.caption).foregroundStyle(.orange)
+                            }
+                        } else {
+                            Text("旧文件未提供可同步计时，请在新版应用重新导出。").font(.caption).foregroundStyle(.secondary)
+                        }
                         HStack {
                             Button("取消") { self.incoming = nil }
                             Spacer()
                             Button("确认合并") {
                                 let sessionIDs = Set(store.database.sessions.map(\.id))
                                 let eventIDs = Set((store.database.events ?? []).map(\.id))
-                                if store.importRecords(incoming) {
+                                if store.importRecords(incoming, syncTimer: syncTimer) {
                                     let addedSessions = store.database.sessions.filter { !sessionIDs.contains($0.id) }.count
                                     let addedEvents = (store.database.events ?? []).filter { !eventIDs.contains($0.id) }.count
                                     self.incoming = nil
-                                    message = "合并完成，新增 \(addedSessions + addedEvents) 个（专注记录 \(addedSessions) 个，时间标记 \(addedEvents) 个，含最近删除）。备份与历史版本已保留。"
+                                    message = "合并完成，新增 \(addedSessions + addedEvents) 个（专注记录 \(addedSessions) 个，时间标记 \(addedEvents) 个，含最近删除）。备份与历史版本已保留。" + (syncTimer ? "计时状态已同步。" : "本机计时保持不变。")
                                 }
                             }.buttonStyle(.borderedProminent).tint(.teal)
                         }
@@ -113,7 +125,7 @@ struct DataExchangeView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("相同 ID 自动去重，往返导入不会重复累计", systemImage: "checkmark.circle")
                     Label("不同修改保留为历史版本，支持恢复", systemImage: "clock.arrow.circlepath")
-                    Label("导入前完整备份，当前计时保持不变", systemImage: "externaldrive")
+                    Label("导入前完整备份，计时状态可选同步", systemImage: "externaldrive")
                 }.foregroundStyle(.secondary).padding(.top, 8)
                 Spacer()
             }
@@ -121,7 +133,7 @@ struct DataExchangeView: View {
             if let error = store.error { Text(error).font(.caption).foregroundStyle(.red) }
             Text("需要手动选择文件导入；此功能不自动联网同步。两端请都更新到支持 v5 的版本。")
                 .font(.caption).foregroundStyle(.secondary)
-        }.padding(24).frame(width: 720, height: 650)
+        }.padding(24).frame(width: 720, height: 780)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             do {
                 let url = try result.get()
@@ -130,7 +142,7 @@ struct DataExchangeView: View {
                 guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 20_000_000 else {
                     throw RecordExchange.ExchangeError.invalid("文件超过 20 MB，请先缩小文件。")
                 }
-                incoming = try RecordExchange.decode(Data(contentsOf: url)); message = nil
+                incoming = try RecordExchange.decode(Data(contentsOf: url)); message = nil; syncTimer = false
             } catch { incoming = nil; message = "导入失败：\(error.localizedDescription)" }
         }
         .fileExporter(isPresented: $exporting, document: document, contentType: .json, defaultFilename: "FocusCount-sessions") { result in

@@ -3,6 +3,61 @@ import FocusCountCore
 @testable import FocusCount
 
 final class PhoneStoreTests: XCTestCase {
+    @MainActor func testCompletedHandoffCannotBeResurrected() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let phone = PhoneStore(directory: root)
+        XCTAssertTrue(phone.start(activity: "阅读"))
+        let file = try RecordExchange.decode(phone.export())
+        let peer = PhoneStore(directory: root.appendingPathComponent("peer"))
+        XCTAssertTrue(peer.importRecords(file, syncTimer: true))
+        XCTAssertEqual(peer.state.timerID, phone.state.timerID)
+        peer.finish()
+        let record = StudySession(startedAt: peer.state.clock.startedAt!, endedAt: peer.state.clock.pendingEnd!,
+            activeSeconds: peer.state.clock.seconds(), subject: "阅读", focus: "A")
+        XCTAssertTrue(peer.save(record, completesTimer: true))
+        XCTAssertEqual(peer.sessions.first?.id, file.timerTransfer?.timerID)
+        XCTAssertFalse(peer.importRecords(file, syncTimer: true))
+        XCTAssertNil(peer.state.clock.startedAt)
+        phone.finish()
+        let other = StudySession(startedAt: phone.state.clock.startedAt!, endedAt: phone.state.clock.pendingEnd!,
+            activeSeconds: phone.state.clock.seconds(), subject: "阅读", focus: "A")
+        XCTAssertTrue(phone.save(other, completesTimer: true))
+        XCTAssertTrue(peer.importRecords(try RecordExchange.decode(phone.export())))
+        XCTAssertEqual(peer.sessions.count, 1)
+    }
+    @MainActor func testTimerHandoffIsExplicitAndPersists() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let phone = PhoneStore(directory: root)
+        XCTAssertTrue(phone.start(activity: "本机活动"))
+        let original = phone.state.clock.startedAt
+        let now = Date()
+        let transfer = TimerTransfer(capturedAt: now.addingTimeInterval(-20), startedAt: now.addingTimeInterval(-120),
+            accumulated: 60, isRunning: true, pendingEnd: nil, activity: "阅读")
+        let incoming = Database(timerTransfer: transfer)
+        XCTAssertTrue(phone.importRecords(incoming))
+        XCTAssertEqual(phone.state.clock.startedAt, original)
+        XCTAssertTrue(phone.importRecords(incoming, syncTimer: true))
+        XCTAssertTrue(phone.state.clock.isRunning)
+        XCTAssertEqual(phone.state.clock.seconds(), 80, accuracy: 2)
+        XCTAssertEqual(phone.state.activity, "阅读")
+        XCTAssertTrue(phone.importRecords(incoming, syncTimer: true))
+        XCTAssertEqual(phone.state.clock.seconds(), 80, accuracy: 2)
+        let reopened = PhoneStore(directory: root)
+        XCTAssertTrue(reopened.state.clock.isRunning)
+        let outgoing = try RecordExchange.decode(phone.export()).timerTransfer!
+        XCTAssertEqual(outgoing.timerState().seconds(), phone.state.clock.seconds(), accuracy: 0.1)
+        XCTAssertEqual(outgoing.activity, "阅读")
+        XCTAssertFalse(phone.importRecords(Database(), syncTimer: true))
+        XCTAssertTrue(phone.state.clock.isRunning)
+        var paused = transfer; paused.isRunning = false; paused.pendingEnd = now.addingTimeInterval(-30)
+        XCTAssertTrue(phone.importRecords(Database(timerTransfer: paused), syncTimer: true))
+        XCTAssertEqual(phone.state.clock.pendingEnd, paused.pendingEnd)
+        XCTAssertEqual(phone.state.clock.seconds(), 60, accuracy: 0.01)
+        XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: root.path).contains { $0.hasPrefix("before-import-") })
+    }
+
     private func directory() -> URL { FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString) }
 
     @MainActor func testMarkerEditingKeepsIDAndWinsAgainstOldImport() throws {

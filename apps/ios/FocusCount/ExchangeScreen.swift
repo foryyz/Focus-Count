@@ -13,6 +13,7 @@ struct JSONDocument: FileDocument {
 struct ExchangeScreen: View {
     @ObservedObject var store: PhoneStore
     @Environment(\.dismiss) private var dismiss
+    @State private var syncTimer = false
     @State private var importing = false
     @State private var exporting = false
     @State private var document = JSONDocument(data: Data())
@@ -45,9 +46,20 @@ struct ExchangeScreen: View {
                         LabeledContent("合并后历史版本", value: "\(RecordExchange.archivedCount(merged)) 个")
                         Text("相同记录不会重复新增；较旧修改保留在历史版本中。彻底删除过的记录不会重新出现。")
                             .font(.footnote).foregroundStyle(.secondary)
+                        if let timer = pending.timerTransfer {
+                            Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
+                            Text("导出于 \(timer.capturedAt.formatted(date: .abbreviated, time: .standard)) · \(phoneDuration(timer.accumulated)) · \(timer.activity ?? "未填写活动")")
+                                .font(.footnote).foregroundStyle(.secondary)
+                            if syncTimer {
+                                Text("将替换本机当前计时（替换前会备份原状态）。运行中的计时会补上文件传递期间的时间；原设备不会自动停止。请勿在两端分别保存同一次专注。")
+                                    .font(.footnote).foregroundStyle(.orange)
+                            }
+                        } else {
+                            Text("旧文件未提供可同步计时，请在新版应用重新导出。").font(.footnote).foregroundStyle(.secondary)
+                        }
                         Button {
                             let before = store.state.sessions
-                            if store.importRecords(pending) {
+                            if store.importRecords(pending, syncTimer: syncTimer) {
                                 let after = store.state.sessions
                                 let addedCount = after.filter { record in !before.contains { $0.id == record.id } }.count
                                 let changedCount = after.filter { record in
@@ -55,6 +67,7 @@ struct ExchangeScreen: View {
                                 }.count
                                 let removedCount = before.filter { record in !after.contains { $0.id == record.id } }.count
                                 message = "新增 \(addedCount) 条，更新 \(changedCount) 条，彻底删除 \(removedCount) 条。\n当前专注记录 \(store.sessions.count) 条，最近删除 \(after.count - store.sessions.count) 条，历史版本 \(RecordExchange.archivedCount(after)) 个。\n时间标记 \((store.state.events ?? []).filter { $0.deletedAt == nil }.count) 次，可在主页“时间标记”查看。\n相同记录不重复新增，较旧修改请在历史版本中查看。"
+                                message = (message ?? "") + (syncTimer ? "\n计时状态已同步。" : "\n本机计时保持不变。")
                                 self.pending = nil
                                 showResult = true
                             } else { failure = store.error ?? "导入未完成，请重试。" }
@@ -76,7 +89,7 @@ struct ExchangeScreen: View {
                         do { document = JSONDocument(data: try store.export()); exporting = true }
                         catch { failure = error.localizedDescription }
                     } label: { Label("导出 JSON", systemImage: "square.and.arrow.up") }.disabled(store.blocked)
-                } footer: { Text("兼容 Mac 的 sessions.json。导入只合并记录，不接管其他设备的计时草稿；导出包含已删除标记。") }
+                } footer: { Text("兼容 Mac 的 sessions.json。导入合并记录，可选择同步计时状态；导出包含已删除标记。") }
                 Section {
                     Button { showVersions = true } label: { Label("历史版本与恢复", systemImage: "clock.arrow.circlepath") }
                 } footer: { Text("不同修改会保留为历史版本，不重复计入统计。两端都需更新到支持 v5 的版本。") }
@@ -96,6 +109,7 @@ struct ExchangeScreen: View {
                         do {
                             let data = try await Task.detached { try PhoneImportFile.read(url) }.value
                             pending = try RecordExchange.decode(data)
+                            syncTimer = false
                             failure = nil; message = nil
                         } catch {
                             pending = nil
