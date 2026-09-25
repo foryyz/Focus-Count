@@ -88,6 +88,11 @@ struct HistoryView: View {
                     metric("专注次数", value: "\(records.count) 次")
                     metric("专注天数", value: "\(days.count) 天")
                 }
+                if !records.isEmpty {
+                    HistoryMiniCharts(records: records, activities: subjects, selectDay: { day in
+                        filter.start = day; filter.end = day; filter.allDates = false
+                    }, selectActivity: { filter.subject = $0 })
+                }
             }
             Divider()
             HStack {

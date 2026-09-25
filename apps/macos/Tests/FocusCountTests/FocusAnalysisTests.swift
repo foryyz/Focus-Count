@@ -19,6 +19,21 @@ final class FocusAnalysisTests: XCTestCase {
         XCTAssertEqual(result[date(12)]!, 1800 / 7, accuracy: 0.001)
         XCTAssertEqual(FocusAnalysisData.trailingWeekAverage([], days: [date(10)], calendar: calendar)[date(10)], 0)
     }
+    func testShareChartRemainderPreservesDurationAndZeroItemsAreExcluded() {
+        let groups = (0..<9).map { index in
+            FocusBreakdown(name: index == 0 ? "其他" : "活动\(index)", records: [record(date(10), seconds: Double(index * 100))])
+        }.sorted { $0.seconds > $1.seconds }
+        let slices = FocusShareSlice.make(groups)
+        XCTAssertEqual(slices.count, 6)
+        XCTAssertEqual(slices.reduce(0) { $0 + $1.seconds }, groups.reduce(0) { $0 + $1.seconds })
+        XCTAssertEqual(Set(slices.map(\.id)).count, slices.count)
+        XCTAssertEqual(slices.last?.name, "其他（3项）")
+        XCTAssertNil(slices.last?.source)
+        XCTAssertTrue(FocusShareSlice.make([FocusBreakdown(name: "空", records: [])]).isEmpty)
+        let one = FocusShareSlice.make([FocusBreakdown(name: "单项", records: [record(date(10), seconds: 0.5)])])
+        XCTAssertEqual(one.count, 1)
+        XCTAssertEqual(one.first?.seconds, 0.5)
+    }
     func testWeekStartsMondayAndExcludesFutureDaysFromAverage() {
         let span = FocusAnalysisData.interval(.week, records: [], now: date(11), calendar: calendar)
         XCTAssertEqual(span.start, date(9))
