@@ -9,7 +9,9 @@ struct FocusAnalysisView: View {
     @State private var category = "all"
     @State private var activity = ""
     @State private var byCategory = false
-    @State private var pie = false
+    @State private var dailyBars = false
+    @State private var shareMode = 0
+    @State private var showShareDetails = false
     @State private var customStart = Calendar.current.startOfDay(for: Date())
     @State private var customEnd = Date()
     @State private var zoom: DateInterval?
@@ -46,8 +48,12 @@ struct FocusAnalysisView: View {
             metrics
             GeometryReader { geometry in
                 HStack(alignment: .top, spacing: 18) {
-                    trend.frame(maxWidth: .infinity, maxHeight: .infinity)
-                    distribution(height: geometry.size.height).frame(width: max(400, geometry.size.width * 0.46), height: geometry.size.height)
+                    Group {
+                        if dailyBars { dailyTrend } else { trend }
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Group {
+                        if shareMode == 0 { distribution } else { sharePanel }
+                    }.frame(width: shareMode == 0 ? min(360, max(280, geometry.size.width * 0.3)) : max(400, geometry.size.width * 0.46), height: geometry.size.height)
                 }
             }.frame(minHeight: selected == nil ? 300 : 150)
             if let bucket = selectedBucket { details(bucket) }
@@ -75,6 +81,18 @@ struct FocusAnalysisView: View {
                     Text("看见每天的投入，也看见时间的去向").font(.callout).foregroundStyle(.secondary)
                 }
                 Spacer()
+                Menu {
+                    Section("左侧图形") {
+                        Button { dailyBars = false } label: { Label("折线图", systemImage: dailyBars ? "chart.xyaxis.line" : "checkmark") }
+                        Button { dailyBars = true } label: { Label("每日柱状图", systemImage: dailyBars ? "checkmark" : "chart.bar") }
+                    }
+                    Section("右侧图形") {
+                        Button { shareMode = 0 } label: { Label("横向条形图", systemImage: shareMode == 0 ? "checkmark" : "chart.bar.xaxis") }
+                        Button { shareMode = 1 } label: { Label("环形图", systemImage: shareMode == 1 ? "checkmark" : "circle") }
+                        Button { shareMode = 2 } label: { Label("扇形图", systemImage: shareMode == 2 ? "checkmark" : "chart.pie") }
+                    }
+                } label: { Label("切换图形", systemImage: "rectangle.2.swap") }
+                    .help("左右图形可分别切换，保留当前筛选")
                 Button { managing = true } label: { Label("分类与颜色", systemImage: "folder.badge.gearshape") }
             }
             HStack(spacing: 12) {
@@ -116,12 +134,26 @@ struct FocusAnalysisView: View {
     private func metric(_ name: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) { Text(name).font(.caption).foregroundStyle(.secondary); Text(value).font(.system(size: 24, weight: .medium, design: .rounded)).monospacedDigit() }
     }
+    private var trendRecords: [StudySession] {
+        store.database.sessions.filter {
+            $0.deletedAt == nil && (activity.isEmpty || $0.subject == activity) &&
+            (category == "all" || (appearance.categoryID($0.subject)?.uuidString ?? "none") == category)
+        }
+    }
     private var trendColor: Color {
         if !activity.isEmpty { return appearance.color("activity:" + activity) }
         if category != "all" { return appearance.color("category:" + category) }
         return Color(red: 0.16, green: 0.57, blue: 0.53)
     }
     private var trend: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if zoom != nil { HStack { Spacer(); Button("查看全貌") { clearSelection() } } }
+            FocusTrendChart(buckets: buckets, interval: plotInterval, week: period == .week && zoom == nil,
+                            color: trendColor, averageRecords: trendRecords, selected: $selected)
+            if records.isEmpty { Text("这个周期暂无符合条件的专注记录，可调整周期或筛选。").font(.caption).foregroundStyle(.secondary) }
+        }.padding(18).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 16))
+    }
+    private var dailyTrend: some View {
         VStack(alignment: .leading, spacing: 8) {
             if zoom != nil { HStack { Spacer(); Button("查看全貌") { clearSelection() } } }
             HStack {
@@ -132,13 +164,24 @@ struct FocusAnalysisView: View {
             if records.isEmpty { Text("这个周期暂无符合条件的专注记录，可调整周期或筛选。").font(.caption).foregroundStyle(.secondary) }
         }.padding(18).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 16))
     }
-    private func distribution(height: CGFloat) -> some View {
+    private var sharePanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack { Text("时间去向").font(.headline); Spacer(); Text(shareMode == 1 ? "环形图" : "扇形图").font(.caption).foregroundStyle(.secondary) }
+            Picker("分布", selection: $byCategory) { Text("按分类").tag(true); Text("按活动").tag(false) }.pickerStyle(.segmented)
+            FocusShareChart(items: breakdown, activityCount: Set(records.map(\.subject)).count, pie: shareMode == 2, color: itemColor)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            HStack {
+                Text("超过 6 项时合并较小项目").font(.caption2).foregroundStyle(.secondary)
+                Spacer()
+                Button("查看全部占比") { showShareDetails = true }
+                    .popover(isPresented: $showShareDetails) { distribution.frame(width: 360, height: 440) }
+            }
+        }.padding(18).background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 16))
+    }
+    private var distribution: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack { Text("时间去向").font(.headline); Spacer() }
             Picker("分布", selection: $byCategory) { Text("按分类").tag(true); Text("按活动").tag(false) }.pickerStyle(.segmented)
-            Picker("图形", selection: $pie) { Text("环形图").tag(false); Text("扇形图").tag(true) }.pickerStyle(.segmented)
-            FocusShareChart(items: breakdown, activityCount: Set(records.map(\.subject)).count, pie: pie, color: itemColor)
-                .frame(height: max(100, min(255, height * 0.48)))
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     ForEach(breakdown) { item in
