@@ -43,8 +43,8 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 HStack {
                     HStack(spacing: 8) {
-                        Image(systemName: "circle.hexagongrid.fill").foregroundStyle(.teal)
-                        Text("FOCUSCOUNT").font(.system(size: 11, weight: .semibold)).tracking(2.5)
+                        Text("🧠").font(.system(size: 16)).accessibilityHidden(true)
+                        Text("FOCUS-COUNT").font(.system(size: 11, weight: .semibold)).tracking(2.5)
                     }.foregroundStyle(.secondary)
                     Spacer()
                     Button { showHistory = true } label: {
