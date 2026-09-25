@@ -33,13 +33,15 @@ struct TodayFocusHero: View {
             let minutes = Int(max(0, summary.seconds)) / 60
             VStack(spacing: 18) {
                 (
-                    Text("Today’s focus  ")
-                        .font(.system(size: fontSize * 0.28, weight: .medium))
+                    Text("Today’s ")
+                        .font(.system(size: fontSize * 0.28, weight: .regular, design: .rounded))
                         .foregroundColor(.secondary)
+                    + Text("focus   ")
+                        .font(.system(size: fontSize * 0.28, weight: .semibold, design: .rounded))
                     + Text("\(minutes / 60)H")
-                        .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                        .font(.system(size: fontSize * 0.62, weight: .medium, design: .rounded))
                     + Text("  \(minutes % 60)m")
-                        .font(.system(size: fontSize * 0.62, weight: .light, design: .rounded))
+                        .font(.system(size: fontSize * 0.28, weight: .regular, design: .rounded))
                         .foregroundColor(.secondary)
                 )
                 .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
