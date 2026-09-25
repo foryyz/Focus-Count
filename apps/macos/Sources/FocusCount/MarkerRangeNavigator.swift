@@ -36,14 +36,14 @@ struct MarkerRangeNavigator: View {
                     RoundedRectangle(cornerRadius: 6).fill(Color.teal.opacity(0.18))
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.teal.opacity(0.55)))
                         .frame(width: max(8, visible * unit)).offset(x: offset * unit)
-                        .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("markerRangeNavigator")).onChanged { value in
                             if initialOffset == nil { initialOffset = offset }
                             change(min(Double(days) - visible, max(0, (initialOffset ?? offset) + value.translation.width / unit)), visible)
                         }.onEnded { _ in initialOffset = nil })
                     ForEach([false, true], id: \.self) { right in
                         Capsule().fill(Color.teal).frame(width: 5, height: 16).frame(width: 16, height: 28)
                             .contentShape(Rectangle()).offset(x: (offset + (right ? visible : 0)) * unit - 8)
-                            .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .named("markerRangeNavigator")).onChanged { value in
                                 if initialOffset == nil { initialOffset = offset; initialVisible = visible }
                                 let oldOffset = initialOffset ?? offset
                                 let oldVisible = initialVisible ?? visible
@@ -74,6 +74,6 @@ struct MarkerRangeNavigator: View {
                     .accessibilityLabel("浏览完整日期范围")
                     .controlSize(.mini)
             }
-        }
+        }.coordinateSpace(name: "markerRangeNavigator")
     }
 }

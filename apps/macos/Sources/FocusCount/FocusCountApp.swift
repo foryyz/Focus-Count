@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var hint = ""
     @State private var showHistory = false
     @State private var showData = false
+    @State private var showToday = false
     @State private var cancellingTimer = false
     @FocusState private var commandFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
@@ -157,6 +158,20 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(backdrop.ignoresSafeArea())
             .background(FocusWindowReader(controller: focusWindow))
+            .overlay(alignment: .bottomLeading) {
+                if phase == 0 {
+                    Button { showToday.toggle() } label: {
+                        Image(systemName: "sun.max")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(ink.opacity(0.65))
+                            .frame(width: 34, height: 34)
+                            .background(ink.opacity(0.045), in: Circle())
+                            .overlay(Circle().strokeBorder(ink.opacity(0.09), lineWidth: 1))
+                    }.buttonStyle(.plain).help("今日概览").accessibilityLabel("今日标记与专注时长")
+                        .popover(isPresented: $showToday, arrowEdge: .bottom) { TodaySummaryView(store: store) }
+                        .padding(.leading, wide ? 64 : 32).padding(.bottom, 18)
+                }
+            }
             .onContinuousHover { hover in
                 if case .active(let location) = hover, pointerLocation != location {
                     pointerLocation = location
@@ -168,7 +183,7 @@ struct ContentView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: phase)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: visible)
         .onChange(of: focusWindow.fullScreen) { _ in revealControls() }
-        .onChange(of: phase) { _ in revealControls() }
+        .onChange(of: phase) { _ in showToday = false; revealControls() }
         .onChange(of: command) { _ in revealControls() }
         .task(id: interaction) {
             guard focusWindow.fullScreen, phase == 1 else { return }

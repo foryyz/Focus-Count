@@ -21,7 +21,8 @@ import SwiftUI
         window.title = "时间标记"
         window.isReleasedWhenClosed = false
         window.isMovable = true
-        window.isMovableByWindowBackground = true
+        // Content contains drag handles: only the title bar should move the window.
+        window.isMovableByWindowBackground = false
         window.collectionBehavior.insert(.fullScreenPrimary)
         window.contentMinSize = NSSize(width: 1000, height: 700)
         window.contentView = NSHostingView(rootView: EventHistoryView(store: store, onReturn: { [weak self] in
