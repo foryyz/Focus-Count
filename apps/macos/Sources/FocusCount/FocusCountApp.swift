@@ -63,7 +63,7 @@ struct ContentView: View {
                 Group {
                     if phase == 0 {
                         VStack(spacing: min(26, max(18, geometry.size.height * 0.04))) {
-                            TodayFocusHero(store: store, fontSize: min(120, max(78, min(geometry.size.width * 0.11, geometry.size.height * 0.20))))
+                            TodayFocusHero(store: store, fontSize: min(120, max(78, min(geometry.size.width * 0.11, geometry.size.height * 0.20))) * 1.5)
                                 .foregroundStyle(ink)
                                 .padding(.bottom, 10)
                             HStack {

@@ -47,7 +47,7 @@ struct TodayFocusHero: View {
                 .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                 .accessibilityLabel("今日已保存专注时长，\(minutes / 60) 小时 \(minutes % 60) 分钟")
                 Text(encouragement)
-                    .font(.system(size: fontSize > 110 ? 14 : 13))
+                    .font(.system(size: fontSize > 165 ? 14 : 13))
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }.frame(maxWidth: 760)
