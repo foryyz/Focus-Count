@@ -24,3 +24,5 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 codesign --force --sign - "$APP"
 printf 'Built: %s/%s\n' "$PWD" "$APP"
+
+python3 scripts/package-macos.py

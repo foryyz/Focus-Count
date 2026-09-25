@@ -12,7 +12,7 @@
 
 ### Mac
 
-当前本地打包产物为 [FocusCount-1.13.4-macOS.zip](dist/macos/FocusCount-1.13.4-macOS.zip)（约 2.5 MB），适用于 **Apple 芯片 Mac、macOS 13 及以上**。
+当前本地打包产物为 [FocusCount-1.13.4-macOS.zip](dist/macos/FocusCount-1.13.4-macOS.zip)（约 2.8 MB），适用于 **Apple 芯片 Mac、macOS 13 及以上**。
 
 1. 退出正在运行的 FocusCount。
 2. 解压 ZIP，将 `FocusCount.app` 放入“应用程序”文件夹；更新时替换旧应用。
@@ -39,7 +39,8 @@ FocusCount/
 ├── data/                     旧项目数据，迁移后保留，个人记录不进入 Git
 ├── docs/data-format.md       两个平台共同遵守的数据协议
 ├── scripts/build-app.sh      macOS 构建与本地签名
-└── dist/macos/               Mac 应用与 ZIP 压缩包，不进入 Git
+└── dist/macos/               Mac 应用与最新版 ZIP，不进入 Git
+    └── history/              历史版本 ZIP 归档
 ```
 
 后续 Windows 客户端放入 `apps/windows/`，构建产物放入 `dist/windows/`，计划遵循相同的 JSON 数据协议；Windows 本地存储位置尚未实现。
@@ -53,14 +54,12 @@ bash scripts/build-app.sh
 open dist/macos/FocusCount.app
 ```
 
-脚本生成本机架构的应用并进行 ad-hoc 签名，未进行 Apple 公证。也可开发运行：`swift run --package-path apps/macos`。
+脚本生成本机架构的应用并进行 ad-hoc 签名，未进行 Apple 公证。构建完成后会自动生成并校验 ZIP，将旧版压缩包移入 `dist/macos/history/`，当前目录只保留最新版 ZIP。打包步骤需要 Python 3。也可开发运行：`swift run --package-path apps/macos`。
 
 编译并打包当前版本（在项目根目录运行）：
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer bash scripts/build-app.sh
-ditto -c -k --sequesterRsrc --keepParent dist/macos/FocusCount.app dist/macos/FocusCount-1.13.4-macOS.zip
-unzip -t dist/macos/FocusCount-1.13.4-macOS.zip
 ```
 
 **应用可以独立运行**，可将 `dist/macos/FocusCount.app` 复制到“应用程序”目录，也可压缩后发给其他兼容 Mac。接收方无需项目源码、根目录标记或 Xcode。当前脚本生成本机架构，Apple 芯片构建不支持 Intel Mac；要求 macOS 13+。
@@ -232,3 +231,9 @@ Mac 1.6.3：暂停页移除中央继续按钮，恢复琥珀色静止波纹；�
 ### 主页品牌显示（1.13.4）
 
 Mac 主页左上角显示「🧠 FOCUS-COUNT」，替换原蜂巢图标与 FOCUSCOUNT 文案。
+
+### 压缩包版本归档
+
+`dist/macos/FocusCount.app` 与最新版 ZIP 留在当前目录，旧 ZIP 移至 `dist/macos/history/`，不覆盖同名历史归档。打包读取应用内的版本号，检测到比当前应用更新的 ZIP 时会停止，防止旧构建被误当成最新版。
+
+已有构建产物只需重新打包归档时，运行 `python3 scripts/package-macos.py`。`dist/` 整体仍由 Git 忽略，推送仓库包含源码、版本配置和打包脚本，不包含个人数据及本机压缩包。
