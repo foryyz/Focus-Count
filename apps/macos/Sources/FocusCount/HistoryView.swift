@@ -43,7 +43,7 @@ struct HistoryView: View {
                 .buttonStyle(.borderedProminent).tint(.teal)
                 .keyboardShortcut(.cancelAction).help("返回计时（Esc）")
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("专注记录").font(.title2.bold())
+                    Label("专注记录", systemImage: "list.bullet.rectangle").font(.title2.bold())
                     Text("回顾每一次专注")
                         .font(.caption).foregroundStyle(.secondary)
                 }

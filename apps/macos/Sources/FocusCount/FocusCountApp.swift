@@ -48,8 +48,11 @@ struct ContentView: View {
                     }.foregroundStyle(.secondary)
                     Spacer()
                     Button { showHistory = true } label: {
-                        Image(systemName: "chart.bar.xaxis").frame(width: 32, height: 28)
+                        Image(systemName: "list.bullet.rectangle").frame(width: 32, height: 28)
                     }.help("专注记录").accessibilityLabel("专注记录")
+                    Button { FocusAnalysisWindow.shared.show(store: store); revealControls() } label: {
+                        Image(systemName: "chart.bar.xaxis").frame(width: 32, height: 28)
+                    }.help("专注分析").accessibilityLabel("专注分析")
                     Button { MarkerWindowController.shared.show(store: store); revealControls() } label: {
                         Image(systemName: "tag").frame(width: 32, height: 28)
                     }.help("时间标记").accessibilityLabel("时间标记")
