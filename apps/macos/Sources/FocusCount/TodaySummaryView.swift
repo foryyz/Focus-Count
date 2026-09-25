@@ -31,7 +31,7 @@ struct TodayFocusHero: View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let summary = TodaySummary(database: store.database, now: context.date)
             let minutes = Int(max(0, summary.seconds)) / 60
-            VStack(spacing: 18) {
+            VStack(spacing: 12) {
                 (
                     Text("Today’s ")
                         .font(.system(size: fontSize * 0.28, weight: .regular, design: .rounded))
@@ -47,7 +47,7 @@ struct TodayFocusHero: View {
                 .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                 .accessibilityLabel("今日已保存专注时长，\(minutes / 60) 小时 \(minutes % 60) 分钟")
                 Text(encouragement)
-                    .font(.system(size: fontSize > 90 ? 19 : 16))
+                    .font(.system(size: fontSize > 110 ? 14 : 13))
                     .foregroundStyle(.secondary).multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }.frame(maxWidth: 760)

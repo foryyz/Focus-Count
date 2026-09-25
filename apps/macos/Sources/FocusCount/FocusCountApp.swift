@@ -62,9 +62,10 @@ struct ContentView: View {
                 Spacer(minLength: 24)
                 Group {
                     if phase == 0 {
-                        VStack(spacing: 28) {
-                            TodayFocusHero(store: store, fontSize: min(96, max(64, geometry.size.width * 0.09)))
+                        VStack(spacing: min(26, max(18, geometry.size.height * 0.04))) {
+                            TodayFocusHero(store: store, fontSize: min(120, max(78, min(geometry.size.width * 0.11, geometry.size.height * 0.20))))
                                 .foregroundStyle(ink)
+                                .padding(.bottom, 10)
                             HStack {
                                 TextField("这次想专注于什么？（可选）", text: $subject)
                                     .textFieldStyle(.plain).onSubmit { submitActivity() }.help("填写活动开始专注，或输入 !文字并回车添加标记")
@@ -74,7 +75,8 @@ struct ContentView: View {
                                     label: { Image(systemName: "clock.arrow.circlepath") }
                                         .menuStyle(.borderlessButton).fixedSize().help("最近活动")
                                 }
-                            }.font(.system(size: 15)).padding(14).frame(maxWidth: 360)
+                            }.font(.system(size: wide ? 15 : 14)).padding(.horizontal, 16).padding(.vertical, 13)
+                                .frame(maxWidth: min(400, max(330, geometry.size.width * 0.4)))
                                 .background(ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
                             Button { submitActivity() } label: {
                                 Label("开始专注", systemImage: "play.fill")
