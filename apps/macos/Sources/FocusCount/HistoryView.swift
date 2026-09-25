@@ -49,7 +49,9 @@ struct HistoryView: View {
                 }
                 Spacer()
                 Button { FocusAnalysisWindow.shared.show(store: store) } label: { Label("专注分析", systemImage: "chart.bar.xaxis") }
-                Button("时间标记") { MarkerWindowController.shared.show(store: store) }
+                Button { MarkerWindowController.shared.show(store: store) } label: {
+                    Label("时间标记", systemImage: "tag")
+                }
                 Button {
                     editing = StudySession(startedAt: Date().addingTimeInterval(-1800), endedAt: Date(), activeSeconds: 1800, subject: "", focus: "A")
                 } label: { Label("补记", systemImage: "plus") }.disabled(store.blocked)

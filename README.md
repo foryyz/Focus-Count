@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-- **macOS 1.13.1**：专注分析默认恢复折线图＋横向条形图，新增“切换图形”菜单，左右两侧可独立选择图形；保留独立分析窗口、活动分类与自定义颜色；支持可选计时状态接续；导入合并完成后显示“新增 X 个”，分别列出专注记录与时间标记数量（含最近删除）。按合并成功后的实际新增 ID 统计，重复导入不会重复计数。
+- **macOS 1.13.2**：专注分析默认恢复折线图＋横向条形图，新增“切换图形”菜单，左右两侧可独立选择图形；保留独立分析窗口、活动分类与自定义颜色；支持可选计时状态接续；导入合并完成后显示“新增 X 个”，分别列出专注记录与时间标记数量（含最近删除）。按合并成功后的实际新增 ID 统计，重复导入不会重复计数。
 - **iPhone 1.2.0**：新增与 Mac 双向接续计时；支持频率总览、折线趋势、24 小时时间分布，以及颜色、emoji 设置和标记编辑；支持横屏全屏查看。
 - 两端使用 JSON v5 手动导出、导入并合并数据；颜色和 emoji 设置仍各自保存在本机。
 
@@ -12,7 +12,7 @@
 
 ### Mac
 
-当前本地打包产物为 [FocusCount-1.13.1-macOS.zip](dist/macos/FocusCount-1.13.1-macOS.zip)（约 2.5 MB），适用于 **Apple 芯片 Mac、macOS 13 及以上**。
+当前本地打包产物为 [FocusCount-1.13.2-macOS.zip](dist/macos/FocusCount-1.13.2-macOS.zip)（约 2.5 MB），适用于 **Apple 芯片 Mac、macOS 13 及以上**。
 
 1. 退出正在运行的 FocusCount。
 2. 解压 ZIP，将 `FocusCount.app` 放入“应用程序”文件夹；更新时替换旧应用。
@@ -59,8 +59,8 @@ open dist/macos/FocusCount.app
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer bash scripts/build-app.sh
-ditto -c -k --sequesterRsrc --keepParent dist/macos/FocusCount.app dist/macos/FocusCount-1.13.1-macOS.zip
-unzip -t dist/macos/FocusCount-1.13.1-macOS.zip
+ditto -c -k --sequesterRsrc --keepParent dist/macos/FocusCount.app dist/macos/FocusCount-1.13.2-macOS.zip
+unzip -t dist/macos/FocusCount-1.13.2-macOS.zip
 ```
 
 **应用可以独立运行**，可将 `dist/macos/FocusCount.app` 复制到“应用程序”目录，也可压缩后发给其他兼容 Mac。接收方无需项目源码、根目录标记或 Xcode。当前脚本生成本机架构，Apple 芯片构建不支持 Intel Mac；要求 macOS 13+。
@@ -220,3 +220,7 @@ Mac 1.6.3：暂停页移除中央继续按钮，恢复琥珀色静止波纹；�
 - 右侧：横向条形图／环形图／实心扇形图。
 
 切换任意一侧不会改变另一侧的图形或当前周期、分类、活动筛选。环形／扇形图使用独立的宽阔区域，不再在下方堆叠条形列表；点击“查看全部占比”按需展开完整明细。环形中心的活动总数与总时长、扇形文字、分类配色均保留。专注记录页维持紧凑图表布局。
+
+### 时间标记快捷入口（1.13.2）
+
+首页右上角依次为专注记录、时间标记、数据管理、全屏。时间标记使用标签形图标，点击直接打开独立时间标记窗口；专注记录页的“时间标记”按钮使用相同图标。入口沿用专注模式下的工具栏显隐规则。
