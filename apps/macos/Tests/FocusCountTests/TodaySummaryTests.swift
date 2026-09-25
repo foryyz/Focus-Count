@@ -27,6 +27,16 @@ final class TodaySummaryTests: XCTestCase {
         XCTAssertEqual(nextDay.seconds, 60)
         XCTAssertEqual(nextDay.events.map(\.kind), ["明天"])
     }
+    func testActivitiesAggregateSavedTimeAndSortByDuration() {
+        let now = Date()
+        let sessions = [("阅读", 600.0), ("运动", 900.0), ("阅读", 600.0)].map { name, seconds in
+            StudySession(startedAt: now, endedAt: now, activeSeconds: seconds, subject: name, focus: "A")
+        }
+        let summary = TodaySummary(database: Database(sessions: sessions), now: now)
+        XCTAssertEqual(summary.activities.map(\.name), ["阅读", "运动"])
+        XCTAssertEqual(summary.activities.map(\.seconds), [1200, 900])
+        XCTAssertEqual(summary.activities.reduce(0) { $0 + $1.seconds }, summary.seconds)
+    }
     func testEmptyDay() {
         let summary = TodaySummary(database: Database())
         XCTAssertEqual(summary.seconds, 0)

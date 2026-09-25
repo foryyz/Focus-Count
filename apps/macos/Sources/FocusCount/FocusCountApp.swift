@@ -25,14 +25,6 @@ struct ContentView: View {
     @State private var chromeVisible = true
     @State private var interaction = Date()
     @State private var pointerLocation: CGPoint?
-    @State private var encouragement = Int.random(in: 0..<5)
-    private let greetings = [
-        ("🌱 One small start. One meaningful step.", "You don’t have to finish it all. Just begin."),
-        ("✨ Make a little room for what matters.", "One thing at a time. You’ve got this."),
-        ("☀️ Your next chapter starts here.", "Take a breath. Give this moment your attention."),
-        ("🚀 Start small. Stay curious.", "A little focus can take you a long way."),
-        ("✨ Begin before you feel ready.", "Press Return to start. You don’t have to be perfect.")
-    ]
     private var phase: Int { store.database.draft.isRunning ? 1 : store.database.draft.startedAt == nil ? 0 : 2 }
     private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { colorScheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
@@ -71,13 +63,8 @@ struct ContentView: View {
                 Group {
                     if phase == 0 {
                         VStack(spacing: 28) {
-                            VStack(spacing: 12) {
-                            Text(greetings[encouragement].0)
-                                .font(.system(size: min(44, max(30, geometry.size.width * 0.037)), weight: .medium, design: .rounded))
-                                .multilineTextAlignment(.center).foregroundStyle(ink)
-                            Text(greetings[encouragement].1).font(.system(size: wide ? 19 : 16)).foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                            }.frame(maxWidth: 760).fixedSize(horizontal: false, vertical: true)
+                            TodayFocusHero(store: store, fontSize: min(96, max(64, geometry.size.width * 0.09)))
+                                .foregroundStyle(ink)
                             HStack {
                                 TextField("这次想专注于什么？（可选）", text: $subject)
                                     .textFieldStyle(.plain).onSubmit { submitActivity() }.help("填写活动开始专注，或输入 !文字并回车添加标记")
@@ -199,7 +186,7 @@ struct ContentView: View {
             Button("保留计时", role: .cancel) {}
             Button("取消并归零", role: .destructive) {
                 if store.cancelTimer() {
-                    command = ""; subject = ""; hint = ""; showMarkerInput = false; encouragement = greetings.indices.filter { $0 != encouragement }.randomElement() ?? 0; commandFocused = showMarkerInput
+                    command = ""; subject = ""; hint = ""; showMarkerInput = false; commandFocused = showMarkerInput
                 }
             }
         } message: { Text("本次未保存的计时将被清除，不生成专注记录。已有专注记录不会受到影响。") }
@@ -231,7 +218,6 @@ struct ContentView: View {
                         let completed = duration(store.database.draft.seconds())
                         if store.save(subject: subject, focus: focus) {
                             subject = ""; command = ""; showMarkerInput = false; commandFocused = false
-                            encouragement = greetings.indices.filter { $0 != encouragement }.randomElement() ?? 0
                             hint = "✨ " + completed + " of focus. Well done. Take a little break."
                         }
                     }.keyboardShortcut(.defaultAction)
