@@ -19,20 +19,35 @@ struct TodayFocusHero: View {
     @ObservedObject var store: StudyStore
     let fontSize: CGFloat
 
+    @State private var encouragement = [
+        "You don’t have to finish it all. Just begin.",
+        "One thing at a time. You’ve got this.",
+        "Take a breath. Give this moment your attention.",
+        "A little focus can take you a long way.",
+        "Press Return to start. You don’t have to be perfect."
+    ].randomElement()!
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let summary = TodaySummary(database: store.database, now: context.date)
-            VStack(spacing: 10) {
-                Text("今日专注").font(.system(size: 15, weight: .medium)).foregroundStyle(.secondary)
-                Text(duration(summary.seconds))
-                    .font(.system(size: fontSize, weight: .light, design: .rounded))
-                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-                    .accessibilityLabel("今日已保存专注时长，\(duration(summary.seconds))")
-                HStack(spacing: 12) {
-                    Text("\(summary.sessions.count) 次专注")
-                    Circle().frame(width: 3, height: 3).accessibilityHidden(true)
-                    Text("\(summary.events.count) 次标记")
-                }.font(.system(size: 13)).foregroundStyle(.secondary)
+            let minutes = Int(max(0, summary.seconds)) / 60
+            VStack(spacing: 18) {
+                (
+                    Text("Today’s focus  ")
+                        .font(.system(size: fontSize * 0.28, weight: .medium))
+                        .foregroundColor(.secondary)
+                    + Text("\(minutes / 60)H")
+                        .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                    + Text("  \(minutes % 60)m")
+                        .font(.system(size: fontSize * 0.62, weight: .light, design: .rounded))
+                        .foregroundColor(.secondary)
+                )
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                .accessibilityLabel("今日已保存专注时长，\(minutes / 60) 小时 \(minutes % 60) 分钟")
+                Text(encouragement)
+                    .font(.system(size: fontSize > 90 ? 19 : 16))
+                    .foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }.frame(maxWidth: 760)
         }
     }
@@ -51,14 +66,7 @@ struct TodaySummaryView: View {
                     Spacer()
                     Text(context.date.formatted(.dateTime.month().day())).font(.caption).foregroundStyle(.secondary)
                 }
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("专注时长").font(.caption).foregroundStyle(.secondary)
-                        Text(duration(summary.seconds)).font(.system(size: 26, weight: .medium, design: .rounded)).monospacedDigit()
-                    }
-                    Spacer()
-                    Text("\(summary.sessions.count) 次专注").font(.caption).foregroundStyle(.secondary)
-                }
+                Text("专注活动").font(.subheadline.weight(.medium))
                 if summary.activities.isEmpty {
                     Text("今天的第一段专注，从这里开始。")
                         .font(.callout).foregroundStyle(.secondary)
@@ -84,11 +92,7 @@ struct TodaySummaryView: View {
                     }.frame(height: min(164, CGFloat(summary.activities.count) * 42))
                 }
                 Divider()
-                HStack {
-                    Text("时间标记").font(.subheadline.weight(.medium))
-                    Spacer()
-                    Text("\(summary.events.count) 次").font(.caption).foregroundStyle(.secondary)
-                }
+                Text("时间标记").font(.subheadline.weight(.medium))
                 if summary.events.isEmpty {
                     Text("今天还没有标记\n输入 !文字，记下值得留意的一刻。")
                         .font(.callout).foregroundStyle(.secondary).lineSpacing(5).padding(.vertical, 6)
@@ -112,6 +116,12 @@ struct TodaySummaryView: View {
                         }.padding(.vertical, 3)
                     }.frame(height: min(150, CGFloat(summary.events.count) * 34))
                 }
+                Divider()
+                HStack(spacing: 10) {
+                    Text("\(summary.sessions.count) 次专注")
+                    Text("·").accessibilityHidden(true)
+                    Text("\(summary.events.count) 次标记")
+                }.font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
                 Text("仅统计已保存记录；跨午夜专注按开始日期归属。")
                     .font(.system(size: 10)).foregroundStyle(.secondary)
             }.padding(20).frame(width: 350)
