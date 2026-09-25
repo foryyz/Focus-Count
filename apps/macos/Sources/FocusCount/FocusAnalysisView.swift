@@ -115,59 +115,24 @@ struct FocusAnalysisView: View {
     private func metric(_ name: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 6) { Text(name).font(.caption).foregroundStyle(.secondary); Text(value).font(.system(size: 24, weight: .medium, design: .rounded)).monospacedDigit() }
     }
+    private var trendRecords: [StudySession] {
+        store.database.sessions.filter {
+            $0.deletedAt == nil && (activity.isEmpty || $0.subject == activity) &&
+            (category == "all" || (appearance.categoryID($0.subject)?.uuidString ?? "none") == category)
+        }
+    }
+    private var trendColor: Color {
+        if !activity.isEmpty { return appearance.color("activity:" + activity) }
+        if category != "all" { return appearance.color("category:" + category) }
+        return Color(red: 0.16, green: 0.57, blue: 0.53)
+    }
     private var trend: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("投入趋势").font(.headline)
-                Text("按\(FocusAnalysisData.grain(plotInterval).rawValue)汇总").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                if zoom != nil { Button("查看全貌") { clearSelection() } }
-            }
-            GeometryReader { chartGeometry in
-            Chart {
-                ForEach(buckets) { bucket in
-                    if bucket.records.isEmpty {
-                        BarMark(x: .value("日期", midpoint(bucket)), y: .value("小时", 0), width: .fixed(barWidth(chartGeometry.size.width))).foregroundStyle(.clear)
-                    } else {
-                        ForEach(FocusAnalysisData.breakdown(bucket.records, key: { byCategory ? appearance.category($0.subject) : $0.subject }).sorted { $0.name < $1.name }) { item in
-                            BarMark(x: .value("日期", midpoint(bucket)), y: .value("小时", item.seconds / 3600), width: .fixed(barWidth(chartGeometry.size.width)))
-                                .foregroundStyle(itemColor(item)).cornerRadius(2)
-                                .accessibilityLabel("\(bucket.start.formatted(date: .abbreviated, time: .omitted))，\(item.name)，\(duration(item.seconds))")
-                        }
-                    }
-                }
-                if let bucket = selectedBucket { RuleMark(x: .value("所选日期", midpoint(bucket))).foregroundStyle(Color.primary.opacity(0.25)).lineStyle(StrokeStyle(dash: [3, 3])) }
-            }
-            .chartXScale(domain: plotInterval.start...plotInterval.end)
-            .chartYScale(domain: 0...max(1, (buckets.map(\.seconds).max() ?? 0) / 3600 * 1.1))
-            .chartYAxisLabel("有效时长（小时）")
-            .chartXAxis {
-                AxisMarks(values: axisDates) { value in
-                    AxisGridLine().foregroundStyle(Color.secondary.opacity(0.12))
-                    AxisTick()
-                    AxisValueLabel {
-                        if let date = value.as(Date.self) {
-                            Text(axisLabel(date)).font(.caption2)
-                                .foregroundStyle(date > Date() ? Color.secondary.opacity(0.5) : Color.secondary)
-                        }
-                    }
-                }
-            }
-            .chartOverlay { proxy in
-                GeometryReader { geometry in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .gesture(DragGesture(minimumDistance: 0).onEnded { gesture in
-                            let plot = geometry[proxy.plotAreaFrame]
-                            guard plot.contains(gesture.location), let date: Date = proxy.value(atX: gesture.location.x - plot.minX) else { return }
-                            selected = buckets.first { date >= $0.start && date < $0.end }?.start
-                        })
-                }
-            }
-            }
-            if records.isEmpty { Text("这个周期暂无符合条件的专注记录，可调整周期或筛选。").font(.callout).foregroundStyle(.secondary) }
-            Text("点击日期查看明细 · 颜色对应右侧\(byCategory ? "分类" : "活动") · 本周未来日期留空")
-                .font(.caption).foregroundStyle(.secondary)
-        }.padding(18).background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 16))
+        VStack(alignment: .leading, spacing: 8) {
+            if zoom != nil { HStack { Spacer(); Button("查看全貌") { clearSelection() } } }
+            FocusTrendChart(buckets: buckets, interval: plotInterval, week: period == .week && zoom == nil,
+                            color: trendColor, averageRecords: trendRecords, selected: $selected)
+            if records.isEmpty { Text("这个周期暂无符合条件的专注记录，可调整周期或筛选。").font(.caption).foregroundStyle(.secondary) }
+        }.padding(18).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 16))
     }
     private var distribution: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -228,18 +193,6 @@ struct FocusAnalysisView: View {
                 }
             }.frame(height: 100)
         }.padding(16).background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
-    }
-    private func barWidth(_ width: Double) -> Double { max(2, min(64, (width - 40) / Double(max(1, buckets.count)) * 0.62)) }
-    private func midpoint(_ bucket: FocusBucket) -> Date { bucket.start.addingTimeInterval(bucket.end.timeIntervalSince(bucket.start) / 2) }
-    private var axisDates: [Date] {
-        let values = buckets.map(midpoint)
-        let stride = max(1, Int(ceil(Double(values.count) / 8)))
-        return values.enumerated().filter { $0.offset % stride == 0 || $0.offset == values.count - 1 }.map(\.element)
-    }
-    private func axisLabel(_ midpoint: Date) -> String {
-        let date = buckets.first { midpoint >= $0.start && midpoint < $0.end }?.start ?? midpoint
-        if period == .week && zoom == nil { return ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][Calendar.current.component(.weekday, from: date) - 1] }
-        return FocusAnalysisData.grain(plotInterval) == .month ? date.formatted(.dateTime.year().month()) : date.formatted(.dateTime.month().day())
     }
     private func itemColor(_ item: FocusBreakdown) -> Color {
         appearance.color(byCategory ? appearance.categoryKey(item.records.first?.subject ?? "") : "activity:" + item.name)

@@ -12,6 +12,13 @@ final class FocusAnalysisTests: XCTestCase {
     func record(_ date: Date, seconds: Double = 1800, name: String = "阅读", deleted: Bool = false) -> StudySession {
         StudySession(startedAt: date, endedAt: date.addingTimeInterval(seconds), activeSeconds: seconds, subject: name, focus: "A", deletedAt: deleted ? date : nil)
     }
+    func testTrailingWeekAverageIncludesZerosAndDaysBeforeVisibleRange() {
+        let values = [record(date(5), seconds: 3600), record(date(9), seconds: 1800), record(date(10), seconds: 7200, deleted: true)]
+        let result = FocusAnalysisData.trailingWeekAverage(values, days: [date(10), date(12)], calendar: calendar)
+        XCTAssertEqual(result[date(10)]!, 5400 / 7, accuracy: 0.001)
+        XCTAssertEqual(result[date(12)]!, 1800 / 7, accuracy: 0.001)
+        XCTAssertEqual(FocusAnalysisData.trailingWeekAverage([], days: [date(10)], calendar: calendar)[date(10)], 0)
+    }
     func testWeekStartsMondayAndExcludesFutureDaysFromAverage() {
         let span = FocusAnalysisData.interval(.week, records: [], now: date(11), calendar: calendar)
         XCTAssertEqual(span.start, date(9))

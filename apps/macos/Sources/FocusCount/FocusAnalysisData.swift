@@ -77,6 +77,18 @@ enum FocusAnalysisData {
         }
         return result
     }
+    /// Calendar days, not elapsed 24-hour blocks: DST and zero-record days count correctly.
+    static func trailingWeekAverage(_ records: [StudySession], days: [Date], calendar: Calendar = .current) -> [Date: Double] {
+        let totals = Dictionary(grouping: records.filter { $0.deletedAt == nil }, by: { calendar.startOfDay(for: $0.startedAt) })
+            .mapValues { $0.reduce(0) { $0 + $1.activeSeconds } }
+        return Dictionary(uniqueKeysWithValues: days.map { day in
+            let total = (0..<7).reduce(0.0) { result, offset in
+                let previous = calendar.date(byAdding: .day, value: -offset, to: calendar.startOfDay(for: day))!
+                return result + (totals[previous] ?? 0)
+            }
+            return (day, total / 7)
+        })
+    }
     static func breakdown(_ records: [StudySession], key: (StudySession) -> String) -> [FocusBreakdown] {
         Dictionary(grouping: records, by: key).map { FocusBreakdown(name: $0.key, records: $0.value) }
             .sorted { $0.seconds == $1.seconds ? $0.name < $1.name : $0.seconds > $1.seconds }
