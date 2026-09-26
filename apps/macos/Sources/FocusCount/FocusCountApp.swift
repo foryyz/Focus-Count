@@ -17,6 +17,8 @@ struct ContentView: View {
     @State private var showHistory = false
     @State private var showData = false
     @State private var showToday = false
+    @State private var showTarget = false
+    @StateObject private var targetCountdown = TargetCountdownStore()
     @State private var cancellingTimer = false
     @FocusState private var commandFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
@@ -29,7 +31,7 @@ struct ContentView: View {
     private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { colorScheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
     private var backdrop: Color { colorScheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
-    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showData || showHistory || cancellingTimer || store.error != nil }
+    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 1000
@@ -49,6 +51,9 @@ struct ContentView: View {
                     Button { MarkerWindowController.shared.show(store: store); revealControls() } label: {
                         Image(systemName: "tag").frame(width: 32, height: 28)
                     }.help("时间标记").accessibilityLabel("时间标记")
+                    Button { showTarget = true; revealControls() } label: {
+                        Image(systemName: "calendar").frame(width: 32, height: 28)
+                    }.help("目标日期设置").accessibilityLabel("目标日期设置")
                     Button { showData = true } label: {
                         Image(systemName: "arrow.up.arrow.down").frame(width: 32, height: 28)
                     }.help("数据管理").accessibilityLabel("数据管理")
@@ -63,6 +68,7 @@ struct ContentView: View {
                 Group {
                     if phase == 0 {
                         VStack(spacing: min(26, max(18, geometry.size.height * 0.04))) {
+                            TargetCountdownRow(store: targetCountdown) { showTarget = true }
                             TodayFocusHero(store: store, fontSize: min(120, max(78, min(geometry.size.width * 0.11, geometry.size.height * 0.20))) * 1.5)
                                 .foregroundStyle(ink)
                                 .padding(.bottom, 10)
@@ -195,6 +201,7 @@ struct ContentView: View {
         .onAppear { commandFocused = showMarkerInput; subject = store.database.activity ?? "" }
         .onChange(of: subject) { value in store.setActivity(value) }
         .onChange(of: store.database.activity) { value in subject = value ?? "" }
+        .sheet(isPresented: $showTarget) { TargetCountdownSettings(store: targetCountdown) }
         .sheet(isPresented: $showData, onDismiss: { commandFocused = showMarkerInput }) { DataExchangeView(store: store) }
         .sheet(isPresented: $showHistory, onDismiss: { commandFocused = showMarkerInput }) { HistoryView(store: store) }
         .sheet(isPresented: Binding(get: { store.database.pendingEnd != nil && !showData && !showHistory }, set: { _ in })) {
