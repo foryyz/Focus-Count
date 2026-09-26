@@ -1,7 +1,21 @@
 // !$*UTF8*$!
 { archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
-4F31BA1802571CAA42CDBD6D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FocusCount/PhoneMarkerScreen.swift"; sourceTree = SOURCE_ROOT; };
-B423BA269711E49202C02546 = { isa = PBXBuildFile; fileRef = 4F31BA1802571CAA42CDBD6D; };
+38E3758EE39252BA51EF8D58 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExchangeScreen.swift; sourceTree = "<group>"; };
+11FD2D9475253CFF619F994E = { isa = PBXBuildFile; fileRef = 38E3758EE39252BA51EF8D58; };
+B03F0C787FACE595D91C0E80 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCountApp.swift; sourceTree = "<group>"; };
+ED59C1983025EEC0E0D68A4A = { isa = PBXBuildFile; fileRef = B03F0C787FACE595D91C0E80; };
+4F046974B009B7974276501D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneDashboard.swift; sourceTree = "<group>"; };
+C3993E411B0AA12165C213E4 = { isa = PBXBuildFile; fileRef = 4F046974B009B7974276501D; };
+0C9A4B5594D8E6CC8382FA2F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneFocusAnalysis.swift; sourceTree = "<group>"; };
+14EB2E2E400D6925FAE437CD = { isa = PBXBuildFile; fileRef = 0C9A4B5594D8E6CC8382FA2F; };
+1FD351825BC66ADD701F9AED = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHistory.swift; sourceTree = "<group>"; };
+0DE88444DF3B507126DAB721 = { isa = PBXBuildFile; fileRef = 1FD351825BC66ADD701F9AED; };
+7276021261C77693307B4B10 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneMarkerScreen.swift; sourceTree = "<group>"; };
+A71534FF973A61BE66732056 = { isa = PBXBuildFile; fileRef = 7276021261C77693307B4B10; };
+4CF628851D5981C12303F952 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneStore.swift; sourceTree = "<group>"; };
+91D0BAA289A386CA7C83A845 = { isa = PBXBuildFile; fileRef = 4CF628851D5981C12303F952; };
+1FBFFC812F489BBEEC3C23C5 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordEditor.swift; sourceTree = "<group>"; };
+F8CEA72177241F5AEDE59219 = { isa = PBXBuildFile; fileRef = 1FBFFC812F489BBEEC3C23C5; };
 C5B7B56E09DDB2BDA3D9C695 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/EventAnalytics.swift"; sourceTree = SOURCE_ROOT; };
 6A8E78921E34AFD7643CE98B = { isa = PBXBuildFile; fileRef = C5B7B56E09DDB2BDA3D9C695; };
 A9BA1846E5ECB249B313F6D4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/MarkerOverviewData.swift"; sourceTree = SOURCE_ROOT; };
@@ -18,17 +32,16 @@ A161DFCA413436CE7A4C4413 = { isa = PBXFileReference; lastKnownFileType = sourcec
 A2541BA0DB94EF71AAB6D62B = { isa = PBXBuildFile; fileRef = 1B8EC373E63E8CCBBD8649CC; };
 21EEA37C6D5223870524881E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/MarkerTimelineChart.swift"; sourceTree = SOURCE_ROOT; };
 C6059474EFAE53572CAEFC66 = { isa = PBXBuildFile; fileRef = 21EEA37C6D5223870524881E; };
-
-38E3758EE39252BA51EF8D58 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExchangeScreen.swift; sourceTree = "<group>"; };
-11FD2D9475253CFF619F994E = { isa = PBXBuildFile; fileRef = 38E3758EE39252BA51EF8D58; };
-B03F0C787FACE595D91C0E80 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCountApp.swift; sourceTree = "<group>"; };
-ED59C1983025EEC0E0D68A4A = { isa = PBXBuildFile; fileRef = B03F0C787FACE595D91C0E80; };
-1FD351825BC66ADD701F9AED = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHistory.swift; sourceTree = "<group>"; };
-0DE88444DF3B507126DAB721 = { isa = PBXBuildFile; fileRef = 1FD351825BC66ADD701F9AED; };
-4CF628851D5981C12303F952 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneStore.swift; sourceTree = "<group>"; };
-91D0BAA289A386CA7C83A845 = { isa = PBXBuildFile; fileRef = 4CF628851D5981C12303F952; };
-1FBFFC812F489BBEEC3C23C5 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordEditor.swift; sourceTree = "<group>"; };
-F8CEA72177241F5AEDE59219 = { isa = PBXBuildFile; fileRef = 1FBFFC812F489BBEEC3C23C5; };
+9B6DD69386647F9D1DCEA451 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/FocusAnalysisData.swift"; sourceTree = SOURCE_ROOT; };
+97F751A58DCDBA4A208A8737 = { isa = PBXBuildFile; fileRef = 9B6DD69386647F9D1DCEA451; };
+0B12661EFFF497D54F5888B2 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/FocusAppearanceStore.swift"; sourceTree = SOURCE_ROOT; };
+01C066DEA90FE2F95BA8B6D3 = { isa = PBXBuildFile; fileRef = 0B12661EFFF497D54F5888B2; };
+04D6208F2BB46765AE78BB4B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/FocusShareChart.swift"; sourceTree = SOURCE_ROOT; };
+42D242F4A3AF6868CE6A0B10 = { isa = PBXBuildFile; fileRef = 04D6208F2BB46765AE78BB4B; };
+8EE9CBF423C29FC9AA8D91FA = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/TodaySummaryView.swift"; sourceTree = SOURCE_ROOT; };
+482D9637CFDEE1A69A472815 = { isa = PBXBuildFile; fileRef = 8EE9CBF423C29FC9AA8D91FA; };
+50C3F527088C84E56E071A56 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/TargetCountdown.swift"; sourceTree = SOURCE_ROOT; };
+E3D6449356DFCE4E9BBEA52E = { isa = PBXBuildFile; fileRef = 50C3F527088C84E56E071A56; };
 59BD0A3FF43B32849B319E64 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 05FAC94380A70241F23780E7 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 CF8A4D27E1C506A7C75A76BE = { isa = PBXBuildFile; fileRef = 05FAC94380A70241F23780E7; };
@@ -36,10 +49,10 @@ CF8A4D27E1C506A7C75A76BE = { isa = PBXBuildFile; fileRef = 05FAC94380A70241F2378
 582681C2EAE02B3F3D399C0C = { isa = XCLocalSwiftPackageReference; relativePath = ../../packages/FocusCountCore; };
 E9FAD0C6CD43534327C0AF90 = { isa = XCSwiftPackageProductDependency; package = 582681C2EAE02B3F3D399C0C; productName = FocusCountCore; };
 4F0AA52D656A3D75867F784B = { isa = PBXBuildFile; productRef = E9FAD0C6CD43534327C0AF90; };
-482182478A3ECD4745BEA917 = { isa = PBXGroup; children = (4F31BA1802571CAA42CDBD6D,C5B7B56E09DDB2BDA3D9C695,A9BA1846E5ECB249B313F6D4,F16A653133EA9D5A818562D0,AC9906175EE761E7520180B8,A161DFCA413436CE7A4C4413,76A643C8D3800FC1E2F0BCD6,1B8EC373E63E8CCBBD8649CC,21EEA37C6D5223870524881E,38E3758EE39252BA51EF8D58,B03F0C787FACE595D91C0E80,1FD351825BC66ADD701F9AED,4CF628851D5981C12303F952,1FBFFC812F489BBEEC3C23C5,59BD0A3FF43B32849B319E64,05FAC94380A70241F23780E7,); path = FocusCount; sourceTree = "<group>"; };
+482182478A3ECD4745BEA917 = { isa = PBXGroup; children = (38E3758EE39252BA51EF8D58,B03F0C787FACE595D91C0E80,4F046974B009B7974276501D,0C9A4B5594D8E6CC8382FA2F,1FD351825BC66ADD701F9AED,7276021261C77693307B4B10,4CF628851D5981C12303F952,1FBFFC812F489BBEEC3C23C5,C5B7B56E09DDB2BDA3D9C695,A9BA1846E5ECB249B313F6D4,F16A653133EA9D5A818562D0,AC9906175EE761E7520180B8,A161DFCA413436CE7A4C4413,76A643C8D3800FC1E2F0BCD6,1B8EC373E63E8CCBBD8649CC,21EEA37C6D5223870524881E,9B6DD69386647F9D1DCEA451,0B12661EFFF497D54F5888B2,04D6208F2BB46765AE78BB4B,8EE9CBF423C29FC9AA8D91FA,50C3F527088C84E56E071A56,59BD0A3FF43B32849B319E64,05FAC94380A70241F23780E7,); path = FocusCount; sourceTree = "<group>"; };
 FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (38A007151ABE87CC01A5B6E9,B7480EC88B7F22D0A4757273,); name = Products; sourceTree = "<group>"; };
 B28B7AF69320201D1CF206EB = { isa = PBXGroup; children = (482182478A3ECD4745BEA917,E05FCB614AB36FDEE72EE1F2,FBDC4F23F93125BBEEAE800C,); sourceTree = "<group>"; };
-BCE16DD0260827ECF338C787 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B423BA269711E49202C02546,6A8E78921E34AFD7643CE98B,51764CEC2FB9DE0A56F28D6A,57013F9874B04F6B359608F7,4B7D61EA01D48EA1F3121524,338DA43EBDB79B19B7BE2F49,3A137205DA471951903AB749,A2541BA0DB94EF71AAB6D62B,C6059474EFAE53572CAEFC66,11FD2D9475253CFF619F994E,ED59C1983025EEC0E0D68A4A,0DE88444DF3B507126DAB721,91D0BAA289A386CA7C83A845,F8CEA72177241F5AEDE59219,); runOnlyForDeploymentPostprocessing = 0; };
+BCE16DD0260827ECF338C787 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (11FD2D9475253CFF619F994E,ED59C1983025EEC0E0D68A4A,C3993E411B0AA12165C213E4,14EB2E2E400D6925FAE437CD,0DE88444DF3B507126DAB721,A71534FF973A61BE66732056,91D0BAA289A386CA7C83A845,F8CEA72177241F5AEDE59219,6A8E78921E34AFD7643CE98B,51764CEC2FB9DE0A56F28D6A,57013F9874B04F6B359608F7,4B7D61EA01D48EA1F3121524,338DA43EBDB79B19B7BE2F49,3A137205DA471951903AB749,A2541BA0DB94EF71AAB6D62B,C6059474EFAE53572CAEFC66,97F751A58DCDBA4A208A8737,01C066DEA90FE2F95BA8B6D3,42D242F4A3AF6868CE6A0B10,482D9637CFDEE1A69A472815,E3D6449356DFCE4E9BBEA52E,); runOnlyForDeploymentPostprocessing = 0; };
 7561BFB015D8F536760CB671 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (4F0AA52D656A3D75867F784B,); runOnlyForDeploymentPostprocessing = 0; };
 0189424A5A60FED329FA868E = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (CF8A4D27E1C506A7C75A76BE,); runOnlyForDeploymentPostprocessing = 0; };
 89E1FD6268CC0F221A2BE178 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { CLANG_ENABLE_MODULES = YES; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; }; };
@@ -51,7 +64,7 @@ BCE16DD0260827ECF338C787 = { isa = PBXSourcesBuildPhase; buildActionMask = 21474
  INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
  TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
  SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
- CURRENT_PROJECT_VERSION = 3; MARKETING_VERSION = 1.2.0; CODE_SIGN_STYLE = Automatic;
+ CURRENT_PROJECT_VERSION = 4; MARKETING_VERSION = 1.3.0; CODE_SIGN_STYLE = Automatic;
  ENABLE_DEBUG_DYLIB = NO; ENABLE_TESTABILITY = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone";
  SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG";
  }; };
@@ -64,7 +77,7 @@ E6DE6C99132752C914FEF632 = { isa = XCBuildConfiguration; name = Release; buildSe
  INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
  TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
  SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
- CURRENT_PROJECT_VERSION = 3; MARKETING_VERSION = 1.2.0; CODE_SIGN_STYLE = Automatic;
+ CURRENT_PROJECT_VERSION = 4; MARKETING_VERSION = 1.3.0; CODE_SIGN_STYLE = Automatic;
  ENABLE_DEBUG_DYLIB = NO; ENABLE_TESTABILITY = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "-O";
  SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
  }; };

@@ -15,6 +15,7 @@ struct TodaySummary {
     }
 }
 
+#if os(macOS)
 struct TodayFocusHero: View {
     @ObservedObject var store: StudyStore
     let fontSize: CGFloat
@@ -134,3 +135,5 @@ struct TodaySummaryView: View {
         }
     }
 }
+
+#endif

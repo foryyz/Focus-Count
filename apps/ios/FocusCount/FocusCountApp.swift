@@ -16,6 +16,16 @@ struct TimerScreen: View {
     @ObservedObject var store: PhoneStore
     @State private var history = false
     @State private var exchange = false
+    @State private var today = false
+    @State private var targetSettings = false
+    @State private var markers = false
+    @State private var analysis = false
+    @StateObject private var appearance = FocusAppearanceStore()
+    @StateObject private var targetCountdown: TargetCountdownStore
+    init(store: PhoneStore) {
+        self.store = store
+        _targetCountdown = StateObject(wrappedValue: TargetCountdownStore(snapshot: store.state.goal, writer: { store.updateGoal($0) }))
+    }
     @State private var cancelling = false
     @State private var subject = ""
     @State private var command = ""
@@ -60,16 +70,30 @@ struct TimerScreen: View {
                 }.scrollIndicators(.hidden).scrollDismissesKeyboard(.interactively)
             }
             .background(backdrop.ignoresSafeArea())
-            .navigationTitle(immersive ? "" : "FocusCount").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle(immersive ? "" : "🧠 FOCUS-COUNT").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if !immersive {
-                        Button { history = true } label: { Image(systemName: "chart.bar.xaxis") }.accessibilityLabel("专注记录与时间标记")
-                        Button { exchange = true } label: { Image(systemName: "arrow.up.arrow.down") }.accessibilityLabel("数据管理")
+                        Menu {
+                            Button { history = true } label: { Label("专注记录", systemImage: "list.bullet.rectangle") }
+                            Button { analysis = true } label: { Label("专注分析", systemImage: "chart.bar.xaxis") }
+                            Button { markers = true } label: { Label("时间标记", systemImage: "tag") }
+                            Button { targetSettings = true } label: { Label("目标日期", systemImage: "calendar") }
+                            Button { exchange = true } label: { Label("数据管理", systemImage: "arrow.up.arrow.down") }
+                        } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel("记录、分析与设置")
                     }
                     Button { immersive.toggle(); activityFocused = false; markerFocused = false } label: {
                         Image(systemName: immersive ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     }.accessibilityLabel(immersive ? "退出沉浸模式" : "沉浸模式")
+                }
+            }
+            .safeAreaInset(edge: .bottom, alignment: .leading) {
+                if idle && !immersive {
+                    Button { today = true } label: {
+                        Image(systemName: "sun.max").frame(width: 44, height: 44)
+                            .background(ink.opacity(0.05), in: Circle())
+                    }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("今日概览")
+                        .padding(.leading, 24).padding(.bottom, 8)
                 }
             }
             .statusBarHidden(immersive)
@@ -89,14 +113,14 @@ struct TimerScreen: View {
                 Button("保留计时", role: .cancel) {}
                 Button("取消并归零", role: .destructive) { store.cancelTimer() }
             } message: { Text("清除本次未保存的计时，不生成记录。已有记录不受影响。") }
-            .sheet(isPresented: $history) {
-                TabView {
-                    PhoneHistory(store: store).tabItem { Label("专注记录", systemImage: "chart.bar.xaxis") }
-                    PhoneEventHistory(store: store).tabItem { Label("时间标记", systemImage: "mappin.circle") }
-                }.tint(.teal)
-            }
+            .sheet(isPresented: $history) { PhoneHistory(store: store) }
+            .sheet(isPresented: $markers) { PhoneEventHistory(store: store) }
+            .sheet(isPresented: $analysis) { PhoneFocusAnalysis(store: store, appearance: appearance) }
+            .sheet(isPresented: $today) { PhoneTodaySheet(store: store, appearance: appearance) }
+            .sheet(isPresented: $targetSettings) { PhoneTargetSettings(store: targetCountdown) }
+            .onChange(of: store.state.goal) { _, value in targetCountdown.receive(value) }
             .sheet(isPresented: $exchange) { ExchangeScreen(store: store) }
-            .sheet(isPresented: Binding(get: { store.state.clock.pendingEnd != nil && !exchange && !history }, set: { _ in })) {
+            .sheet(isPresented: Binding(get: { store.state.clock.pendingEnd != nil && !exchange && !history && !analysis && !markers && !today && !targetSettings }, set: { _ in })) {
                 if let start = store.state.clock.startedAt, let end = store.state.clock.pendingEnd {
                     RecordEditor(store: store, session: StudySession(startedAt: start, endedAt: end, activeSeconds: store.state.clock.seconds(), subject: store.state.activity ?? "", focus: "A"), completesTimer: true) {
                         message = "✨ A little focus, a meaningful step. Well done."
@@ -107,12 +131,18 @@ struct TimerScreen: View {
     }
     private var welcome: some View {
         VStack(spacing: 28) {
-            VStack(spacing: 14) {
-                Text(Self.greetings[encouragement].0)
-                    .font(.system(.largeTitle, design: .rounded, weight: .medium))
-                    .foregroundStyle(ink)
-                Text(Self.greetings[encouragement].1).font(.body).foregroundStyle(.secondary)
-            }.multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            TargetCountdownRow(store: targetCountdown) { targetSettings = true }
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                let minutes = Int(store.today(at: context.date).seconds) / 60
+                VStack(spacing: 12) {
+                    Text("Today’s focus").font(.system(.title3, design: .rounded, weight: .medium)).foregroundStyle(.secondary)
+                    (Text("\(minutes / 60)H").font(.system(size: 64, weight: .medium, design: .rounded))
+                     + Text("  \(minutes % 60)m").font(.system(size: 30, weight: .regular, design: .rounded)).foregroundColor(.secondary))
+                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                    Text(Self.greetings[encouragement].1).font(.footnote).foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
             HStack {
                 TextField("这次想专注于什么？（可选）", text: $subject)
                     .font(.body).focused($activityFocused).submitLabel(.go)

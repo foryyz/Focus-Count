@@ -2,6 +2,7 @@ import SwiftUI
 import FocusCountCore
 
 struct PhoneState: Codable {
+    var goal: GoalSnapshot?
     var version = 5
     var events: [TimeEvent]?
     var purgedIDs: Set<UUID>?
@@ -33,7 +34,7 @@ struct PhoneState: Codable {
                 var loaded = try JSONDecoder().decode(PhoneState.self, from: data)
                 guard [1, 2, 3, 4, 5].contains(loaded.version), loaded.clock.isValid else { throw CocoaError(.fileReadCorruptFile) }
                 // Validate the records with the same rules as interchange files.
-                let validated = try RecordExchange.decode(RecordExchange.encode(Database(events: loaded.events, purgedIDs: loaded.purgedIDs, sessions: loaded.sessions)))
+                let validated = try RecordExchange.decode(RecordExchange.encode(Database(events: loaded.events, purgedIDs: loaded.purgedIDs, sessions: loaded.sessions, goal: loaded.goal)))
                 loaded.sessions = validated.sessions
                 loaded.events = validated.events
                 if loaded.version < 5 {
@@ -137,6 +138,10 @@ struct PhoneState: Codable {
             $0.sessions.removeAll { removed.contains($0.id) }
         }
     }
+    @discardableResult func updateGoal(_ goal: GoalSnapshot) -> Bool {
+        guard goal.isValid else { return false }
+        return commit { $0.goal = goal }
+    }
     func importRecords(_ database: Database, syncTimer: Bool = false) -> Bool {
         guard !blocked else { return false }
         do {
@@ -152,6 +157,7 @@ struct PhoneState: Codable {
             try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("before-import-\(identifier).json"), options: .atomic)
             try RecordExchange.encode(database).write(to: directory.appendingPathComponent("incoming-\(identifier).json"), options: .atomic)
             return commit {
+                $0.goal = GoalSnapshot.merge($0.goal, incoming.goal)
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(incoming.purgedIDs ?? [])
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: incoming.sessions, purgedIDs: $0.purgedIDs ?? [])
                 $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: incoming.events ?? [], purgedIDs: $0.purgedIDs ?? [])
@@ -175,7 +181,7 @@ struct PhoneState: Codable {
         let draft = TimerState(startedAt: state.clock.startedAt, accumulated: state.clock.seconds(at: capturedAt))
         let transfer = TimerTransfer(capturedAt: capturedAt, startedAt: draft.startedAt, accumulated: draft.accumulated,
             isRunning: state.clock.isRunning, pendingEnd: state.clock.pendingEnd, activity: state.activity, timerID: state.timerID)
-        return try RecordExchange.encode(Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd, timerTransfer: transfer, activity: state.activity))
+        return try RecordExchange.encode(Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd, timerTransfer: transfer, activity: state.activity, goal: state.goal))
     }
 }
 

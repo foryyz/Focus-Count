@@ -1,4 +1,5 @@
 import SwiftUI
+import FocusCountCore
 
 struct TargetDate: Codable, Equatable {
     var name: String
@@ -26,26 +27,54 @@ struct TargetDate: Codable, Equatable {
 
 @MainActor final class TargetCountdownStore: ObservableObject {
     @Published private(set) var target: TargetDate?
+    @Published private(set) var error: String?
     private let defaults: UserDefaults
     private let key = "focus-target-date-v1"
+    private let hiddenKey = "focus-target-hidden-v1"
+    private var snapshot: GoalSnapshot?
+    private let writer: ((GoalSnapshot) -> Bool)?
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        target = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(TargetDate.self, from: $0) }
+    init(defaults: UserDefaults = .standard, snapshot: GoalSnapshot? = nil, writer: ((GoalSnapshot) -> Bool)? = nil) {
+        self.defaults = defaults; self.writer = writer
+        let old = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(TargetDate.self, from: $0) }
+        if let snapshot { receive(snapshot) }
+        else if let old {
+            target = old
+            if defaults.object(forKey: hiddenKey) == nil { defaults.set(old.hidden, forKey: hiddenKey) }
+            if writer != nil { _ = save(old) }
+        }
     }
-    func save(_ value: TargetDate) {
-        guard let data = try? JSONEncoder().encode(value) else { return }
-        defaults.set(data, forKey: key)
-        target = value
+    func receive(_ value: GoalSnapshot?) {
+        snapshot = value
+        guard let value, !value.deleted else { target = nil; return }
+        // First imports remain hidden until explicitly made visible on this device.
+        let hidden = defaults.object(forKey: hiddenKey) == nil ? true : defaults.bool(forKey: hiddenKey)
+        target = TargetDate(name: value.name, emoji: value.emoji, date: value.date, includesTime: value.includesTime, hidden: hidden)
+    }
+    @discardableResult func save(_ value: TargetDate) -> Bool {
+        let now = max(Date(), (snapshot?.updatedAt ?? .distantPast).addingTimeInterval(0.001))
+        let unchanged = snapshot.map { !$0.deleted && $0.name == value.name && $0.emoji == value.emoji && $0.date == value.date && $0.includesTime == value.includesTime } ?? false
+        let next = unchanged ? snapshot! : GoalSnapshot(name: value.name, emoji: value.emoji, date: value.date, includesTime: value.includesTime, updatedAt: now)
+        if !unchanged, let writer, !writer(next) { error = "保存失败，目标未修改。"; return false }
+        guard let data = try? JSONEncoder().encode(value) else { return false }
+        defaults.set(data, forKey: key); defaults.set(value.hidden, forKey: hiddenKey)
+        snapshot = next; target = value; error = nil
+        return true
     }
     func hide() {
         guard var value = target else { return }
         value.hidden = true
-        save(value)
+        defaults.set(true, forKey: hiddenKey)
+        if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: key) }
+        target = value
     }
-    func remove() {
+    @discardableResult func remove() -> Bool {
+        let next = GoalSnapshot(name: "", date: Date(), deleted: true,
+            updatedAt: max(Date(), (snapshot?.updatedAt ?? .distantPast).addingTimeInterval(0.001)))
+        if let writer, !writer(next) { error = "删除失败，目标未修改。"; return false }
         defaults.removeObject(forKey: key)
-        target = nil
+        snapshot = next; target = nil; error = nil
+        return true
     }
 }
 
@@ -53,6 +82,13 @@ struct TargetCountdownRow: View {
     @ObservedObject var store: TargetCountdownStore
     var edit: () -> Void
 
+    private var hideButtonSize: CGFloat {
+        #if os(iOS)
+        44
+        #else
+        28
+        #endif
+    }
     var body: some View {
         if let target = store.target {
             if !target.hidden {
@@ -66,7 +102,7 @@ struct TargetCountdownRow: View {
                             }
                         }.buttonStyle(.plain).help("编辑目标日期")
                         Button { store.hide() } label: {
-                            Image(systemName: "eye.slash").frame(width: 28, height: 28)
+                            Image(systemName: "eye.slash").frame(width: hideButtonSize, height: hideButtonSize)
                         }.buttonStyle(.plain).help("隐藏目标与倒数").accessibilityLabel("隐藏目标与倒数")
                     }.font(.system(size: 13)).foregroundStyle(.secondary).frame(maxWidth: 520)
                 }
@@ -78,6 +114,7 @@ struct TargetCountdownRow: View {
     }
 }
 
+#if os(macOS)
 struct TargetCountdownSettings: View {
     @ObservedObject var store: TargetCountdownStore
     @Environment(\.dismiss) private var dismiss
@@ -98,6 +135,7 @@ struct TargetCountdownSettings: View {
                 Spacer()
                 Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction)
             }
+            if let error = store.error { Text(error).foregroundStyle(.red).font(.caption) }
             if concealed {
                 Label("目标已隐藏", systemImage: "eye.slash").foregroundStyle(.secondary)
                 Text("首页不会显示目标名称、日期或倒数。查看设置不会自动恢复首页显示。")
@@ -114,7 +152,7 @@ struct TargetCountdownSettings: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Toggle("在首页显示目标与倒数", isOn: $showOnHome)
-                Text("隐藏状态会记住；此目标仅保存在本机，不包含在数据导出中。")
+                Text("目标随 JSON 导入导出同步；隐藏状态仅保存在本机。")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     if store.target != nil {
@@ -122,8 +160,7 @@ struct TargetCountdownSettings: View {
                     }
                     Spacer()
                     Button("保存") {
-                        store.save(TargetDate(name: name.trimmingCharacters(in: .whitespacesAndNewlines), emoji: emoji, date: date, includesTime: includesTime, hidden: !showOnHome))
-                        dismiss()
+                        if store.save(TargetDate(name: name.trimmingCharacters(in: .whitespacesAndNewlines), emoji: emoji, date: date, includesTime: includesTime, hidden: !showOnHome)) { dismiss() }
                     }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .keyboardShortcut(.defaultAction)
                 }
@@ -132,7 +169,7 @@ struct TargetCountdownSettings: View {
             .onAppear { if !concealed { load() } }
             .alert("删除目标日期？", isPresented: $deleting) {
                 Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) { store.remove(); dismiss() }
+                Button("删除", role: .destructive) { if store.remove() { dismiss() } }
             } message: { Text("不会影响专注记录和时间标记。") }
     }
     private func load() {
@@ -141,3 +178,5 @@ struct TargetCountdownSettings: View {
         includesTime = target.includesTime; showOnHome = !target.hidden
     }
 }
+
+#endif

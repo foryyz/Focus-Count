@@ -6,6 +6,7 @@ struct PhoneHistory: View {
     @ObservedObject var store: PhoneStore
     @Environment(\.dismiss) private var dismiss
     @State private var deleted = false
+    @StateObject private var appearance = FocusAppearanceStore()
     @State private var subject = ""
     @State private var focus = ""
     @State private var allDates = true
@@ -87,7 +88,7 @@ struct PhoneHistory: View {
                                 Button { subject = name } label: {
                                     VStack(spacing: 8) {
                                         HStack { Text(name).foregroundStyle(.primary); Spacer(); Text(phoneDuration(subjectTotals[name] ?? 0)).foregroundStyle(.secondary).monospacedDigit() }.font(.subheadline)
-                                        ProgressView(value: subjectTotals[name] ?? 0, total: max(subjectTotals.values.max() ?? 1, 1)).tint(.teal)
+                                        ProgressView(value: subjectTotals[name] ?? 0, total: max(subjectTotals.values.max() ?? 1, 1)).tint(appearance.color("activity:" + name))
                                     }.padding(.vertical, 4)
                                 }.buttonStyle(.plain).accessibilityHint("筛选此活动")
                             }
@@ -113,6 +114,7 @@ struct PhoneHistory: View {
                 footer: { if deleted { Text("可恢复或彻底删除。清空全部包含筛选外的记录。") } }
                 if let error = store.error { Section { Text(error).font(.footnote).foregroundStyle(.red) } }
             }
+            .onAppear { appearance.ensureColors(store.subjects) }
             .navigationTitle("专注记录").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button { dismiss() } label: { Label("计时", systemImage: "chevron.left") } }

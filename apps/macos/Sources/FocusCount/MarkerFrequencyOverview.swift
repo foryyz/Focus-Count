@@ -24,8 +24,22 @@ struct MarkerFrequencyOverview: View {
     private var days: Int { max(1, calendar.dateComponents([.day], from: start, to: end).day ?? 1) }
     private var visible: Double { span == 0 ? Double(days) : min(Double(days), span) }
     private func date(_ index: Double) -> Date { calendar.date(byAdding: .day, value: Int(index), to: start)! }
+    private var rowHeight: CGFloat {
+        #if os(iOS)
+        44
+        #else
+        58
+        #endif
+    }
+    private var resolvedGranularity: MarkerGranularity {
+        #if os(iOS)
+        granularity == .automatic ? (visible <= 14 ? .day : visible <= 100 ? .week : .month) : granularity
+        #else
+        granularity
+        #endif
+    }
     private var data: MarkerOverviewData {
-        MarkerOverviewData(events: events, start: date(floor(offset)), end: min(end, date(ceil(offset + visible))), granularity: granularity)
+        MarkerOverviewData(events: events, start: date(floor(offset)), end: min(end, date(ceil(offset + visible))), granularity: resolvedGranularity)
     }
     private var names: [String] { Array(Set(events.filter { $0.deletedAt == nil }.map { EventAnalytics.label($0.kind) })).sorted() }
     private func zoom(_ value: Double) {
@@ -69,9 +83,15 @@ struct MarkerFrequencyOverview: View {
                 if let selected { inspector(selected).frame(width: 220) }
                 #endif
             }
+            #if os(iOS)
+            if visible < Double(days) {
+                Slider(value: $offset, in: 0...max(1, Double(days) - visible)).accessibilityLabel("浏览日期")
+            }
+            #else
             MarkerRangeNavigator(days: days, start: start, visible: visible, offset: offset, compact: compact, maximumSpan: Double(days), events: events, colors: colors) { position, length in
                 span = length; offset = position
             }
+            #endif
             if !compact {
             HStack(spacing: 12) {
                 Text("面积 = 次数").font(.caption)
@@ -97,7 +117,7 @@ struct MarkerFrequencyOverview: View {
         #endif
         .onChange(of: events) { _ in
             if let selection = selected {
-                selected = MarkerOverviewData(events: events, start: selection.bucket.start, end: selection.bucket.end, granularity: granularity).cells.first { $0.kind == selection.kind }
+                selected = MarkerOverviewData(events: events, start: selection.bucket.start, end: selection.bucket.end, granularity: resolvedGranularity).cells.first { $0.kind == selection.kind }
             }
         }
     }
@@ -120,7 +140,7 @@ struct MarkerFrequencyOverview: View {
                             if let emoji = colors.emojis[name], !emoji.isEmpty { Text(emoji) }
                             else { Circle().fill(colors.color(name)).frame(width: 7, height: 7) }
                             Text(name).lineLimit(1).help(name)
-                        }.font(.caption).frame(width: 84, height: 58, alignment: .leading).padding(.bottom, 2)
+                        }.font(.caption).frame(width: 84, height: rowHeight, alignment: .leading).padding(.bottom, 2)
                     }
                 }.frame(width: 84)
                 ScrollView(.horizontal) {
@@ -169,10 +189,10 @@ struct MarkerFrequencyOverview: View {
                                     ForEach(cells[name] ?? []) { cell in
                                         if let index = bucketIndices[cell.bucket.id] {
                                             bubble(cell, unit: unit, limit: limit)
-                                                .position(x: (Double(index) + 0.5) * column, y: 29)
+                                                .position(x: (Double(index) + 0.5) * column, y: rowHeight / 2)
                                         }
                                     }
-                                }.frame(width: plotWidth, height: 58)
+                                }.frame(width: plotWidth, height: rowHeight)
                             }.padding(.bottom, 2)
                         }
                         if names.isEmpty { Text("此范围没有标记").foregroundStyle(.secondary).padding(40) }

@@ -193,6 +193,10 @@ import AppKit
             $0.sessions.removeAll { removed.contains($0.id) }
         }
     }
+    @discardableResult func updateGoal(_ goal: GoalSnapshot) -> Bool {
+        guard goal.isValid else { return false }
+        return commit { $0.goal = goal }
+    }
     func importRecords(_ incoming: Database, syncTimer: Bool = false) -> Bool {
         guard !blocked else { return false }
         do {
@@ -208,6 +212,7 @@ import AppKit
             try export().write(to: backupFolder.appendingPathComponent("before-import.json"), options: .atomic)
             try RecordExchange.encode(incoming).write(to: backupFolder.appendingPathComponent("incoming.json"), options: .atomic)
             return commit {
+                $0.goal = GoalSnapshot.merge($0.goal, validated.goal)
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(validated.purgedIDs ?? [])
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: validated.sessions, purgedIDs: $0.purgedIDs ?? [])
                 $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: validated.events ?? [], purgedIDs: $0.purgedIDs ?? [])

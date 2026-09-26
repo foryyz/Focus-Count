@@ -1,7 +1,38 @@
 import XCTest
+import FocusCountCore
 @testable import FocusCount
 
 final class TargetCountdownTests: XCTestCase {
+    @MainActor func testImportedGoalIsHiddenAndLocalPrivacyNeverExports() {
+        let suite = "GoalPrivacy-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let incoming = GoalSnapshot(name: "私密目标", date: Date())
+        let store = TargetCountdownStore(defaults: defaults, snapshot: incoming, writer: { _ in true })
+        XCTAssertEqual(store.target?.hidden, true)
+        var target = store.target!; target.hidden = false
+        XCTAssertTrue(store.save(target))
+        store.hide()
+        store.receive(GoalSnapshot(name: "更新目标", date: Date()))
+        XCTAssertEqual(store.target?.hidden, true)
+        let failed = TargetCountdownStore(defaults: defaults, snapshot: incoming, writer: { _ in false })
+        target.name = "无法保存的新目标"
+        XCTAssertFalse(failed.save(target))
+        XCTAssertFalse(failed.remove())
+        XCTAssertEqual(failed.target?.name, incoming.name)
+    }
+    @MainActor func testMacGoalRoundTripPersistsAndOldFileCannotRestoreDeletedGoal() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root, observeSystem: false)
+        let goal = GoalSnapshot(name: "考试", date: Date())
+        XCTAssertTrue(store.updateGoal(goal))
+        XCTAssertEqual(try RecordExchange.decode(store.export()).goal, goal)
+        var deleted = goal; deleted.deleted = true; deleted.updatedAt = goal.updatedAt.addingTimeInterval(1)
+        XCTAssertTrue(store.importRecords(Database(goal: deleted)))
+        XCTAssertTrue(store.importRecords(Database(goal: goal)))
+        XCTAssertEqual(StudyStore(directory: root, observeSystem: false).database.goal, deleted)
+    }
     func testCountdownBoundariesAndDateOnlyMidnight() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

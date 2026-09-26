@@ -68,6 +68,7 @@ public struct TimerState: Codable {
 }
 
 public struct Database: Codable {
+    public var goal: GoalSnapshot?
     public var version = 5
     public var timerTransfer: TimerTransfer?
     public var timerID: UUID?
@@ -77,7 +78,8 @@ public struct Database: Codable {
     public var sessions: [StudySession] = []
     public var draft = TimerState()
     public var pendingEnd: Date?
-    public init(version: Int = 5, events: [TimeEvent]? = nil, purgedIDs: Set<UUID>? = nil, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil, timerTransfer: TimerTransfer? = nil, activity: String? = nil) {
+    public init(version: Int = 5, events: [TimeEvent]? = nil, purgedIDs: Set<UUID>? = nil, sessions: [StudySession] = [], draft: TimerState = TimerState(), pendingEnd: Date? = nil, timerTransfer: TimerTransfer? = nil, activity: String? = nil, goal: GoalSnapshot? = nil) {
+        self.goal = goal
         self.timerTransfer = timerTransfer; self.activity = activity
         self.events = events; self.purgedIDs = purgedIDs; self.version = version; self.sessions = sessions; self.draft = draft; self.pendingEnd = pendingEnd
     }

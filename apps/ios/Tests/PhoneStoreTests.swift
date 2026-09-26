@@ -1,8 +1,22 @@
 import XCTest
+import SwiftUI
+import UIKit
 import FocusCountCore
 @testable import FocusCount
 
 final class PhoneStoreTests: XCTestCase {
+    @MainActor func testGoalExchangeAndDeletionSurviveRestart() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let phone = PhoneStore(directory: root)
+        let goal = GoalSnapshot(name: "目标", date: Date())
+        XCTAssertTrue(phone.importRecords(Database(goal: goal)))
+        XCTAssertEqual(try RecordExchange.decode(phone.export()).goal, goal)
+        var deleted = goal; deleted.deleted = true; deleted.updatedAt = goal.updatedAt.addingTimeInterval(1)
+        XCTAssertTrue(phone.updateGoal(deleted))
+        XCTAssertTrue(phone.importRecords(Database(goal: goal)))
+        XCTAssertEqual(PhoneStore(directory: root).state.goal, deleted)
+    }
     @MainActor func testCompletedHandoffCannotBeResurrected() throws {
         let root = directory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -443,4 +457,56 @@ final class MarkerPointLayoutTests: XCTestCase {
         XCTAssertTrue(items.allSatisfy { !$0.grouped })
     }
 
+}
+
+// Render synthetic records at a compact phone size for visual regression review.
+// The store is isolated; no personal records are read or changed.
+@MainActor final class PhoneLayoutTests: XCTestCase {
+    func testCompactAndLandscapeScreens() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let start = cal.date(byAdding: .day, value: -29, to: today)!
+        let end = cal.date(byAdding: .day, value: 1, to: today)!
+        let names = ["阅读", "健身", "冥想", "散步", "写作", "咖啡"]
+        let events = (0..<180).map { index in
+            TimeEvent(kind: names[index % names.count], occurredAt: start.addingTimeInterval(Double(index % 29) * 86400 + Double(6 + index % 17) * 3600))
+        }
+        let sessions = (0..<30).map { index in
+            let date = cal.date(byAdding: .day, value: -(index % 20), to: today)!
+            return StudySession(startedAt: date, endedAt: date.addingTimeInterval(3600), activeSeconds: Double((index % 5 + 1) * 600), subject: names[index % names.count], focus: "A")
+        }
+        XCTAssertTrue(store.importRecords(Database(events: events, sessions: sessions)))
+        let suite = "PhoneLayout-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let colors = MarkerColors(defaults: defaults)
+        colors.ensure(names)
+        for (name, emoji) in zip(names, ["📚", "🏋️", "🧘", "🚶", "✍️", "☕️"]) { colors.setEmoji(emoji, for: name) }
+        let appearance = FocusAppearanceStore(defaults: defaults)
+        appearance.ensureColors(names)
+        await render(TimerScreen(store: store), name: "home-compact", size: CGSize(width: 375, height: 667))
+        await render(PhoneTodaySheet(store: store, appearance: appearance), name: "today-compact", size: CGSize(width: 375, height: 667))
+        await render(PhoneFocusAnalysis(store: store, appearance: appearance), name: "analysis-compact", size: CGSize(width: 375, height: 667))
+        await render(PhoneMarkerCharts(mode: .constant(0), events: events, start: start, end: end, isWeek: false, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "frequency-compact", size: CGSize(width: 375, height: 460))
+        await render(PhoneMarkerCharts(mode: .constant(2), events: events, start: start, end: end, isWeek: false, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "time-compact", size: CGSize(width: 375, height: 460))
+        await render(PhoneMarkerCharts(mode: .constant(2), events: events, start: start, end: end, isWeek: false, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "time-landscape", size: CGSize(width: 740, height: 310))
+    }
+    private func render<V: View>(_ view: V, name: String, size: CGSize) async {
+        let host = UIHostingController(rootView: view)
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.rootViewController = host
+        window.isHidden = false
+        host.view.frame = window.bounds
+        host.view.setNeedsLayout(); host.view.layoutIfNeeded()
+        try? await Task.sleep(for: .milliseconds(150))
+        let image = UIGraphicsImageRenderer(size: size).image { _ in host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true) }
+        let attachment = XCTAttachment(image: image)
+        attachment.name = name; attachment.lifetime = .keepAlways
+        add(attachment)
+        XCTAssertEqual(image.size, size)
+        window.isHidden = true
+    }
 }

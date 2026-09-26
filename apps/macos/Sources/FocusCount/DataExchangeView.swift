@@ -68,6 +68,7 @@ struct DataExchangeView: View {
                         Text("合并后保留 \(RecordExchange.archivedCount(merged)) 个历史版本，不重复计入统计。")
                         Text("彻底删除标记会同步清除对应记录及其历史版本。修改时间较新的版本作为当前记录；时间相同按固定规则选定，两端结果一致。其他版本保留，可恢复。导入前备份双方数据，可选择是否同步计时。")
                             .font(.caption).foregroundStyle(.secondary)
+                        if incoming.goal != nil { Text("包含目标日期，将按修改时间合并；本机隐藏状态不变。首次导入目标默认隐藏。") .font(.caption).foregroundStyle(.secondary) }
                         if let timer = incoming.timerTransfer {
                             Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
                             Text("导出于 \(timer.capturedAt.formatted(date: .abbreviated, time: .standard)) · \(duration(timer.accumulated)) · \(timer.activity ?? "未填写活动")")

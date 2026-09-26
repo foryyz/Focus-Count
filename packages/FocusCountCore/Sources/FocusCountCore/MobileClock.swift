@@ -38,6 +38,7 @@ public enum RecordExchange {
         if let timer = database.timerTransfer, !timer.isValid {
             throw ExchangeError.invalid("文件中的计时状态无效。")
         }
+        if let goal = database.goal, !goal.isValid { throw ExchangeError.invalid("目标日期数据无效。") }
         var ids = Set<UUID>()
         for index in database.sessions.indices {
             let session = database.sessions[index]

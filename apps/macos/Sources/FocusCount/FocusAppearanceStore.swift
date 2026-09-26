@@ -1,5 +1,9 @@
 import SwiftUI
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 @MainActor final class FocusAppearanceStore: ObservableObject {
     @Published private(set) var settings: FocusAppearance
@@ -67,8 +71,14 @@ import AppKit
         return Color(red: Double(value >> 16 & 255) / 255, green: Double(value >> 8 & 255) / 255, blue: Double(value & 255) / 255)
     }
     func setColor(_ color: Color, key: String) {
+        #if os(macOS)
         guard let rgb = NSColor(color).usingColorSpace(.sRGB) else { return }
         let hex = String(format: "%02X%02X%02X", Int((rgb.redComponent * 255).rounded()), Int((rgb.greenComponent * 255).rounded()), Int((rgb.blueComponent * 255).rounded()))
+        #else
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a) else { return }
+        let hex = String(format: "%02X%02X%02X", Int((r * 255).rounded()), Int((g * 255).rounded()), Int((b * 255).rounded()))
+        #endif
         change { $0.colors[key] = hex }
     }
 }

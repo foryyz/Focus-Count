@@ -8,7 +8,7 @@ func duration(_ seconds: Double) -> String {
 }
 
 struct ContentView: View {
-    @StateObject private var store = StudyStore()
+    @StateObject private var store: StudyStore
     @State private var command = ""
     @State private var showMarkerInput = false
     @State private var subject = ""
@@ -18,7 +18,12 @@ struct ContentView: View {
     @State private var showData = false
     @State private var showToday = false
     @State private var showTarget = false
-    @StateObject private var targetCountdown = TargetCountdownStore()
+    @StateObject private var targetCountdown: TargetCountdownStore
+    init() {
+        let store = StudyStore()
+        _store = StateObject(wrappedValue: store)
+        _targetCountdown = StateObject(wrappedValue: TargetCountdownStore(snapshot: store.database.goal, writer: { store.updateGoal($0) }))
+    }
     @State private var cancellingTimer = false
     @FocusState private var commandFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
@@ -201,6 +206,7 @@ struct ContentView: View {
         .onAppear { commandFocused = showMarkerInput; subject = store.database.activity ?? "" }
         .onChange(of: subject) { value in store.setActivity(value) }
         .onChange(of: store.database.activity) { value in subject = value ?? "" }
+        .onChange(of: store.database.goal) { value in targetCountdown.receive(value) }
         .sheet(isPresented: $showTarget) { TargetCountdownSettings(store: targetCountdown) }
         .sheet(isPresented: $showData, onDismiss: { commandFocused = showMarkerInput }) { DataExchangeView(store: store) }
         .sheet(isPresented: $showHistory, onDismiss: { commandFocused = showMarkerInput }) { HistoryView(store: store) }

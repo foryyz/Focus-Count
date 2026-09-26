@@ -22,6 +22,13 @@ struct FocusShareChart: View {
     let activityCount: Int
     let pie: Bool
     let color: (FocusBreakdown) -> Color
+    private var background: Color {
+        #if os(macOS)
+        Color(nsColor: .windowBackgroundColor)
+        #else
+        Color(uiColor: .systemBackground)
+        #endif
+    }
     private var slices: [FocusShareSlice] { FocusShareSlice.make(items) }
     private var total: Double { items.reduce(0) { $0 + $1.seconds } }
     var body: some View {
@@ -69,7 +76,7 @@ struct FocusShareChart: View {
                     }
                 }
                 if !pie || total == 0 {
-                    if !pie { Circle().fill(Color(nsColor: .windowBackgroundColor)).frame(width: size * 0.70, height: size * 0.70).position(center) }
+                    if !pie { Circle().fill(background).frame(width: size * 0.70, height: size * 0.70).position(center) }
                     VStack(spacing: 6) {
                         Text("\(activityCount) 个活动").font(.caption).foregroundStyle(.secondary)
                         Text(duration(total)).font(.system(size: size > 190 ? 22 : 15, weight: .medium, design: .rounded)).monospacedDigit()

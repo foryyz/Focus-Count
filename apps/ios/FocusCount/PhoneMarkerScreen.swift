@@ -14,6 +14,7 @@ struct PhoneEventHistory: View {
     @State private var style = false
     @State private var expanded = false
     @State private var adding = false
+    @State private var help = false
     @State private var pendingEdit: TimeEvent?
     @State private var pendingDelete: TimeEvent?
     @State private var pendingStyle = false
@@ -32,7 +33,7 @@ struct PhoneEventHistory: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 12) {
                     Picker("页面", selection: $page) {
                         Text("可视化").tag(0); Text("时间轴").tag(1); Text("最近删除").tag(2)
                     }.pickerStyle(.segmented)
@@ -47,13 +48,12 @@ struct PhoneEventHistory: View {
                     }
                     if page == 0 {
                         HStack {
-                            Text("看见重复与变化").font(.headline)
+                            Text("标记分布").font(.subheadline.weight(.medium))
+                            Button { help = true } label: { Image(systemName: "info.circle") }.accessibilityLabel("图表说明")
                             Spacer()
                             Button { expanded = true } label: { Label("全屏", systemImage: "arrow.up.left.and.arrow.down.right") }.font(.subheadline)
                         }
-                        charts().frame(height: 530)
-                        Text("平均每周次数按整个所选周期计算，包含无记录日期；本周按周一至今天计算。颜色与 emoji 保存在本机，暂不随 JSON 交换。")
-                            .font(.caption).foregroundStyle(.secondary)
+                        charts(compact: true).frame(height: 430)
                     } else {
                         if page == 1 && !kind.isEmpty { hourDistribution }
                         TextField("查找标记", text: $search).textFieldStyle(.roundedBorder)
@@ -76,6 +76,12 @@ struct PhoneEventHistory: View {
                 ToolbarItem(placement: .topBarLeading) { Button("完成") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) { Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("添加标记").disabled(store.blocked) }
             }
+            .sheet(isPresented: $help) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("阅读标记图表").font(.headline)
+                    Text("频率总览：长周期自动按周、月汇总，点击气泡查看原始记录。\n\n时间分布：竖屏默认 3 天、横屏默认 7 天，使用箭头或左右滑动切换。拥挤时同类标记合并，点击查看。\n\n平均每周次数包含无记录日期；本周按周一至今天计算。颜色与 emoji 保存在本机。")
+                }.padding(24).presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+            }
             .sheet(isPresented: $adding) { addSheet }
             .sheet(isPresented: $style) { styleSheet }
             .sheet(item: $editing) { PhoneMarkerEditor(store: store, event: $0) }
@@ -93,7 +99,7 @@ struct PhoneEventHistory: View {
                                     Picker("标记", selection: $kind) { Text("全部标记").tag(""); ForEach(names, id: \.self) { Text($0).tag($0) } }.labelsHidden()
                                 }
                             } else { filters }
-                            charts(compact: geometry.size.height < 500).frame(maxHeight: .infinity)
+                            charts(compact: true).frame(maxHeight: .infinity)
                         }.padding(.horizontal).padding(.bottom, 6)
                     }.navigationTitle("标记可视化").navigationBarTitleDisplayMode(.inline)
                         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { expanded = false } } }
@@ -193,7 +199,7 @@ struct PhoneEventHistory: View {
     }
 }
 
-private struct PhoneMarkerCharts: View {
+struct PhoneMarkerCharts: View {
     @Binding var mode: Int
     let events: [TimeEvent]
     let start: Date
@@ -205,11 +211,17 @@ private struct PhoneMarkerCharts: View {
     var compact = false
     var body: some View {
         VStack(spacing: 12) {
-            Picker("显示方式", selection: $mode) { Text("频率总览").tag(0); Text("折线趋势").tag(1); Text("时间分布").tag(2) }.pickerStyle(.segmented)
+            HStack {
+                Picker("显示方式", selection: $mode) { Text("频率总览").tag(0); Text("折线趋势").tag(1); Text("时间分布").tag(2) }.pickerStyle(.menu)
+                Spacer()
+                Text(mode == 2 ? "全天 24 小时" : "点击查看详情").font(.caption).foregroundStyle(.secondary)
+            }
             if mode == 0 {
-                MarkerFrequencyOverview(events: events, start: start, end: isWeek ? Calendar.current.date(byAdding: .day, value: 7, to: start)! : end, isWeek: isWeek, colors: colors, edit: edit, delete: delete, compact: compact)
+                MarkerFrequencyOverview(events: events, start: start, end: isWeek ? Calendar.current.date(byAdding: .day, value: 7, to: start)! : end, isWeek: isWeek, colors: colors, edit: edit, delete: delete, compact: true)
+            } else if mode == 1 {
+                MarkerTimelineChart(events: events, start: start, end: end, colors: colors, isWeek: isWeek, line: true, compact: true)
             } else {
-                MarkerTimelineChart(events: events, start: start, end: end, colors: colors, isWeek: isWeek, line: mode == 1, compact: compact).id(mode)
+                PhoneTimeDistribution(events: events, start: start, end: end, colors: colors)
             }
         }
     }
@@ -240,6 +252,43 @@ private struct PhoneMarkerEditor: View {
                             .disabled(store.blocked || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
+        }
+    }
+}
+
+private struct PhoneTimeDistribution: View {
+    let events: [TimeEvent]
+    let start: Date
+    let end: Date
+    @ObservedObject var colors: MarkerColors
+    @State private var back = 0
+    @State private var selectedSpan = 0
+    private let calendar = Calendar.current
+    private var total: Int { max(1, calendar.dateComponents([.day], from: start, to: end).day ?? 1) }
+    var body: some View {
+        GeometryReader { geometry in
+            let span = min(total, selectedSpan == 0 ? (geometry.size.width > 600 ? 7 : 3) : selectedSpan)
+            let offset = min(back, max(0, total - span))
+            let first = calendar.date(byAdding: .day, value: total - span - offset, to: start)!
+            VStack(spacing: 4) {
+                HStack {
+                    Button { back = min(total - span, offset + span) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.disabled(offset >= total - span).accessibilityLabel("较早日期")
+                    Spacer(minLength: 0)
+                    Text(first.formatted(.dateTime.month().day()) + " — " + calendar.date(byAdding: .day, value: span - 1, to: first)!.formatted(.dateTime.month().day())).font(.caption).monospacedDigit()
+                    Spacer(minLength: 0)
+                    Button { back = max(0, offset - span) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.disabled(offset == 0).accessibilityLabel("较新日期")
+                    Menu {
+                        Picker("显示天数", selection: $selectedSpan) { Text("自动").tag(0); Text("1 天").tag(1); Text("3 天").tag(3); Text("7 天").tag(7) }
+                    } label: { Image(systemName: "calendar").frame(width: 44, height: 44) }.accessibilityLabel("显示天数")
+                }
+                MarkerPointTimeline(events: events, start: first, days: span, offset: 0, visibleDays: Double(span), isWeek: false, colors: colors, minimumHeight: 90) { date, _ in
+                    selectedSpan = 1
+                    back = max(0, calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: end).day! - 1)
+                }.simultaneousGesture(DragGesture(minimumDistance: 35).onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                    back = value.translation.width > 0 ? min(total - span, offset + span) : max(0, offset - span)
+                })
+            }
         }
     }
 }

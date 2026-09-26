@@ -46,6 +46,7 @@ struct ExchangeScreen: View {
                         LabeledContent("合并后历史版本", value: "\(RecordExchange.archivedCount(merged)) 个")
                         Text("相同记录不会重复新增；较旧修改保留在历史版本中。彻底删除过的记录不会重新出现。")
                             .font(.footnote).foregroundStyle(.secondary)
+                        if pending.goal != nil { Text("包含目标日期，将按修改时间合并；本机隐藏状态不变。首次导入目标默认隐藏。") .font(.caption).foregroundStyle(.secondary) }
                         if let timer = pending.timerTransfer {
                             Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
                             Text("导出于 \(timer.capturedAt.formatted(date: .abbreviated, time: .standard)) · \(phoneDuration(timer.accumulated)) · \(timer.activity ?? "未填写活动")")
