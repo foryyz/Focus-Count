@@ -33,6 +33,32 @@ final class TargetCountdownTests: XCTestCase {
         XCTAssertTrue(store.importRecords(Database(goal: goal)))
         XCTAssertEqual(StudyStore(directory: root, observeSystem: false).database.goal, deleted)
     }
+    @MainActor func testDisplayPreferencesPersistWithoutSyncWrites() {
+        let suite = "CountdownFormat-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let goal = GoalSnapshot(name: "Goal", date: Date())
+        var writes = 0
+        let store = TargetCountdownStore(defaults: defaults, snapshot: goal, writer: { _ in writes += 1; return true })
+        store.setHidden(false)
+        store.setTotalHours(true)
+        let loaded = TargetCountdownStore(defaults: defaults, snapshot: goal)
+        XCTAssertEqual(loaded.target?.hidden, false)
+        XCTAssertTrue(loaded.totalHours)
+        store.setHidden(true)
+        XCTAssertEqual(store.target?.hidden, true)
+        XCTAssertEqual(writes, 0)
+    }
+    func testTotalHoursUsesElapsedTimeAcrossDaylightSaving() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 3, day: 8))!
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now)!
+        let target = TargetDate(name: "Goal", emoji: "", date: tomorrow, includesTime: false, hidden: false)
+        XCTAssertEqual(target.remaining(now: now, calendar: calendar), "还有 1 天 0 小时")
+        XCTAssertEqual(target.remaining(now: now, calendar: calendar, totalHours: true), "还有 23 小时")
+        XCTAssertEqual(target.remaining(now: tomorrow.addingTimeInterval(-59), calendar: calendar, totalHours: true), "不足 1 小时")
+    }
     func testCountdownBoundariesAndDateOnlyMidnight() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

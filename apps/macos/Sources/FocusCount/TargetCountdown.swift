@@ -12,9 +12,13 @@ struct TargetDate: Codable, Equatable {
         includesTime ? date : calendar.startOfDay(for: date)
     }
 
-    func remaining(now: Date, calendar: Calendar = .current) -> String {
+    func remaining(now: Date, calendar: Calendar = .current, totalHours: Bool = false) -> String {
         let target = deadline(calendar: calendar)
         if now < target {
+            if totalHours {
+                let hours = Int(target.timeIntervalSince(now) / 3600)
+                return hours == 0 ? "不足 1 小时" : "还有 \(hours) 小时"
+            }
             let parts = calendar.dateComponents([.day, .hour], from: now, to: target)
             let days = max(0, parts.day ?? 0), hours = max(0, parts.hour ?? 0)
             return days == 0 && hours == 0 ? "不足 1 小时" : "还有 \(days) 天 \(hours) 小时"
@@ -28,6 +32,7 @@ struct TargetDate: Codable, Equatable {
 @MainActor final class TargetCountdownStore: ObservableObject {
     @Published private(set) var target: TargetDate?
     @Published private(set) var error: String?
+    @Published private(set) var totalHours: Bool
     private let defaults: UserDefaults
     private let key = "focus-target-date-v1"
     private let hiddenKey = "focus-target-hidden-v1"
@@ -36,6 +41,7 @@ struct TargetDate: Codable, Equatable {
 
     init(defaults: UserDefaults = .standard, snapshot: GoalSnapshot? = nil, writer: ((GoalSnapshot) -> Bool)? = nil) {
         self.defaults = defaults; self.writer = writer
+        self.totalHours = defaults.bool(forKey: "focus-target-total-hours-v1")
         let old = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(TargetDate.self, from: $0) }
         if let snapshot { receive(snapshot) }
         else if let old {
@@ -61,10 +67,15 @@ struct TargetDate: Codable, Equatable {
         snapshot = next; target = value; error = nil
         return true
     }
-    func hide() {
+    func setTotalHours(_ value: Bool) {
+        totalHours = value
+        defaults.set(value, forKey: "focus-target-total-hours-v1")
+    }
+    func hide() { setHidden(true) }
+    func setHidden(_ hidden: Bool) {
         guard var value = target else { return }
-        value.hidden = true
-        defaults.set(true, forKey: hiddenKey)
+        value.hidden = hidden
+        defaults.set(hidden, forKey: hiddenKey)
         if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: key) }
         target = value
     }
@@ -98,12 +109,14 @@ struct TargetCountdownRow: View {
                             HStack(spacing: 8) {
                                 if !target.emoji.isEmpty { Text(target.emoji) }
                                 Text(target.name).lineLimit(1).truncationMode(.tail)
-                                Text(target.remaining(now: context.date)).fontWeight(.medium).fixedSize()
+                                Text(target.remaining(now: context.date, totalHours: store.totalHours)).fontWeight(.medium).fixedSize()
                             }
                         }.buttonStyle(.plain).help("编辑目标日期")
+                        #if os(iOS)
                         Button { store.hide() } label: {
                             Image(systemName: "eye.slash").frame(width: hideButtonSize, height: hideButtonSize)
                         }.buttonStyle(.plain).help("隐藏目标与倒数").accessibilityLabel("隐藏目标与倒数")
+                        #endif
                     }.font(.system(size: 13)).foregroundStyle(.secondary).frame(maxWidth: 520)
                 }
             }
@@ -133,8 +146,25 @@ struct TargetCountdownSettings: View {
             HStack {
                 Label("目标日期", systemImage: "calendar").font(.title3.weight(.semibold))
                 Spacer()
+                if let target = store.target {
+                    Button {
+                        let hidden = !target.hidden
+                        store.setHidden(hidden)
+                        showOnHome = !hidden
+                        revealed = false
+                        if !hidden { load() }
+                    } label: {
+                        Image(systemName: target.hidden ? "eye.slash" : "eye").frame(width: 28, height: 28)
+                    }.buttonStyle(.plain)
+                        .help(target.hidden ? "显示倒数" : "隐藏倒数")
+                        .accessibilityLabel(target.hidden ? "显示倒数" : "隐藏倒数")
+                }
                 Button("关闭") { dismiss() }.keyboardShortcut(.cancelAction)
             }
+            Picker("倒数格式", selection: Binding(get: { store.totalHours }, set: { store.setTotalHours($0) })) {
+                Text("天 + 小时").tag(false)
+                Text("总小时").tag(true)
+            }.pickerStyle(.segmented)
             if let error = store.error { Text(error).foregroundStyle(.red).font(.caption) }
             if concealed {
                 Label("目标已隐藏", systemImage: "eye.slash").foregroundStyle(.secondary)
@@ -151,7 +181,7 @@ struct TargetCountdownSettings: View {
                     Text("倒数至所选日期的本地时间 00:00。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                Toggle("在首页显示目标与倒数", isOn: $showOnHome)
+                if store.target == nil { Toggle("在首页显示目标与倒数", isOn: $showOnHome) }
                 Text("目标随 JSON 导入导出同步；隐藏状态仅保存在本机。")
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {

@@ -73,7 +73,6 @@ struct ContentView: View {
                 Group {
                     if phase == 0 {
                         VStack(spacing: min(26, max(18, geometry.size.height * 0.04))) {
-                            TargetCountdownRow(store: targetCountdown) { showTarget = true }
                             TodayFocusHero(store: store, fontSize: min(120, max(78, min(geometry.size.width * 0.11, geometry.size.height * 0.20))) * 1.5)
                                 .foregroundStyle(ink)
                                 .padding(.bottom, 10)
@@ -154,7 +153,7 @@ struct ContentView: View {
                 if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(.secondary).padding(.top, 10) }
                 if let error = store.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(.top, 8) }
             }
-            .padding(.horizontal, wide ? 64 : 32).padding(.top, 22).padding(.bottom, 24)
+            .padding(.horizontal, wide ? 64 : 32).padding(.top, 22).padding(.bottom, phase == 0 ? 60 : 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(backdrop.ignoresSafeArea())
             .background(FocusWindowReader(controller: focusWindow))
@@ -170,6 +169,14 @@ struct ContentView: View {
                     }.buttonStyle(.plain).help("今日概览").accessibilityLabel("今日标记与专注时长")
                         .popover(isPresented: $showToday, arrowEdge: .bottom) { TodaySummaryView(store: store) }
                         .padding(.leading, wide ? 64 : 32).padding(.bottom, 18)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if phase == 0 {
+                    TargetCountdownRow(store: targetCountdown) { showTarget = true }
+                        .frame(maxWidth: max(240, geometry.size.width - 180))
+                        .frame(height: 34)
+                        .padding(.bottom, 18)
                 }
             }
             .onContinuousHover { hover in
