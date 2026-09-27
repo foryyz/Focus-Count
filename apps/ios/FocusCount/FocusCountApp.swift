@@ -80,8 +80,10 @@ struct TimerScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if !immersive {
-                        Text("🧠").font(.system(size: 20))
-                            .lineLimit(1).minimumScaleFactor(0.8).foregroundStyle(.secondary)
+                        HStack(spacing: 6) {
+                            Text("🧠").font(.system(size: 20))
+                            Text("foryyz").font(.system(size: 14, weight: .medium, design: .rounded))
+                        }.lineLimit(1).foregroundStyle(.secondary)
                     }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -167,7 +169,8 @@ struct TimerScreen: View {
                 VStack(spacing: 12) {
                     (Text("Today’s ").foregroundColor(.secondary)
                      + Text("focus").fontWeight(.semibold).foregroundColor(ink))
-                        .font(.system(size: 21.84, weight: .regular, design: .rounded))
+                        .font(.system(size: 32.76, weight: .regular, design: .rounded))
+                        .lineLimit(1).minimumScaleFactor(0.8)
                     (Text("\(minutes / 60)H").font(.system(size: 64, weight: .medium, design: .rounded)).foregroundColor(ink)
                      + Text("  \(minutes % 60)m").font(.system(size: 30, weight: .regular, design: .rounded)).foregroundColor(.secondary))
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
