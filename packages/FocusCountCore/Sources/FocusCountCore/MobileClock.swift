@@ -34,6 +34,8 @@ public struct MobileClock: Codable {
 public enum RecordExchange {
     public static func decode(_ data: Data) throws -> Database {
         var database = try JSONDecoder().decode(Database.self, from: data)
+        if let settings = database.sharedSettings, !SharedPreferences.validate(settings) { throw ExchangeError.invalid("同步设置无效。") }
+        if let sounds = database.sounds, !sounds.allSatisfy(\.isValid) || Set(sounds.map(\.id)).count != sounds.count { throw ExchangeError.invalid("同步提示音无效。") }
         guard [1, 2, 3, 4, 5].contains(database.version) else { throw ExchangeError.invalid("不支持此数据版本。") }
         if let timer = database.timerTransfer, !timer.isValid {
             throw ExchangeError.invalid("文件中的计时状态无效。")

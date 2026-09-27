@@ -1,4 +1,5 @@
 import SwiftUI
+import FocusCountCore
 #if os(macOS)
 import AppKit
 #else
@@ -8,6 +9,7 @@ import UIKit
 @MainActor final class FocusAppearanceStore: ObservableObject {
     @Published private(set) var settings: FocusAppearance
     @Published var error: String?
+    private var observer: NSObjectProtocol?
     private let defaults: UserDefaults
     private let key = "focus-analysis-appearance-v1"
     private var readable = true
@@ -17,9 +19,18 @@ import UIKit
             do { settings = try JSONDecoder().decode(FocusAppearance.self, from: data) }
             catch { settings = FocusAppearance(); readable = false; self.error = "分类设置无法读取，已保留原设置，暂停修改。" }
         } else { settings = FocusAppearance() }
+        SharedPreferences.capture(defaults)
+        observer = NotificationCenter.default.addObserver(forName: SharedPreferences.changed, object: defaults, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let data = self.defaults.data(forKey: self.key), let value = try? JSONDecoder().decode(FocusAppearance.self, from: data) else { return }
+                self.settings = value; self.readable = true
+            }
+        }
     }
     private func change(_ edit: (inout FocusAppearance) -> Void) {
         guard readable else { return }
+        SharedPreferences.capture(defaults)
+        defer { SharedPreferences.capture(defaults) }
         var next = settings; edit(&next)
         do {
             let data = try JSONEncoder().encode(next)

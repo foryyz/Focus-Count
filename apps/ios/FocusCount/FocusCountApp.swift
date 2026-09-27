@@ -80,7 +80,7 @@ struct TimerScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if !immersive {
-                        Text("🧠 FOCUS-COUNT").font(.system(size: 11, weight: .semibold)).tracking(1)
+                        Text("🧠").font(.system(size: 20))
                             .lineLimit(1).minimumScaleFactor(0.8).foregroundStyle(.secondary)
                     }
                 }
@@ -165,12 +165,12 @@ struct TimerScreen: View {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 let minutes = Int(store.today(at: context.date).seconds) / 60
                 VStack(spacing: 12) {
-                    (
-                        Text("Today’s ").font(.system(size: 21.84, weight: .regular, design: .rounded)).foregroundColor(.secondary)
-                        + Text("focus  ").font(.system(size: 21.84, weight: .semibold, design: .rounded)).foregroundColor(ink)
-                        + Text("\(minutes / 60)H").font(.system(size: 48.36, weight: .medium, design: .rounded)).foregroundColor(ink)
-                        + Text("  \(minutes % 60)m").font(.system(size: 21.84, weight: .regular, design: .rounded)).foregroundColor(.secondary)
-                    ).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                    (Text("Today’s ").foregroundColor(.secondary)
+                     + Text("focus").fontWeight(.semibold).foregroundColor(ink))
+                        .font(.system(size: 21.84, weight: .regular, design: .rounded))
+                    (Text("\(minutes / 60)H").font(.system(size: 64, weight: .medium, design: .rounded)).foregroundColor(ink)
+                     + Text("  \(minutes % 60)m").font(.system(size: 30, weight: .regular, design: .rounded)).foregroundColor(.secondary))
+                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
                         .accessibilityLabel("今日已保存专注时长，\(minutes / 60) 小时 \(minutes % 60) 分钟")
                     Text(Self.greetings[encouragement].1).font(.footnote).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

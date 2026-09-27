@@ -21,6 +21,8 @@ struct PhoneState: Codable {
     @Published private(set) var blocked = false
     private var ticker: Timer?
     private let live: Bool
+    private let preferences: UserDefaults
+    private let soundLibrary: PhoneSounds
     private var ticks = 0
     var modeSettings: FocusRoutineSettings { state.modeSettings ?? FocusRoutineSettings() }
     var isRunning: Bool { state.routine.map { !$0.suspended && $0.phase != .ready } ?? state.clock.isRunning }
@@ -31,6 +33,8 @@ struct PhoneState: Codable {
 
     init(directory: URL? = nil) {
         live = directory == nil
+        preferences = directory == nil ? .standard : UserDefaults(suiteName: "FocusCount-test-" + Data(directory!.path.utf8).base64EncodedString())!
+        soundLibrary = directory.map { PhoneSounds(directory: $0.appendingPathComponent("sounds")) } ?? PhoneSounds.shared
         self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("FocusCount", isDirectory: true)
         if directory == nil {
             // Make an offline export destination visible in the Files app.
@@ -55,6 +59,8 @@ struct PhoneState: Codable {
                 if state.clock.startedAt != nil && state.timerID == nil { _ = commit { $0.timerID = UUID() } }
             }
         } catch { blocked = true; self.error = "无法读取本地数据，已停止写入保护原文件。\n\(error.localizedDescription)" }
+        if preferences.data(forKey: "focus-modes-v1") == nil, let settings = state.modeSettings, let data = try? JSONEncoder().encode(settings) { preferences.set(data, forKey: "focus-modes-v1") }
+        SharedPreferences.capture(preferences)
         if live {
             tick()
             refreshNotifications()
@@ -88,7 +94,7 @@ struct PhoneState: Codable {
         PhoneNotifications.shared.replace(state.routine) { [weak self] issue in self?.notificationIssue = issue }
     }
     @discardableResult func setMode(_ settings: FocusRoutineSettings) -> Bool {
-        guard PhoneRoutine.supports(settings), state.clock.pendingEnd == nil else { return false }
+        guard settings.isValid, state.clock.pendingEnd == nil else { return false }
         let previousMode = modeSettings.mode
         let success = commit { next in
             if previousMode != settings.mode, next.clock.startedAt != nil {
@@ -103,7 +109,12 @@ struct PhoneState: Codable {
             }
             next.modeSettings = settings
         }
-        if success { refreshNotifications() }
+        if success {
+            SharedPreferences.capture(preferences)
+            if let data = try? JSONEncoder().encode(settings) { preferences.set(data, forKey: "focus-modes-v1") }
+            SharedPreferences.capture(preferences)
+            refreshNotifications()
+        }
         return success
     }
     func skipRest() {
@@ -249,19 +260,37 @@ struct PhoneState: Codable {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let identifier = UUID().uuidString
             try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("before-import-\(identifier).json"), options: .atomic)
+            try export().write(to: directory.appendingPathComponent("before-import-complete-\(identifier).json"), options: .atomic)
             try RecordExchange.encode(database).write(to: directory.appendingPathComponent("incoming-\(identifier).json"), options: .atomic)
-            return commit {
+            if let sounds = incoming.sounds { try soundLibrary.importSounds(sounds) }
+            let success = commit {
                 $0.goal = GoalSnapshot.merge($0.goal, incoming.goal)
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(incoming.purgedIDs ?? [])
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: incoming.sessions, purgedIDs: $0.purgedIDs ?? [])
                 $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: incoming.events ?? [], purgedIDs: $0.purgedIDs ?? [])
                 if syncTimer, let timer = incoming.timerTransfer {
                     $0.routine = nil
+                    if var routine = incoming.focusRoutine {
+                        let focus = routine.advance(max(0, Date().timeIntervalSince(timer.capturedAt)))
+                        $0.routine = PhoneRoutine(routine: routine)
+                        $0.clock = MobileClock(); $0.clock.startedAt = timer.startedAt
+                        $0.clock.accumulated = timer.accumulated + focus
+                        $0.clock.runningSince = !routine.suspended && routine.phase == .focus ? Date() : nil
+                        $0.clock.pendingEnd = timer.pendingEnd
+                    }
                     $0.timerID = timer.timerID ?? (timer.startedAt == nil ? nil : UUID())
-                    $0.clock = timer.mobileClock()
+                    if $0.routine == nil { $0.clock = timer.mobileClock() }
                     $0.activity = timer.activity
                 }
             }
+            if success {
+                if let settings = incoming.sharedSettings {
+                    SharedPreferences.apply(settings, defaults: preferences)
+                    if let data = preferences.data(forKey: "focus-modes-v1"), let value = try? JSONDecoder().decode(FocusRoutineSettings.self, from: data) { _ = commit { $0.modeSettings = value } }
+                }
+                refreshNotifications()
+            }
+            return success
         } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
     }
     func restoreVersion(_ snapshot: SessionSnapshot) {
@@ -277,7 +306,11 @@ struct PhoneState: Codable {
         let draft = TimerState(startedAt: state.clock.startedAt, accumulated: state.clock.seconds(at: capturedAt))
         let transfer = TimerTransfer(capturedAt: capturedAt, startedAt: draft.startedAt, accumulated: draft.accumulated,
             isRunning: state.clock.isRunning, pendingEnd: state.clock.pendingEnd, activity: state.activity, timerID: state.timerID)
-        return try RecordExchange.encode(Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd, timerTransfer: transfer, activity: state.activity, goal: state.goal))
+        var snapshot = Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd, timerTransfer: transfer, activity: state.activity, goal: state.goal)
+        snapshot.sharedSettings = SharedPreferences.capture(preferences)
+        snapshot.sounds = try soundLibrary.exportSounds()
+        snapshot.focusRoutine = state.routine?.portable
+        return try RecordExchange.encode(snapshot)
     }
 }
 
@@ -296,11 +329,11 @@ enum PhoneImportFile {
         var result: Result<Data, Error>?
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinationError) { readableURL in
             result = Result {
-                let limit = 20_000_000
+                let limit = 512_000_000
                 let size = try readableURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                guard size <= limit else { throw RecordExchange.ExchangeError.invalid("文件超过 20 MB。") }
+                guard size <= limit else { throw RecordExchange.ExchangeError.invalid("同步文件超过 512 MB，请减少自定义音频后重试。") }
                 let data = try Data(contentsOf: readableURL)
-                guard data.count <= limit else { throw RecordExchange.ExchangeError.invalid("文件超过 20 MB。") }
+                guard data.count <= limit else { throw RecordExchange.ExchangeError.invalid("同步文件超过 512 MB，请减少自定义音频后重试。") }
                 return data
             }
         }

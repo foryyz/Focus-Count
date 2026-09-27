@@ -68,6 +68,8 @@ public struct TimerState: Codable {
 }
 
 public struct Database: Codable {
+    public var sharedSettings: SharedSettings?
+    public var sounds: [SharedSound]?
     public var focusRoutine: FocusRoutine?
     public var goal: GoalSnapshot?
     public var version = 5

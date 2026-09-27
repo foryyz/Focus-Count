@@ -33,6 +33,7 @@ struct TargetDate: Codable, Equatable {
     @Published private(set) var target: TargetDate?
     @Published private(set) var error: String?
     @Published private(set) var totalHours: Bool
+    private var observer: NSObjectProtocol?
     private let defaults: UserDefaults
     private let key = "focus-target-date-v1"
     private let hiddenKey = "focus-target-hidden-v1"
@@ -42,6 +43,14 @@ struct TargetDate: Codable, Equatable {
     init(defaults: UserDefaults = .standard, snapshot: GoalSnapshot? = nil, writer: ((GoalSnapshot) -> Bool)? = nil) {
         self.defaults = defaults; self.writer = writer
         self.totalHours = defaults.bool(forKey: "focus-target-total-hours-v1")
+        SharedPreferences.capture(defaults)
+        observer = NotificationCenter.default.addObserver(forName: SharedPreferences.changed, object: defaults, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.totalHours = self.defaults.bool(forKey: "focus-target-total-hours-v1")
+                self.receive(self.snapshot)
+            }
+        }
         let old = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(TargetDate.self, from: $0) }
         if let snapshot { receive(snapshot) }
         else if let old {
@@ -58,6 +67,8 @@ struct TargetDate: Codable, Equatable {
         target = TargetDate(name: value.name, emoji: value.emoji, date: value.date, includesTime: value.includesTime, hidden: hidden)
     }
     @discardableResult func save(_ value: TargetDate) -> Bool {
+        SharedPreferences.capture(defaults)
+        defer { SharedPreferences.capture(defaults) }
         let now = max(Date(), (snapshot?.updatedAt ?? .distantPast).addingTimeInterval(0.001))
         let unchanged = snapshot.map { !$0.deleted && $0.name == value.name && $0.emoji == value.emoji && $0.date == value.date && $0.includesTime == value.includesTime } ?? false
         let next = unchanged ? snapshot! : GoalSnapshot(name: value.name, emoji: value.emoji, date: value.date, includesTime: value.includesTime, updatedAt: now)
@@ -68,11 +79,15 @@ struct TargetDate: Codable, Equatable {
         return true
     }
     func setTotalHours(_ value: Bool) {
+        SharedPreferences.capture(defaults)
+        defer { SharedPreferences.capture(defaults) }
         totalHours = value
         defaults.set(value, forKey: "focus-target-total-hours-v1")
     }
     func hide() { setHidden(true) }
     func setHidden(_ hidden: Bool) {
+        SharedPreferences.capture(defaults)
+        defer { SharedPreferences.capture(defaults) }
         guard var value = target else { return }
         value.hidden = hidden
         defaults.set(hidden, forKey: hiddenKey)

@@ -75,6 +75,36 @@ final class PhoneStoreTests: XCTestCase {
         try Data("invalid".utf8).write(to: invalid)
         XCTAssertThrowsError(try sounds.add(invalid))
     }
+    @MainActor func testCompleteSettingsSoundAndRestStateExchange() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        var incoming = Database()
+        var shared = SharedSettings()
+        shared.entries["emoji/冥想"] = PreferenceValue(value: "🧘", modified: Date())
+        shared.entries["markerColor/冥想"] = PreferenceValue(value: "AABBCC", modified: Date())
+        incoming.sharedSettings = shared
+        var settings = FocusRoutineSettings(); settings.mode = .microBreak
+        var routine = FocusRoutine(settings: settings)
+        routine.phase = .microRest; routine.remaining = 8; routine.roundRemaining = 400; routine.suspended = true
+        incoming.focusRoutine = routine
+        incoming.timerTransfer = TimerTransfer(capturedAt: Date(), startedAt: Date().addingTimeInterval(-120), accumulated: 100, isRunning: false, pendingEnd: nil, activity: "阅读", timerID: UUID())
+        let asset = try XCTUnwrap(PhoneSounds(directory: root).url("Glass"))
+        incoming.sounds = [SharedSound(id: UUID().uuidString, name: "我的铃声", fileExtension: "wav", data: try Data(contentsOf: asset), modified: Date())]
+        XCTAssertTrue(store.importRecords(incoming, syncTimer: true))
+        XCTAssertEqual(store.state.routine?.phase, .microRest)
+        XCTAssertEqual(store.state.routine?.remaining, 8)
+        XCTAssertEqual(store.state.clock.seconds(), 100)
+        let output = try RecordExchange.decode(store.export())
+        XCTAssertEqual(output.sharedSettings?.entries["emoji/冥想"]?.value, "🧘")
+        XCTAssertEqual(output.sharedSettings?.entries["markerColor/冥想"]?.value, "AABBCC")
+        XCTAssertEqual(output.sounds?.first?.data, incoming.sounds?.first?.data)
+        XCTAssertEqual(output.sounds?.first?.name, "我的铃声")
+        XCTAssertEqual(output.focusRoutine?.phase, .microRest)
+        let peer = PhoneStore(directory: root.appendingPathComponent("peer"))
+        XCTAssertTrue(peer.importRecords(output, syncTimer: true))
+        XCTAssertEqual(peer.state.routine?.phase, .microRest)
+    }
     @MainActor func testGoalExchangeAndDeletionSurviveRestart() throws {
         let root = directory()
         defer { try? FileManager.default.removeItem(at: root) }

@@ -12,6 +12,7 @@ import AppKit
     private var routineTick: Double?
     private var soundsEnabled = false
     private var modeDefaults: UserDefaults?
+    private let soundLibrary: SoundLibrary
     private var playingSound: NSSound?
     var isRunning: Bool {
         if let routine = database.focusRoutine { return !routine.suspended && routine.phase != .ready }
@@ -46,8 +47,10 @@ import AppKit
                 }
             }
         }) else { return false }
+        if let modeDefaults { SharedPreferences.capture(modeDefaults) }
         modeSettings = settings
         if let data = try? JSONEncoder().encode(settings) { modeDefaults?.set(data, forKey: "focus-modes-v1") }
+        if let modeDefaults { SharedPreferences.capture(modeDefaults) }
         routineTick = StudyClock.now
         return true
     }
@@ -90,9 +93,11 @@ import AppKit
     var subjects: [String] { Array(Set(sessions.map(\.subject))).sorted() }
 
     init(directory: URL? = nil, observeSystem: Bool = true) {
+        soundLibrary = directory.map { SoundLibrary(directory: $0.appendingPathComponent("sounds")) } ?? SoundLibrary.shared
         customDirectory = directory
         soundsEnabled = observeSystem
-        modeDefaults = directory == nil ? .standard : nil
+        modeDefaults = directory == nil ? .standard : UserDefaults(suiteName: "FocusCount-test-" + Data(directory!.path.utf8).base64EncodedString())
+        if let modeDefaults { SharedPreferences.capture(modeDefaults) }
         if let data = modeDefaults?.data(forKey: "focus-modes-v1"), let settings = try? JSONDecoder().decode(FocusRoutineSettings.self, from: data), settings.isValid { modeSettings = settings }
         do {
             if customDirectory == nil, let executable = Bundle.main.executableURL {
@@ -319,26 +324,42 @@ import AppKit
             try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
             try export().write(to: backupFolder.appendingPathComponent("before-import.json"), options: .atomic)
             try RecordExchange.encode(incoming).write(to: backupFolder.appendingPathComponent("incoming.json"), options: .atomic)
-            return commit {
+            if let sounds = validated.sounds { try soundLibrary.importSounds(sounds) }
+            let success = commit {
                 $0.goal = GoalSnapshot.merge($0.goal, validated.goal)
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(validated.purgedIDs ?? [])
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: validated.sessions, purgedIDs: $0.purgedIDs ?? [])
                 $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: validated.events ?? [], purgedIDs: $0.purgedIDs ?? [])
                 if syncTimer, let timer = validated.timerTransfer {
-                    $0.focusRoutine = nil
+                    $0.focusRoutine = validated.focusRoutine
+                    if var routine = $0.focusRoutine {
+                        let focus = routine.advance(max(0, Date().timeIntervalSince(timer.capturedAt)))
+                        $0.focusRoutine = routine
+                        $0.draft = TimerState(startedAt: timer.startedAt, accumulated: timer.accumulated + focus)
+                        if !routine.suspended && routine.phase == .focus { $0.draft.toggle() }
+                    }
                     $0.timerID = timer.timerID ?? (timer.startedAt == nil ? nil : UUID())
-                    $0.draft = timer.timerState()
+                    if $0.focusRoutine == nil { $0.draft = timer.timerState() }
                     $0.pendingEnd = timer.pendingEnd
                     $0.activity = timer.activity
                 }
             }
+            if success {
+                if let settings = validated.sharedSettings, let defaults = modeDefaults {
+                    SharedPreferences.apply(settings, defaults: defaults)
+                    if let data = defaults.data(forKey: "focus-modes-v1"), let value = try? JSONDecoder().decode(FocusRoutineSettings.self, from: data) { modeSettings = value }
+                }
+                routineTick = StudyClock.now
+            }
+            return success
         } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
     }
     func export() throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("数据读取失败，无法导出。") }
         advanceRoutine()
         var snapshot = database
-        snapshot.focusRoutine = nil
+        snapshot.sharedSettings = modeDefaults.map { SharedPreferences.capture($0) }
+        snapshot.sounds = try soundLibrary.exportSounds()
         let capturedAt = Date()
         snapshot.draft = database.draft.checkpoint()
         snapshot.timerTransfer = TimerTransfer(capturedAt: capturedAt, startedAt: snapshot.draft.startedAt,

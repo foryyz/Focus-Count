@@ -1,3 +1,4 @@
+import FocusCountCore
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
@@ -6,6 +7,7 @@ struct FocusSound: Codable, Identifiable, Equatable {
     let id: String
     var name: String
     var file: String?
+    var modified: Date?
 }
 
 @MainActor final class SoundLibrary: ObservableObject {
@@ -56,10 +58,32 @@ struct FocusSound: Codable, Identifiable, Equatable {
         do { try save(custom + [FocusSound(id: id, name: url.deletingPathExtension().lastPathComponent, file: file)]) }
         catch { try? FileManager.default.removeItem(at: destination); throw error }
     }
+    func exportSounds() throws -> [SharedSound] {
+        guard let folder = root else { throw CocoaError(.fileNoSuchFile) }
+        return try custom.map { item in
+            guard let file = item.file, file == URL(fileURLWithPath: file).lastPathComponent else { throw CocoaError(.fileReadCorruptFile) }
+            let url = folder.appendingPathComponent(file)
+            return SharedSound(id: item.id, name: item.name, fileExtension: url.pathExtension, data: try Data(contentsOf: url), modified: item.modified ?? .distantPast)
+        }
+    }
+    func importSounds(_ incoming: [SharedSound]) throws {
+        guard let folder = root else { throw CocoaError(.fileNoSuchFile) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var next = custom
+        for sound in incoming {
+            guard sound.isValid else { throw CocoaError(.fileReadCorruptFile) }
+            if let old = next.first(where: { $0.id == sound.id }), (old.modified ?? .distantPast) > sound.modified || ((old.modified ?? .distantPast) == sound.modified && old.name > sound.name) { continue }
+            let file = sound.id + "." + sound.fileExtension
+            try sound.data.write(to: folder.appendingPathComponent(file), options: .atomic)
+            let entry = FocusSound(id: sound.id, name: sound.name, file: file, modified: sound.modified)
+            next.removeAll { $0.id == sound.id }; next.append(entry)
+        }
+        try save(next)
+    }
     func rename(_ id: String, to name: String) {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, let index = custom.firstIndex(where: { $0.id == id }) else { return }
-        var items = custom; items[index].name = String(name.prefix(80))
+        var items = custom; items[index].name = String(name.prefix(80)); items[index].modified = Date()
         do { try save(items) } catch { self.error = "保存名称失败：\(error.localizedDescription)" }
     }
 }
@@ -85,7 +109,7 @@ struct SoundSettingsView: View {
                         Divider()
                         HStack { Text("我的提示音").font(.headline); Spacer(); Button("导入音频…") { library.importSound() } }
                         ForEach(library.custom) { sound in SoundNameRow(sound: sound, store: store) }
-                        Text("点击自定义名称编辑，回车或点击保存。音频会复制到本机数据目录，不依赖原文件；暂不随记录导出同步。")
+                        Text("点击自定义名称编辑，回车或点击保存。音频会复制到本机数据目录，不依赖原文件；随新版同步文件一同导出。")
                             .font(.caption).foregroundStyle(.secondary)
                         if let error = library.error { Text(error).font(.caption).foregroundStyle(.red) }
                     }.padding(20)

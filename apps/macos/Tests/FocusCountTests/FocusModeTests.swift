@@ -3,6 +3,22 @@ import FocusCountCore
 @testable import FocusCount
 
 @MainActor final class FocusModeTests: XCTestCase {
+    func testSharedSettingsAndSoundsTravelWithExport() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = StudyStore(directory: root, observeSystem: false)
+        var incoming = Database(), settings = SharedSettings()
+        settings.entries["emoji/sex"] = PreferenceValue(value: "❤️", modified: Date())
+        settings.entries["markerColor/sex"] = PreferenceValue(value: "CC5C79", modified: Date())
+        incoming.sharedSettings = settings
+        incoming.sounds = [SharedSound(id: UUID().uuidString, name: "提醒", fileExtension: "aiff", data: try Data(contentsOf: URL(fileURLWithPath: "/System/Library/Sounds/Glass.aiff")), modified: Date())]
+        XCTAssertTrue(store.importRecords(incoming))
+        let output = try RecordExchange.decode(store.export())
+        XCTAssertEqual(output.sharedSettings?.entries["emoji/sex"]?.value, "❤️")
+        XCTAssertEqual(output.sounds?.first?.data, incoming.sounds?.first?.data)
+        XCTAssertTrue(store.importRecords(output))
+        XCTAssertEqual(try RecordExchange.decode(store.export()).sounds?.count, 1)
+    }
     func testRestAccountingRestartAndDisable() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -28,7 +44,7 @@ import FocusCountCore
         XCTAssertTrue(store.database.draft.isRunning)
         XCTAssertEqual(store.database.draft.seconds(), 60, accuracy: 0.1)
     }
-    func testCancelAndTimerTransferClearRoutine() throws {
+    func testCancelAndTimerTransferPreservesRoutine() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let store = StudyStore(directory: root, observeSystem: false)
@@ -36,9 +52,9 @@ import FocusCountCore
         XCTAssertTrue(store.setMode(settings)); store.toggle()
         XCTAssertNotNil(store.database.focusRoutine)
         let snapshot = try RecordExchange.decode(store.export())
-        XCTAssertNil(snapshot.focusRoutine)
+        XCTAssertNotNil(snapshot.focusRoutine)
         XCTAssertTrue(store.importRecords(snapshot, syncTimer: true))
-        XCTAssertNil(store.database.focusRoutine)
+        XCTAssertNotNil(store.database.focusRoutine)
         XCTAssertTrue(store.cancelTimer())
         XCTAssertNil(store.database.focusRoutine)
         XCTAssertNil(store.database.draft.startedAt)

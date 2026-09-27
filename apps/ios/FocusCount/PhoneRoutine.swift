@@ -11,14 +11,23 @@ struct PhoneRoutine: Codable {
     var anchor: Date
     var suspended = false
     init(settings: FocusRoutineSettings, at date: Date = Date()) {
-        self.settings = settings; anchor = date
-        var routine = FocusRoutine(settings: settings), result: [Segment] = []
+        self.init(routine: FocusRoutine(settings: settings), at: date)
+    }
+    init(routine: FocusRoutine, at date: Date = Date()) {
+        settings = routine.settings; anchor = date; suspended = routine.suspended
+        var routine = routine, result: [Segment] = []
+        routine.suspended = false
         while routine.phase != .ready {
             let seconds = routine.phase == .longRest ? routine.remaining : min(routine.remaining, routine.roundRemaining)
-            result.append(Segment(phase: routine.phase, seconds: seconds))
-            routine.advance(seconds)
+            if seconds > 0 { result.append(Segment(phase: routine.phase, seconds: seconds)); routine.advance(seconds) }
+            else { routine.advance(0.000001) }
         }
         segments = result
+    }
+    var portable: FocusRoutine {
+        var result = FocusRoutine(settings: settings)
+        result.phase = phase; result.remaining = remaining; result.roundRemaining = roundRemaining; result.suspended = suspended
+        return result
     }
     var total: Double { segments.reduce(0) { $0 + $1.seconds } }
     var phase: FocusRoutine.Phase {
@@ -33,7 +42,7 @@ struct PhoneRoutine: Codable {
     }
     var roundRemaining: Double { max(0, total - Double(settings.restMinutes * 60) - elapsed) }
     var isValid: Bool {
-        settings.isValid && elapsed.isFinite && elapsed >= 0 && elapsed <= total && !segments.isEmpty && segments.count <= 64 &&
+        settings.isValid && elapsed.isFinite && elapsed >= 0 && elapsed <= total && segments.count <= 800 &&
         segments.allSatisfy { $0.seconds.isFinite && $0.seconds > 0 && $0.phase != .ready } && total <= Double((settings.roundMinutes + settings.restMinutes) * 60) + 0.001
     }
     static func supports(_ settings: FocusRoutineSettings) -> Bool {
@@ -89,7 +98,9 @@ struct PhoneRoutine: Codable {
                 let allowed = try await center.requestAuthorization(options: [.alert, .sound])
                 guard generation == token else { return }
                 guard allowed else { report("通知未开启：后台仍会计时，但无法提醒。请在系统设置中允许 FocusCount 通知。"); return }
-                for (index, reminder) in plan.reminders(at: Date()).enumerated() {
+                let reminders = plan.reminders(at: Date())
+                if reminders.count > 64 { report("此轮提醒较多，后台先安排前 64 条；再次打开应用会补齐后续提醒。") }
+                for (index, reminder) in reminders.prefix(64).enumerated() {
                     guard generation == token else { return }
                     let content = UNMutableNotificationContent()
                     let rest = reminder.phase == .microRest || reminder.phase == .longRest

@@ -68,7 +68,9 @@ struct DataExchangeView: View {
                         Text("合并后保留 \(RecordExchange.archivedCount(merged)) 个历史版本，不重复计入统计。")
                         Text("彻底删除标记会同步清除对应记录及其历史版本。修改时间较新的版本作为当前记录；时间相同按固定规则选定，两端结果一致。其他版本保留，可恢复。导入前备份双方数据，可选择是否同步计时。")
                             .font(.caption).foregroundStyle(.secondary)
-                        if incoming.goal != nil { Text("包含目标日期，将按修改时间合并；本机隐藏状态不变。首次导入目标默认隐藏。") .font(.caption).foregroundStyle(.secondary) }
+                        if incoming.sharedSettings != nil { Text("包含 emoji、颜色、分类、目标显示设置和模式参数，按条目合并较新的修改。") .font(.caption).foregroundStyle(.secondary) }
+                        if let sounds = incoming.sounds, !sounds.isEmpty { Text("包含 \(sounds.count) 个自定义提示音，音频与名称一起导入。") .font(.caption).foregroundStyle(.secondary) }
+                        if incoming.goal != nil { Text("包含目标日期，将按修改时间合并；新版文件也同步目标隐藏状态与显示方式。") .font(.caption).foregroundStyle(.secondary) }
                         if let timer = incoming.timerTransfer {
                             Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
                             Text("导出于 \(timer.capturedAt.formatted(date: .abbreviated, time: .standard)) · \(duration(timer.accumulated)) · \(timer.activity ?? "未填写活动")")
@@ -90,7 +92,7 @@ struct DataExchangeView: View {
                                     let addedSessions = store.database.sessions.filter { !sessionIDs.contains($0.id) }.count
                                     let addedEvents = (store.database.events ?? []).filter { !eventIDs.contains($0.id) }.count
                                     self.incoming = nil
-                                    message = "合并完成，新增 \(addedSessions + addedEvents) 个（专注记录 \(addedSessions) 个，时间标记 \(addedEvents) 个，含最近删除）。备份与历史版本已保留。" + (syncTimer ? "计时状态已同步。" : "本机计时保持不变。")
+                                    message = "合并完成，新增 \(addedSessions + addedEvents) 个（专注记录 \(addedSessions) 个，时间标记 \(addedEvents) 个，含最近删除）。设置与提示音已合并，备份与历史版本已保留。" + (syncTimer ? "计时状态已同步。" : "本机计时保持不变。")
                                 }
                             }.buttonStyle(.borderedProminent).tint(.teal)
                         }
@@ -132,7 +134,7 @@ struct DataExchangeView: View {
             }
             if let message { Text(message).font(.callout).textSelection(.enabled) }
             if let error = store.error { Text(error).font(.caption).foregroundStyle(.red) }
-            Text("需要手动选择文件导入；此功能不自动联网同步。两端请都更新到支持 v5 的版本。")
+            Text("需要手动选择文件导入；此功能不自动联网同步。完整同步需将两端更新到最新版。")
                 .font(.caption).foregroundStyle(.secondary)
         }.padding(24).frame(width: 720, height: 780)
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
@@ -140,8 +142,8 @@ struct DataExchangeView: View {
                 let url = try result.get()
                 let access = url.startAccessingSecurityScopedResource()
                 defer { if access { url.stopAccessingSecurityScopedResource() } }
-                guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 20_000_000 else {
-                    throw RecordExchange.ExchangeError.invalid("文件超过 20 MB，请先缩小文件。")
+                guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 512_000_000 else {
+                    throw RecordExchange.ExchangeError.invalid("同步文件超过 512 MB，请减少自定义音频后重试。")
                 }
                 incoming = try RecordExchange.decode(Data(contentsOf: url)); message = nil; syncTimer = false
             } catch { incoming = nil; message = "导入失败：\(error.localizedDescription)" }

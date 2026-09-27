@@ -1,4 +1,5 @@
 import SwiftUI
+import FocusCountCore
 #if os(macOS)
 import AppKit
 #else
@@ -9,19 +10,32 @@ import UIKit
 @MainActor final class MarkerColors: ObservableObject {
     @Published private(set) var values: [String: String]
     @Published private(set) var emojis: [String: String]
+    private var observer: NSObjectProtocol?
     private let defaults: UserDefaults
     private let key = "marker-colors-v1"
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         values = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
         emojis = defaults.dictionary(forKey: "marker-emojis-v1") as? [String: String] ?? [:]
+        SharedPreferences.capture(defaults)
+        observer = NotificationCenter.default.addObserver(forName: SharedPreferences.changed, object: defaults, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.values = self.defaults.dictionary(forKey: self.key) as? [String: String] ?? [:]
+                self.emojis = self.defaults.dictionary(forKey: "marker-emojis-v1") as? [String: String] ?? [:]
+            }
+        }
     }
     func setEmoji(_ value: String, for name: String) {
+        SharedPreferences.capture(defaults)
+        defer { SharedPreferences.capture(defaults) }
         let emoji = String(value.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1))
         if emoji.isEmpty { emojis.removeValue(forKey: name) } else { emojis[name] = emoji }
         defaults.set(emojis, forKey: "marker-emojis-v1")
     }
     func ensure(_ names: [String]) {
+        SharedPreferences.capture(defaults)
+        defer { SharedPreferences.capture(defaults, at: .distantPast) }
         var next = values
         for name in names where next[name] == nil { next[name] = Self.nextColor(used: Set(next.values)) }
         guard next != values else { return }
@@ -47,6 +61,8 @@ import UIKit
         return Color(red: Double((hex >> 16) & 255) / 255, green: Double((hex >> 8) & 255) / 255, blue: Double(hex & 255) / 255)
     }
     func set(_ color: Color, for name: String) {
+        SharedPreferences.capture(defaults)
+        defer { SharedPreferences.capture(defaults) }
         #if os(macOS)
         guard let rgb = NSColor(color).usingColorSpace(.sRGB) else { return }
         #else

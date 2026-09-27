@@ -103,3 +103,10 @@ v5 顶层新增可选 `goal`，没有字段表示不参与目标合并。字段�
 Mac 模式参数新增可选 `restSound` 与 `focusSound` 声音 ID，旧设置缺省时分别使用 Glass 与 Pop。自定义音频在本机数据目录 `sounds/` 下以 UUID 命名，`library.json` 保存显示名称与文件映射；不包含于记录导出。
 
 iPhone 本机 `PhoneState` 新增可选 `modeSettings` 和 `routine`。`routine` 保存随机阶段序列、已用时、时间基准及暂停状态，重启按墙钟恢复；后台提醒来自相同序列。它们不写入记录交换文件。自定义声音存入本机 Application Support/FocusCount/sounds，通知用 CAF 副本存入 Library/Sounds。
+
+
+## 完整同步扩展（Mac 1.19.0 / iPhone 1.5.0）
+
+保持 v5 兼容，新增可选 `sharedSettings.entries`（键 → `{value, modified}`，value 为 null 表示删除）和 `sounds`（UUID、名称、扩展名、Base64 音频、modified）。设置包含 markerColor/、emoji/、category/、assignment/、focusColor/、目标隐藏/格式、mode。每键较新修改优先，相同时间使用值字符串排序决胜；未出现的条目保持本机数据。旧外观偏好迁移时间为 distantPast，后续修改有真实时间。模式参数作为一个设置项合并。声音用 UUID 合并，名称采用较新修改，时间相同按名称固定顺序选择。
+
+`focusRoutine` 从仅本机字段扩展为可交换的当前模式阶段；需明确勾选同步计时才应用。导出/导入时按 capturedAt 补齐阶段流逝，并仅累积专注阶段；iPhone 据此生成剩余阶段及通知。不同平台后续随机时刻可以不同，当前阶段与剩余时间会接续。上述内容替代旧版本对本机字段及导出剔除的描述。
