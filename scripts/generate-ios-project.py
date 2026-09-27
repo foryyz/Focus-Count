@@ -18,6 +18,9 @@ files.append(info)
 asset=obj('asset' ,'isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>";')
 files.append(asset)
 assetbuild=obj('assetbuild',f'isa = PBXBuildFile; fileRef = {asset};')
+soundfolder=obj('sounds', 'isa = PBXFileReference; lastKnownFileType = folder; path = Sounds; sourceTree = "<group>";')
+files.append(soundfolder)
+soundbuild=obj('soundbuild',f'isa = PBXBuildFile; fileRef = {soundfolder};')
 product=obj('product' ,'isa = PBXFileReference; explicitFileType = wrapper.application; path = FocusCount.app; sourceTree = BUILT_PRODUCTS_DIR;')
 pkg=obj('package','isa = XCLocalSwiftPackageReference; relativePath = ../../packages/FocusCountCore;')
 dep=obj('dep',f'isa = XCSwiftPackageProductDependency; package = {pkg}; productName = FocusCountCore;')
@@ -27,7 +30,7 @@ products=obj('products',f'isa = PBXGroup; children = ({product},); name = Produc
 main=obj('main',f'isa = PBXGroup; children = ({sourcegroup},{products},); sourceTree = "<group>";')
 sources=obj('sources',f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ({",".join(builds)},); runOnlyForDeploymentPostprocessing = 0;')
 frameworks=obj('frameworks',f'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ({link},); runOnlyForDeploymentPostprocessing = 0;')
-resources=obj('resources',f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({assetbuild},); runOnlyForDeploymentPostprocessing = 0;')
+resources=obj('resources',f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ({assetbuild},{soundbuild},); runOnlyForDeploymentPostprocessing = 0;')
 for mode in ['Debug','Release']:
  obj('project'+mode,f'isa = XCBuildConfiguration; name = {mode}; buildSettings = {{ CLANG_ENABLE_MODULES = YES; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; }};')
  obj('target'+mode,f'''isa = XCBuildConfiguration; name = {mode}; buildSettings = {{
@@ -38,7 +41,7 @@ for mode in ['Debug','Release']:
  INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
  TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
  SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
- CURRENT_PROJECT_VERSION = 5; MARKETING_VERSION = 1.3.1; CODE_SIGN_STYLE = Automatic;
+ CURRENT_PROJECT_VERSION = 6; MARKETING_VERSION = 1.4.0; CODE_SIGN_STYLE = Automatic;
  ENABLE_DEBUG_DYLIB = NO; ENABLE_TESTABILITY = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "{'-Onone' if mode=='Debug' else '-O'}";
  SWIFT_ACTIVE_COMPILATION_CONDITIONS = "{'DEBUG' if mode=='Debug' else ''}";
  }};''')

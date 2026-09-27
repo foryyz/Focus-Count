@@ -5,6 +5,76 @@ import FocusCountCore
 @testable import FocusCount
 
 final class PhoneStoreTests: XCTestCase {
+    @MainActor func testModePauseRestartAndTimerImport() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        var settings = FocusRoutineSettings(); settings.mode = .microBreak
+        XCTAssertTrue(store.setMode(settings))
+        XCTAssertTrue(store.start(activity: "阅读"))
+        XCTAssertNotNil(store.state.routine)
+        store.toggle()
+        XCTAssertTrue(store.state.routine!.suspended)
+        XCTAssertFalse(store.isRunning)
+        let restored = PhoneStore(directory: root)
+        XCTAssertTrue(restored.state.routine!.suspended)
+        XCTAssertEqual(restored.modeSettings.mode, .microBreak)
+        restored.toggle()
+        XCTAssertTrue(restored.isRunning)
+        restored.finish()
+        XCTAssertTrue(restored.state.routine!.suspended)
+        XCTAssertTrue(restored.state.routine!.reminders(at: Date()).isEmpty)
+        restored.returnToTimer()
+        XCTAssertTrue(restored.cancelTimer())
+        XCTAssertNil(restored.state.routine)
+        let normal = PhoneStore(directory: root.appendingPathComponent("peer"))
+        XCTAssertTrue(normal.start(activity: "普通计时"))
+        XCTAssertTrue(restored.start(activity: "阅读"))
+        XCTAssertTrue(restored.importRecords(try RecordExchange.decode(normal.export()), syncTimer: true))
+        XCTAssertNil(restored.state.routine)
+        XCTAssertTrue(restored.isRunning)
+    }
+    func testBackgroundPlanAndRemindersUseSameTimeline() throws {
+        var settings = FocusRoutineSettings(); settings.mode = .microBreak
+        settings.minimumMinutes = 1; settings.maximumMinutes = 1
+        settings.microSeconds = 10; settings.roundMinutes = 3; settings.restMinutes = 1
+        let start = Date(timeIntervalSince1970: 1000)
+        var plan = PhoneRoutine(settings: settings, at: start)
+        XCTAssertTrue(plan.isValid)
+        XCTAssertEqual(plan.reminders(at: start).map { $0.date.timeIntervalSince(start) }, [60, 70, 130, 140, 180, 240])
+        XCTAssertEqual(plan.advance(at: start.addingTimeInterval(65)), 60)
+        XCTAssertEqual(plan.phase, .microRest)
+        XCTAssertEqual(plan.remaining, 5)
+        var restored = try JSONDecoder().decode(PhoneRoutine.self, from: JSONEncoder().encode(plan))
+        XCTAssertEqual(restored.advance(at: start.addingTimeInterval(500)), 100)
+        XCTAssertEqual(restored.phase, .ready)
+        XCTAssertTrue(restored.reminders(at: start.addingTimeInterval(500)).isEmpty)
+        plan.suspended = true
+        XCTAssertEqual(plan.advance(at: start.addingTimeInterval(90)), 0)
+        XCTAssertEqual(plan.remaining, 5)
+        XCTAssertTrue(plan.reminders(at: start.addingTimeInterval(90)).isEmpty)
+        plan.skipRest(at: start.addingTimeInterval(90))
+        XCTAssertEqual(plan.phase, .focus)
+        XCTAssertTrue(plan.suspended)
+        XCTAssertTrue(PhoneRoutine.supports(FocusRoutineSettings()))
+        settings.roundMinutes = 360
+        XCTAssertFalse(PhoneRoutine.supports(settings))
+    }
+    @MainActor func testPhoneSoundImportAndNotificationConversion() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sounds = PhoneSounds(directory: root)
+        let preset = try XCTUnwrap(sounds.url("Glass"))
+        try sounds.add(preset)
+        let entry = try XCTUnwrap(sounds.custom.first)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try XCTUnwrap(sounds.url(entry.id)).path))
+        sounds.rename(entry.id, name: "我的轻铃")
+        XCTAssertEqual(PhoneSounds(directory: root).custom.first?.name, "我的轻铃")
+        XCTAssertNoThrow(try sounds.notificationSound(entry.id))
+        let invalid = root.appendingPathComponent("invalid.wav")
+        try Data("invalid".utf8).write(to: invalid)
+        XCTAssertThrowsError(try sounds.add(invalid))
+    }
     @MainActor func testGoalExchangeAndDeletionSurviveRestart() throws {
         let root = directory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -505,6 +575,18 @@ final class MarkerPointLayoutTests: XCTestCase {
         await render(PhoneMarkerCharts(mode: .constant(0), events: events, start: start, end: end, isWeek: false, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "frequency-compact", size: CGSize(width: 375, height: 460))
         await render(PhoneMarkerCharts(mode: .constant(2), events: events, start: start, end: end, isWeek: false, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "time-compact", size: CGSize(width: 375, height: 460))
         await render(PhoneMarkerCharts(mode: .constant(2), events: events, start: start, end: end, isWeek: false, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "time-landscape", size: CGSize(width: 740, height: 310))
+    }
+    func testModeScreens() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        var settings = FocusRoutineSettings(); settings.mode = .microBreak
+        XCTAssertTrue(store.setMode(settings))
+        await render(TimerScreen(store: store), name: "mode-home-small", size: CGSize(width: 375, height: 667))
+        await render(PhoneModeMenu(store: store, adjust: {}), name: "mode-menu", size: CGSize(width: 375, height: 310))
+        await render(PhoneModeSettings(store: store), name: "mode-settings-small", size: CGSize(width: 375, height: 667))
+        await render(PhoneModeSettings(store: store), name: "mode-settings-landscape", size: CGSize(width: 740, height: 350))
+        await render(PhoneSoundSettings(), name: "sound-library", size: CGSize(width: 375, height: 667))
     }
     private func render<V: View>(_ view: V, name: String, size: CGSize) async {
         let host = UIHostingController(rootView: view)

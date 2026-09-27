@@ -8,6 +8,7 @@ import FocusCountCore
         WindowGroup { TimerScreen(store: store).tint(.teal) }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { store.checkpoint() }
+                if phase == .active { store.becameActive() }
             }
     }
 }
@@ -17,6 +18,9 @@ struct TimerScreen: View {
     @State private var history = false
     @State private var exchange = false
     @State private var today = false
+    @State private var modes = false
+    @State private var modeSettings = false
+    @State private var settings = false
     @State private var targetSettings = false
     @State private var markers = false
     @State private var analysis = false
@@ -45,7 +49,7 @@ struct TimerScreen: View {
         ("✨ Begin before you feel ready.", "Tap start. You don’t have to be perfect.")
     ]
     @State private var encouragement = Int.random(in: 0..<5)
-    private var running: Bool { store.state.clock.isRunning }
+    private var running: Bool { store.isRunning }
     private var idle: Bool { store.state.clock.startedAt == nil }
     private var ink: Color { scheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { scheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
@@ -57,12 +61,14 @@ struct TimerScreen: View {
                     VStack(spacing: 24) {
                         Spacer(minLength: 24)
                         if idle { welcome }
+                        else if let plan = store.state.routine, plan.phase != .focus { PhoneRestView(store: store) }
                         else { timer(width: geometry.size.width) }
                         Spacer(minLength: 24)
                         if !idle { controls }
                         if !message.isEmpty {
                             Text(message).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         }
+                        if let issue = store.notificationIssue { Text(issue).font(.footnote).foregroundStyle(.orange) }
                         if let error = store.error { Text(error).font(.footnote).foregroundStyle(.red).textSelection(.enabled) }
                     }.padding(.horizontal, 24).padding(.vertical, 24)
                         .frame(maxWidth: 640).frame(maxWidth: .infinity)
@@ -70,8 +76,14 @@ struct TimerScreen: View {
                 }.scrollIndicators(.hidden).scrollDismissesKeyboard(.interactively)
             }
             .background(backdrop.ignoresSafeArea())
-            .navigationTitle(immersive ? "" : "🧠 FOCUS-COUNT").navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("").navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if !immersive {
+                        Text("🧠 FOCUS-COUNT").font(.system(size: 11, weight: .semibold)).tracking(1)
+                            .lineLimit(1).minimumScaleFactor(0.8).foregroundStyle(.secondary)
+                    }
+                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if !immersive {
                         Menu {
@@ -82,21 +94,30 @@ struct TimerScreen: View {
                             Button { exchange = true } label: { Label("数据管理", systemImage: "arrow.up.arrow.down") }
                         } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel("记录、分析与设置")
                     }
+                    if !immersive {
+                        Button { settings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("设置")
+                    }
                     Button { immersive.toggle(); activityFocused = false; markerFocused = false } label: {
                         Image(systemName: immersive ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     }.accessibilityLabel(immersive ? "退出沉浸模式" : "沉浸模式")
                 }
             }
             .safeAreaInset(edge: .bottom, alignment: .leading) {
-                if idle && !immersive {
+                if !immersive {
                     HStack(spacing: 12) {
                         Button { today = true } label: {
                             Image(systemName: "sun.max").frame(width: 44, height: 44)
                                 .background(ink.opacity(0.05), in: Circle())
                         }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("今日概览")
-                        PhoneCountdownFooter(store: targetCountdown) { targetSettings = true }
-                            .frame(maxWidth: .infinity)
-                        Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
+                        Group {
+                            if idle { PhoneCountdownFooter(store: targetCountdown) { targetSettings = true } }
+                            else { Spacer() }
+                        }.frame(maxWidth: .infinity)
+                        Button { modes = true } label: {
+                            Image(systemName: store.modeSettings.mode.symbol).frame(width: 44, height: 44)
+                                .background(ink.opacity(0.05), in: Circle())
+                        }.buttonStyle(.plain).foregroundStyle(store.modeSettings.mode == .microBreak ? Color.teal : .secondary)
+                            .accessibilityLabel("专注模式：" + store.modeSettings.mode.title)
                     }.padding(.horizontal, 24).padding(.bottom, 8)
 
                 }
@@ -118,6 +139,11 @@ struct TimerScreen: View {
                 Button("保留计时", role: .cancel) {}
                 Button("取消并归零", role: .destructive) { store.cancelTimer() }
             } message: { Text("清除本次未保存的计时，不生成记录。已有记录不受影响。") }
+            .sheet(isPresented: $modes) {
+                PhoneModeMenu(store: store) { modes = false; modeSettings = true }
+            }
+            .sheet(isPresented: $modeSettings) { PhoneModeSettings(store: store) }
+            .sheet(isPresented: $settings) { PhoneSoundSettings() }
             .sheet(isPresented: $history) { PhoneHistory(store: store) }
             .sheet(isPresented: $markers) { PhoneEventHistory(store: store) }
             .sheet(isPresented: $analysis) { PhoneFocusAnalysis(store: store, appearance: appearance) }
@@ -125,7 +151,7 @@ struct TimerScreen: View {
             .sheet(isPresented: $targetSettings) { PhoneTargetSettings(store: targetCountdown) }
             .onChange(of: store.state.goal) { _, value in targetCountdown.receive(value) }
             .sheet(isPresented: $exchange) { ExchangeScreen(store: store) }
-            .sheet(isPresented: Binding(get: { store.state.clock.pendingEnd != nil && !exchange && !history && !analysis && !markers && !today && !targetSettings }, set: { _ in })) {
+            .sheet(isPresented: Binding(get: { store.state.clock.pendingEnd != nil && !exchange && !history && !analysis && !markers && !today && !targetSettings && !modes && !modeSettings && !settings }, set: { _ in })) {
                 if let start = store.state.clock.startedAt, let end = store.state.clock.pendingEnd {
                     RecordEditor(store: store, session: StudySession(startedAt: start, endedAt: end, activeSeconds: store.state.clock.seconds(), subject: store.state.activity ?? "", focus: "A"), completesTimer: true) {
                         message = "✨ A little focus, a meaningful step. Well done."
@@ -139,10 +165,13 @@ struct TimerScreen: View {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 let minutes = Int(store.today(at: context.date).seconds) / 60
                 VStack(spacing: 12) {
-                    Text("Today’s focus").font(.system(.title3, design: .rounded, weight: .medium)).foregroundStyle(.secondary)
-                    (Text("\(minutes / 60)H").font(.system(size: 64, weight: .medium, design: .rounded))
-                     + Text("  \(minutes % 60)m").font(.system(size: 30, weight: .regular, design: .rounded)).foregroundColor(.secondary))
-                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                    (
+                        Text("Today’s ").font(.system(size: 21.84, weight: .regular, design: .rounded)).foregroundColor(.secondary)
+                        + Text("focus  ").font(.system(size: 21.84, weight: .semibold, design: .rounded)).foregroundColor(ink)
+                        + Text("\(minutes / 60)H").font(.system(size: 48.36, weight: .medium, design: .rounded)).foregroundColor(ink)
+                        + Text("  \(minutes % 60)m").font(.system(size: 21.84, weight: .regular, design: .rounded)).foregroundColor(.secondary)
+                    ).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                        .accessibilityLabel("今日已保存专注时长，\(minutes / 60) 小时 \(minutes % 60) 分钟")
                     Text(Self.greetings[encouragement].1).font(.footnote).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
@@ -193,6 +222,10 @@ struct TimerScreen: View {
                 .accessibilityHint(running ? "轻点暂停" : "轻点继续")
             FocusFlow(running: running && scenePhase == .active, reduceMotion: reduceMotion, tint: running ? .teal : pauseInk)
                 .frame(maxWidth: 300)
+            if let plan = store.state.routine {
+                Text("MICRO BREAK MODE · \(Int(ceil(plan.roundRemaining / 60)))min")
+                    .font(.caption2.weight(.medium)).tracking(1.5).foregroundStyle(.teal)
+            }
             Text(running ? "Stay with this moment. 🌊" : "Take a breath. Come back when you’re ready. 🍃")
                 .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }

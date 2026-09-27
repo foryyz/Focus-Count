@@ -2,6 +2,8 @@ import SwiftUI
 import FocusCountCore
 
 struct PhoneState: Codable {
+    var modeSettings: FocusRoutineSettings?
+    var routine: PhoneRoutine?
     var goal: GoalSnapshot?
     var version = 5
     var events: [TimeEvent]?
@@ -15,13 +17,20 @@ struct PhoneState: Codable {
 @MainActor final class PhoneStore: ObservableObject {
     @Published private(set) var state = PhoneState()
     @Published var error: String?
+    @Published var notificationIssue: String?
     @Published private(set) var blocked = false
+    private var ticker: Timer?
+    private let live: Bool
+    private var ticks = 0
+    var modeSettings: FocusRoutineSettings { state.modeSettings ?? FocusRoutineSettings() }
+    var isRunning: Bool { state.routine.map { !$0.suspended && $0.phase != .ready } ?? state.clock.isRunning }
     private let directory: URL
     private var file: URL { directory.appendingPathComponent("app-state.json") }
     var sessions: [StudySession] { state.sessions.filter { $0.deletedAt == nil } }
     var subjects: [String] { Array(Set(sessions.map(\.subject))).sorted() }
 
     init(directory: URL? = nil) {
+        live = directory == nil
         self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("FocusCount", isDirectory: true)
         if directory == nil {
             // Make an offline export destination visible in the Files app.
@@ -32,7 +41,7 @@ struct PhoneState: Codable {
             if FileManager.default.fileExists(atPath: file.path) {
                 let data = try Data(contentsOf: file)
                 var loaded = try JSONDecoder().decode(PhoneState.self, from: data)
-                guard [1, 2, 3, 4, 5].contains(loaded.version), loaded.clock.isValid else { throw CocoaError(.fileReadCorruptFile) }
+                guard [1, 2, 3, 4, 5].contains(loaded.version), loaded.clock.isValid, loaded.routine?.isValid ?? true, loaded.modeSettings?.isValid ?? true else { throw CocoaError(.fileReadCorruptFile) }
                 // Validate the records with the same rules as interchange files.
                 let validated = try RecordExchange.decode(RecordExchange.encode(Database(events: loaded.events, purgedIDs: loaded.purgedIDs, sessions: loaded.sessions, goal: loaded.goal)))
                 loaded.sessions = validated.sessions
@@ -46,26 +55,93 @@ struct PhoneState: Codable {
                 if state.clock.startedAt != nil && state.timerID == nil { _ = commit { $0.timerID = UUID() } }
             }
         } catch { blocked = true; self.error = "无法读取本地数据，已停止写入保护原文件。\n\(error.localizedDescription)" }
+        if live {
+            tick()
+            refreshNotifications()
+            ticker = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                Task { @MainActor in self?.tick() }
+            }
+        }
+    }
+    private func settled(_ original: PhoneState, at date: Date) -> PhoneState {
+        var next = original
+        if var routine = next.routine {
+            next.clock.accumulated += routine.advance(at: date)
+            next.clock.runningSince = !routine.suspended && routine.phase == .focus ? date : nil
+            next.routine = routine
+        }
+        return next
+    }
+    func tick(at date: Date = Date()) {
+        guard !blocked, let old = state.routine else { return }
+        state = settled(state, at: date)
+        if live, let plan = state.routine, old.phase != plan.phase,
+           date.timeIntervalSince(old.anchor) < 2, UIApplication.shared.applicationState == .active {
+            PhoneSounds.shared.play((plan.phase == .microRest || plan.phase == .longRest) ? (plan.settings.restSound ?? "Glass") : (plan.settings.focusSound ?? "Pop"), volume: plan.settings.volume)
+        }
+        ticks += 1
+        if ticks % 40 == 0 || old.phase != state.routine?.phase { _ = commit { _ in } }
+    }
+    private func refreshNotifications() {
+        guard live else { return }
+        notificationIssue = nil
+        PhoneNotifications.shared.replace(state.routine) { [weak self] issue in self?.notificationIssue = issue }
+    }
+    @discardableResult func setMode(_ settings: FocusRoutineSettings) -> Bool {
+        guard PhoneRoutine.supports(settings), state.clock.pendingEnd == nil else { return false }
+        let previousMode = modeSettings.mode
+        let success = commit { next in
+            if previousMode != settings.mode, next.clock.startedAt != nil {
+                let running = next.routine.map { !$0.suspended && $0.phase != .ready } ?? next.clock.isRunning
+                next.clock.pause()
+                next.routine = nil
+                if settings.mode == .microBreak {
+                    var plan = PhoneRoutine(settings: settings); plan.suspended = !running
+                    next.routine = plan
+                }
+                if running { next.clock.toggle() }
+            }
+            next.modeSettings = settings
+        }
+        if success { refreshNotifications() }
+        return success
+    }
+    func skipRest() {
+        let success = commit { next in
+            guard var plan = next.routine else { return }
+            let suspended = plan.suspended
+            if plan.phase == .longRest || plan.phase == .ready { plan = PhoneRoutine(settings: modeSettings); plan.suspended = suspended }
+            else { plan.skipRest(at: Date()) }
+            next.routine = plan
+            next.clock.runningSince = !plan.suspended && plan.phase == .focus ? Date() : nil
+        }
+        if success { refreshNotifications() }
     }
     @discardableResult private func commit(_ change: (inout PhoneState) -> Void) -> Bool {
         guard !blocked else { return false }
-        var next = state; change(&next)
+        var next = settled(state, at: Date()); change(&next)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(next).write(to: file, options: .atomic)
             state = next; error = nil
+            if live && next.routine == nil { refreshNotifications() }
             return true
         } catch { self.error = "保存失败，修改未生效：\(error.localizedDescription)"; return false }
     }
-    @discardableResult func cancelTimer() -> Bool { commit { $0.clock = MobileClock(); $0.activity = nil; $0.timerID = nil } }
+    @discardableResult func cancelTimer() -> Bool {
+        let success = commit { $0.clock = MobileClock(); $0.activity = nil; $0.timerID = nil; $0.routine = nil }
+        if success { refreshNotifications() }; return success
+    }
     @discardableResult func start(activity: String) -> Bool {
         guard state.clock.startedAt == nil else { return false }
-        return commit {
+        let success = commit {
             $0.timerID = UUID()
             $0.activity = activity.trimmingCharacters(in: .whitespacesAndNewlines)
             $0.clock.toggle()
+            if modeSettings.mode == .microBreak { $0.routine = PhoneRoutine(settings: modeSettings) }
         }
+        if success { refreshNotifications(); playStart() }; return success
     }
     @discardableResult func markCommand(_ command: String, at date: Date = Date()) -> Bool {
         let input = command.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -106,10 +182,28 @@ struct PhoneState: Codable {
             $0.events?.removeAll { removed.contains($0.id) }
         }
     }
-    func toggle() { commit { if $0.clock.startedAt == nil { $0.timerID = UUID() }; $0.clock.toggle() } }
-    func finish() { commit { $0.clock.finish() } }
+    private func playStart() {
+        if live, let plan = state.routine { PhoneSounds.shared.play(plan.settings.focusSound ?? "Pop", volume: plan.settings.volume) }
+    }
+    func toggle() {
+        if state.clock.startedAt == nil { _ = start(activity: state.activity ?? ""); return }
+        let newRound = state.routine?.phase == .ready
+        let success = commit { next in
+            if var plan = next.routine {
+                if plan.phase == .ready { plan = PhoneRoutine(settings: modeSettings) }
+                else { plan.suspended.toggle(); plan.anchor = Date() }
+                next.routine = plan
+                next.clock.runningSince = !plan.suspended && plan.phase == .focus ? Date() : nil
+            } else { next.clock.toggle() }
+        }
+        if success { refreshNotifications(); if newRound { playStart() } }
+    }
+    func finish() {
+        if commit({ $0.clock.finish(); $0.routine?.suspended = true }) { refreshNotifications() }
+    }
     func returnToTimer() { commit { $0.clock.pendingEnd = nil } }
     func checkpoint() { commit { _ in } }
+    func becameActive() { tick(); refreshNotifications() }
     func save(_ session: StudySession, completesTimer: Bool = false) -> Bool {
         guard !(state.purgedIDs ?? []).contains(completesTimer ? (state.timerID ?? session.id) : session.id) else { error = "此记录已彻底删除。"; return false }
         var edited = session
@@ -120,7 +214,7 @@ struct PhoneState: Codable {
         return commit {
             if let index = $0.sessions.firstIndex(where: { $0.id == edited.id }) { $0.sessions[index] = RecordExchange.replacing($0.sessions[index], with: edited) }
             else { $0.sessions.append(edited) }
-            if completesTimer { $0.clock = MobileClock(); $0.activity = nil; $0.timerID = nil }
+            if completesTimer { $0.clock = MobileClock(); $0.activity = nil; $0.timerID = nil; $0.routine = nil }
         }
     }
     func delete(_ session: StudySession, restore: Bool = false) {
@@ -162,6 +256,7 @@ struct PhoneState: Codable {
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: incoming.sessions, purgedIDs: $0.purgedIDs ?? [])
                 $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: incoming.events ?? [], purgedIDs: $0.purgedIDs ?? [])
                 if syncTimer, let timer = incoming.timerTransfer {
+                    $0.routine = nil
                     $0.timerID = timer.timerID ?? (timer.startedAt == nil ? nil : UUID())
                     $0.clock = timer.mobileClock()
                     $0.activity = timer.activity
@@ -177,6 +272,7 @@ struct PhoneState: Codable {
     }
     func export() throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("本地数据读取失败，无法导出。") }
+        tick()
         let capturedAt = Date()
         let draft = TimerState(startedAt: state.clock.startedAt, accumulated: state.clock.seconds(at: capturedAt))
         let transfer = TimerTransfer(capturedAt: capturedAt, startedAt: draft.startedAt, accumulated: draft.accumulated,

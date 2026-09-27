@@ -101,3 +101,5 @@ v5 顶层新增可选 `goal`，没有字段表示不参与目标合并。字段�
 模式进度不属于当前跨设备交换功能：Mac 导出移除 `focusRoutine`，计时快照只包含有效时长与普通运行/暂停状态。明确导入计时状态会清除本地模式进度；仅合并记录不会清除。Mac 重启将本地模式恢复为暂停，避免应用未运行期间模拟未经提醒的休息。
 
 Mac 模式参数新增可选 `restSound` 与 `focusSound` 声音 ID，旧设置缺省时分别使用 Glass 与 Pop。自定义音频在本机数据目录 `sounds/` 下以 UUID 命名，`library.json` 保存显示名称与文件映射；不包含于记录导出。
+
+iPhone 本机 `PhoneState` 新增可选 `modeSettings` 和 `routine`。`routine` 保存随机阶段序列、已用时、时间基准及暂停状态，重启按墙钟恢复；后台提醒来自相同序列。它们不写入记录交换文件。自定义声音存入本机 Application Support/FocusCount/sounds，通知用 CAF 副本存入 Library/Sounds。
