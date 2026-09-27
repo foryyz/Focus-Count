@@ -54,6 +54,31 @@ struct PhoneTodaySheet: View {
     }
 }
 
+struct PhoneCountdownFooter: View {
+    @ObservedObject var store: TargetCountdownStore
+    var edit: () -> Void
+    var body: some View {
+        if let target = store.target {
+            if !target.hidden {
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    Button(action: edit) {
+                        VStack(spacing: 3) {
+                            Text((target.emoji.isEmpty ? "" : target.emoji + " ") + target.name)
+                                .font(.system(size: 11)).lineLimit(1)
+                            Text(target.remaining(now: context.date, totalHours: store.totalHours))
+                                .font(.system(size: 12, weight: .medium)).monospacedDigit()
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                        }.frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityHint("编辑目标日期")
+                }
+            }
+        } else {
+            Button(action: edit) { Text("设置目标日期").font(.caption).frame(maxWidth: .infinity, minHeight: 44) }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+        }
+    }
+}
+
 struct PhoneTargetSettings: View {
     @ObservedObject var store: TargetCountdownStore
     @Environment(\.dismiss) private var dismiss
@@ -69,6 +94,27 @@ struct PhoneTargetSettings: View {
         NavigationStack {
             Form {
                 if let error = store.error { Text(error).foregroundStyle(.red) }
+                Section("倒数显示") {
+                    if let target = store.target {
+                        HStack {
+                            Text(target.hidden ? "已隐藏" : "已显示")
+                            Spacer()
+                            Button {
+                                let hidden = !target.hidden
+                                store.setHidden(hidden)
+                                showOnHome = !hidden
+                                revealed = false
+                                if !hidden { load() }
+                            } label: {
+                                Image(systemName: target.hidden ? "eye.slash" : "eye").frame(width: 44, height: 44)
+                            }.buttonStyle(.borderless).accessibilityLabel(target.hidden ? "显示倒数" : "隐藏倒数")
+                        }
+                    }
+                    Picker("显示格式", selection: Binding(get: { store.totalHours }, set: { store.setTotalHours($0) })) {
+                        Text("天 + 小时").tag(false)
+                        Text("总小时").tag(true)
+                    }.pickerStyle(.segmented)
+                }
                 if concealed {
                     Section {
                         Label("目标已隐藏", systemImage: "eye.slash")
@@ -82,7 +128,8 @@ struct PhoneTargetSettings: View {
                         Toggle("指定具体时间", isOn: $includesTime)
                     } header: { Text("目标") } footer: { if !includesTime { Text("倒数至所选日期的本地时间 00:00。") } }
                     Section {
-                        Toggle("在首页显示目标与倒数", isOn: $showOnHome)
+                        if store.target == nil { Toggle("在首页显示目标与倒数", isOn: $showOnHome) }
+                        Text("显示开关与格式立即生效，并在本机记住。").font(.caption).foregroundStyle(.secondary)
                     } footer: { Text("目标随 JSON 导入导出同步，隐藏状态仅保存在此设备。首次导入目标默认隐藏。") }
                     if store.target != nil { Button("删除目标", role: .destructive) { deleting = true } }
                 }

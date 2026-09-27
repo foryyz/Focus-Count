@@ -487,6 +487,18 @@ final class MarkerPointLayoutTests: XCTestCase {
         for (name, emoji) in zip(names, ["📚", "🏋️", "🧘", "🚶", "✍️", "☕️"]) { colors.setEmoji(emoji, for: name) }
         let appearance = FocusAppearanceStore(defaults: defaults)
         appearance.ensureColors(names)
+        let goal = GoalSnapshot(name: "准备一场很重要的考试", emoji: "🎓", date: Date().addingTimeInterval(90000))
+        var goalWrites = 0
+        let countdown = TargetCountdownStore(defaults: defaults, snapshot: goal, writer: { _ in goalWrites += 1; return true })
+        countdown.setHidden(false)
+        countdown.setTotalHours(true)
+        XCTAssertEqual(countdown.target?.hidden, false)
+        XCTAssertEqual(TargetCountdownStore(defaults: defaults, snapshot: goal).totalHours, true)
+        await render(PhoneCountdownFooter(store: countdown, edit: {}).padding(.horizontal, 80).ignoresSafeArea(), name: "countdown-footer-compact", size: CGSize(width: 375, height: 100))
+        await render(PhoneTargetSettings(store: countdown), name: "countdown-settings-visible", size: CGSize(width: 375, height: 667))
+        countdown.setHidden(true)
+        await render(PhoneTargetSettings(store: countdown), name: "countdown-settings-hidden", size: CGSize(width: 375, height: 667))
+        XCTAssertEqual(goalWrites, 0)
         await render(TimerScreen(store: store), name: "home-compact", size: CGSize(width: 375, height: 667))
         await render(PhoneTodaySheet(store: store, appearance: appearance), name: "today-compact", size: CGSize(width: 375, height: 667))
         await render(PhoneFocusAnalysis(store: store, appearance: appearance), name: "analysis-compact", size: CGSize(width: 375, height: 667))

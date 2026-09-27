@@ -89,11 +89,16 @@ struct TimerScreen: View {
             }
             .safeAreaInset(edge: .bottom, alignment: .leading) {
                 if idle && !immersive {
-                    Button { today = true } label: {
-                        Image(systemName: "sun.max").frame(width: 44, height: 44)
-                            .background(ink.opacity(0.05), in: Circle())
-                    }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("今日概览")
-                        .padding(.leading, 24).padding(.bottom, 8)
+                    HStack(spacing: 12) {
+                        Button { today = true } label: {
+                            Image(systemName: "sun.max").frame(width: 44, height: 44)
+                                .background(ink.opacity(0.05), in: Circle())
+                        }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("今日概览")
+                        PhoneCountdownFooter(store: targetCountdown) { targetSettings = true }
+                            .frame(maxWidth: .infinity)
+                        Color.clear.frame(width: 44, height: 44).accessibilityHidden(true)
+                    }.padding(.horizontal, 24).padding(.bottom, 8)
+
                 }
             }
             .statusBarHidden(immersive)
@@ -131,7 +136,6 @@ struct TimerScreen: View {
     }
     private var welcome: some View {
         VStack(spacing: 28) {
-            TargetCountdownRow(store: targetCountdown) { targetSettings = true }
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 let minutes = Int(store.today(at: context.date).seconds) / 60
                 VStack(spacing: 12) {
