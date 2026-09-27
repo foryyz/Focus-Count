@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var showData = false
     @State private var showToday = false
     @State private var showModes = false
+    @State private var showModeSettings = false
     @State private var showTarget = false
     @StateObject private var targetCountdown: TargetCountdownStore
     init() {
@@ -37,7 +38,7 @@ struct ContentView: View {
     private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { colorScheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
     private var backdrop: Color { colorScheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
-    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showModes || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
+    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showToday || showModeSettings || showModes || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 1000
@@ -117,8 +118,8 @@ struct ContentView: View {
                                 .accessibilityHint(phase == 1 ? "暂停计时" : "继续计时")
                             FocusFlow(running: phase == 1, reduceMotion: reduceMotion, tint: phase == 1 ? .teal : pauseInk)
                                 .frame(maxWidth: wide ? 460 : 300)
-                            if store.database.focusRoutine != nil {
-                                Text("MICRO BREAK MODE").font(.system(size: 10, weight: .medium)).tracking(1.5).foregroundStyle(.secondary)
+                            if let routine = store.database.focusRoutine {
+                                Text("MICRO BREAK MODE · \(Int(ceil(routine.roundRemaining / 60)))min").font(.system(size: 10, weight: .medium)).tracking(1.5).foregroundStyle(.secondary)
                             }
                             Text(phase == 1 ? "Stay with this moment. 🌊" : "Take a breath. Come back when you’re ready. 🍃")
                                 .font(.system(size: 13)).foregroundStyle(.secondary)
@@ -164,8 +165,8 @@ struct ContentView: View {
             .background(backdrop.ignoresSafeArea())
             .background(FocusWindowReader(controller: focusWindow))
             .overlay(alignment: .bottomLeading) {
-                if phase == 0 {
-                    Button { showToday.toggle() } label: {
+                Group {
+                    Button { showToday.toggle(); revealControls() } label: {
                         Image(systemName: "sun.max")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(ink.opacity(0.65))
@@ -175,6 +176,7 @@ struct ContentView: View {
                     }.buttonStyle(.plain).help("今日概览").accessibilityLabel("今日标记与专注时长")
                         .popover(isPresented: $showToday, arrowEdge: .bottom) { TodaySummaryView(store: store) }
                         .padding(.leading, wide ? 64 : 32).padding(.bottom, 18)
+                        .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -187,14 +189,20 @@ struct ContentView: View {
             }
             .overlay(alignment: .bottomTrailing) {
                 Button { showModes.toggle(); revealControls() } label: {
-                    Image(systemName: "slider.horizontal.3")
+                    Image(systemName: store.modeSettings.mode.symbol)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(store.modeSettings.mode == .microBreak ? Color.teal : ink.opacity(0.65))
                         .frame(width: 34, height: 34)
                         .background(ink.opacity(0.045), in: Circle())
                         .overlay(Circle().strokeBorder(ink.opacity(0.09), lineWidth: 1))
-                }.buttonStyle(.plain).help("专注模式").accessibilityLabel("专注模式")
-                    .popover(isPresented: $showModes, arrowEdge: .bottom) { FocusModeSettingsView(store: store) }
+                }.buttonStyle(.plain).help("专注模式：" + store.modeSettings.mode.title).accessibilityLabel("专注模式：" + store.modeSettings.mode.title)
+                    .popover(isPresented: $showModes, arrowEdge: .bottom) {
+                        FocusModeMenuView(store: store) {
+                            showModes = false
+                            showModeSettings = true
+                        }
+                    }
+                    .sheet(isPresented: $showModeSettings) { FocusModeSettingsView(store: store) }
                     .padding(.trailing, wide ? 64 : 32).padding(.bottom, 18)
                     .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
             }
