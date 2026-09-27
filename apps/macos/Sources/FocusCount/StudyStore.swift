@@ -8,6 +8,74 @@ import AppKit
     @Published var blocked = false
     private var ticker: Timer?
     private var ticks = 0
+    @Published private(set) var modeSettings = FocusRoutineSettings()
+    private var routineTick: Double?
+    private var soundsEnabled = false
+    private var modeDefaults: UserDefaults?
+    private var playingSound: NSSound?
+    var isRunning: Bool {
+        if let routine = database.focusRoutine { return !routine.suspended && routine.phase != .ready }
+        return database.draft.isRunning
+    }
+    var isResting: Bool { database.focusRoutine.map { $0.phase != .focus } ?? false }
+    func previewModeSound(volume: Double? = nil) { playModeSound("Glass", volume: volume ?? modeSettings.volume) }
+    private func playModeSound(_ name: String, volume: Double) {
+        playingSound?.stop()
+        playingSound = NSSound(named: NSSound.Name(name))
+        playingSound?.volume = Float(volume)
+        playingSound?.play()
+    }
+    @discardableResult func setMode(_ settings: FocusRoutineSettings) -> Bool {
+        guard settings.isValid, !blocked, database.pendingEnd == nil else { return false }
+        advanceRoutine()
+        let running = isRunning
+        guard commit({ state in
+            if settings.mode != modeSettings.mode {
+                state.draft.pause()
+                state.focusRoutine = nil
+                if state.draft.startedAt != nil {
+                    if settings.mode == .microBreak {
+                        var routine = FocusRoutine(settings: settings); routine.suspended = !running
+                        state.focusRoutine = routine
+                    }
+                    if running { state.draft.toggle() }
+                }
+            }
+        }) else { return false }
+        modeSettings = settings
+        if let data = try? JSONEncoder().encode(settings) { modeDefaults?.set(data, forKey: "focus-modes-v1") }
+        routineTick = StudyClock.now
+        return true
+    }
+    func advanceRoutine(now: Double = StudyClock.now) {
+        guard var routine = database.focusRoutine else { routineTick = nil; return }
+        guard let previous = routineTick else { routineTick = now; return }
+        let elapsed = max(0, now - previous)
+        let phase = routine.phase
+        let focused = routine.advance(elapsed)
+        database.draft.accumulated += focused
+        database.draft.runningSince = !routine.suspended && routine.phase == .focus ? now : nil
+        database.focusRoutine = routine
+        routineTick = now
+        if phase != routine.phase && soundsEnabled && elapsed < 2 {
+            let sound = routine.phase == .microRest ? "Glass" : routine.phase == .focus ? "Pop" : routine.phase == .longRest ? "Hero" : "Glass"
+            playModeSound(sound, volume: routine.settings.volume)
+        }
+    }
+    func skipModeRest() {
+        guard database.focusRoutine != nil else { return }
+        advanceRoutine()
+        _ = commit { state in
+            if state.focusRoutine?.phase == .longRest || state.focusRoutine?.phase == .ready {
+                let suspended = state.focusRoutine?.suspended ?? false
+                state.focusRoutine = FocusRoutine(settings: modeSettings)
+                state.focusRoutine?.suspended = suspended
+            } else { state.focusRoutine?.skipRest() }
+            if state.focusRoutine?.suspended == false { state.draft.runningSince = StudyClock.now }
+        }
+        routineTick = StudyClock.now
+    }
+
     private var observers: [NSObjectProtocol] = []
     private var file: URL { get throws { try self.directory.appendingPathComponent("sessions.json") } }
 
@@ -18,6 +86,9 @@ import AppKit
 
     init(directory: URL? = nil, observeSystem: Bool = true) {
         customDirectory = directory
+        soundsEnabled = observeSystem
+        modeDefaults = directory == nil ? .standard : nil
+        if let data = modeDefaults?.data(forKey: "focus-modes-v1"), let settings = try? JSONDecoder().decode(FocusRoutineSettings.self, from: data), settings.isValid { modeSettings = settings }
         do {
             if customDirectory == nil, let executable = Bundle.main.executableURL {
                 try Storage.migrateProjectData(executable: executable, to: self.directory)
@@ -42,6 +113,11 @@ import AppKit
             blocked = true
             self.error = "无法读取数据，已停止写入以保护原文件。请检查数据目录：\(error.localizedDescription)"
         }
+        if let routine = database.focusRoutine {
+            if modeSettings.mode == .standard { modeSettings = routine.settings }
+            database.focusRoutine?.suspended = true
+            routineTick = StudyClock.now
+        }
         if !blocked {
             if database.draft.startedAt != nil && database.timerID == nil { database.timerID = UUID(); persist() }
             do { try writeCSV() } catch { self.error = "CSV 更新失败：\(error.localizedDescription)" }
@@ -50,9 +126,12 @@ import AppKit
         ticker = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
+                let previousPhase = self.database.focusRoutine?.phase
+                self.advanceRoutine()
+                if previousPhase != self.database.focusRoutine?.phase { _ = self.persist() }
                 self.objectWillChange.send()
                 self.ticks += 1
-                if self.ticks % 20 == 0 && self.database.draft.isRunning { self.persist() }
+                if self.ticks % 20 == 0 && self.isRunning { self.persist() }
             }
         }
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
@@ -67,6 +146,7 @@ import AppKit
     }
     @discardableResult func persist() -> Bool {
         guard !blocked else { return false }
+        advanceRoutine()
         do {
             try FileManager.default.createDirectory(at: self.directory, withIntermediateDirectories: true)
             var snapshot = database
@@ -113,13 +193,17 @@ import AppKit
             $0.events?.removeAll { removed.contains($0.id) }
         }
     }
-    func prepareForSleep() { _ = persist() }
+    func prepareForSleep() {
+        if database.focusRoutine != nil { pause() }
+        _ = persist()
+    }
     func refreshAfterWake() {
         objectWillChange.send()
         _ = persist()
     }
     @discardableResult func cancelTimer() -> Bool {
         commit {
+            $0.focusRoutine = nil
             $0.draft = TimerState()
             $0.activity = nil
             $0.timerID = nil
@@ -133,14 +217,28 @@ import AppKit
     }
     func toggle() {
         guard !blocked, database.pendingEnd == nil else { return }
-        if database.draft.startedAt == nil { database.timerID = UUID() }
-        database.draft.toggle()
+        advanceRoutine()
+        if database.draft.startedAt == nil {
+            database.timerID = UUID()
+            database.draft.toggle()
+            if modeSettings.mode == .microBreak { database.focusRoutine = FocusRoutine(settings: modeSettings); routineTick = StudyClock.now }
+        } else if var routine = database.focusRoutine {
+            if routine.phase == .ready { routine = FocusRoutine(settings: modeSettings) }
+            else { routine.suspended.toggle() }
+            database.focusRoutine = routine
+            database.draft.runningSince = !routine.suspended && routine.phase == .focus ? StudyClock.now : nil
+            routineTick = StudyClock.now
+        } else { database.draft.toggle() }
         persist()
     }
-    func pause() { database.draft.pause(); persist() }
+    func pause() {
+        advanceRoutine()
+        database.focusRoutine?.suspended = true
+        database.draft.pause(); persist()
+    }
     func finish() {
         guard !blocked, database.draft.startedAt != nil else { return }
-        database.draft.pause()
+        pause()
         database.pendingEnd = Date()
         persist()
     }
@@ -152,6 +250,7 @@ import AppKit
         return commit { database in
             database.sessions = RecordExchange.merge(local: database.sessions, incoming: [session], purgedIDs: database.purgedIDs ?? [])
             database.timerID = nil
+            database.focusRoutine = nil
             database.draft = TimerState()
             database.activity = nil
             database.pendingEnd = nil
@@ -217,6 +316,7 @@ import AppKit
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: validated.sessions, purgedIDs: $0.purgedIDs ?? [])
                 $0.events = RecordExchange.mergeEvents(local: $0.events ?? [], incoming: validated.events ?? [], purgedIDs: $0.purgedIDs ?? [])
                 if syncTimer, let timer = validated.timerTransfer {
+                    $0.focusRoutine = nil
                     $0.timerID = timer.timerID ?? (timer.startedAt == nil ? nil : UUID())
                     $0.draft = timer.timerState()
                     $0.pendingEnd = timer.pendingEnd
@@ -227,7 +327,9 @@ import AppKit
     }
     func export() throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("数据读取失败，无法导出。") }
+        advanceRoutine()
         var snapshot = database
+        snapshot.focusRoutine = nil
         let capturedAt = Date()
         snapshot.draft = database.draft.checkpoint()
         snapshot.timerTransfer = TimerTransfer(capturedAt: capturedAt, startedAt: snapshot.draft.startedAt,

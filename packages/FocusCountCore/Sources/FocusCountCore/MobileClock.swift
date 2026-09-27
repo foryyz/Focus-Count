@@ -39,6 +39,7 @@ public enum RecordExchange {
             throw ExchangeError.invalid("文件中的计时状态无效。")
         }
         if let goal = database.goal, !goal.isValid { throw ExchangeError.invalid("目标日期数据无效。") }
+        if let routine = database.focusRoutine, !routine.isValid { throw ExchangeError.invalid("专注模式状态无效。") }
         var ids = Set<UUID>()
         for index in database.sessions.indices {
             let session = database.sessions[index]

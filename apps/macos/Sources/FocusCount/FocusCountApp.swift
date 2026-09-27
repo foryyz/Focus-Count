@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var showHistory = false
     @State private var showData = false
     @State private var showToday = false
+    @State private var showModes = false
     @State private var showTarget = false
     @StateObject private var targetCountdown: TargetCountdownStore
     init() {
@@ -32,11 +33,11 @@ struct ContentView: View {
     @State private var chromeVisible = true
     @State private var interaction = Date()
     @State private var pointerLocation: CGPoint?
-    private var phase: Int { store.database.draft.isRunning ? 1 : store.database.draft.startedAt == nil ? 0 : 2 }
+    private var phase: Int { store.isRunning ? 1 : store.database.draft.startedAt == nil ? 0 : 2 }
     private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { colorScheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
     private var backdrop: Color { colorScheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
-    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
+    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showModes || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 1000
@@ -93,6 +94,8 @@ struct ContentView: View {
                                     .font(.system(size: 17, weight: .semibold))
                             }.buttonStyle(PrismaticStartStyle()).disabled(store.blocked).keyboardShortcut(.defaultAction)
                         }.transition(.opacity)
+                    } else if store.isResting {
+                        ModeRestView(store: store)
                     } else {
                         VStack(spacing: wide ? 26 : 16) {
                             HStack(spacing: 8) {
@@ -114,6 +117,9 @@ struct ContentView: View {
                                 .accessibilityHint(phase == 1 ? "暂停计时" : "继续计时")
                             FocusFlow(running: phase == 1, reduceMotion: reduceMotion, tint: phase == 1 ? .teal : pauseInk)
                                 .frame(maxWidth: wide ? 460 : 300)
+                            if store.database.focusRoutine != nil {
+                                Text("MICRO BREAK MODE").font(.system(size: 10, weight: .medium)).tracking(1.5).foregroundStyle(.secondary)
+                            }
                             Text(phase == 1 ? "Stay with this moment. 🌊" : "Take a breath. Come back when you’re ready. 🍃")
                                 .font(.system(size: 13)).foregroundStyle(.secondary)
                         }.transition(.opacity)
@@ -178,6 +184,19 @@ struct ContentView: View {
                         .frame(height: 34)
                         .padding(.bottom, 18)
                 }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Button { showModes.toggle(); revealControls() } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(store.modeSettings.mode == .microBreak ? Color.teal : ink.opacity(0.65))
+                        .frame(width: 34, height: 34)
+                        .background(ink.opacity(0.045), in: Circle())
+                        .overlay(Circle().strokeBorder(ink.opacity(0.09), lineWidth: 1))
+                }.buttonStyle(.plain).help("专注模式").accessibilityLabel("专注模式")
+                    .popover(isPresented: $showModes, arrowEdge: .bottom) { FocusModeSettingsView(store: store) }
+                    .padding(.trailing, wide ? 64 : 32).padding(.bottom, 18)
+                    .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
             }
             .onContinuousHover { hover in
                 if case .active(let location) = hover, pointerLocation != location {

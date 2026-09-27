@@ -68,6 +68,7 @@ public struct TimerState: Codable {
 }
 
 public struct Database: Codable {
+    public var focusRoutine: FocusRoutine?
     public var goal: GoalSnapshot?
     public var version = 5
     public var timerTransfer: TimerTransfer?
