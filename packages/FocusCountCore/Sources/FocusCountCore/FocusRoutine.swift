@@ -12,6 +12,8 @@ public struct FocusRoutineSettings: Codable, Equatable {
     public var roundMinutes = 90
     public var restMinutes = 20
     public var volume = 0.4
+    public var restSound: String?
+    public var focusSound: String?
     public init() {}
     public var isValid: Bool {
         (1...180).contains(minimumMinutes) && (minimumMinutes...180).contains(maximumMinutes) &&

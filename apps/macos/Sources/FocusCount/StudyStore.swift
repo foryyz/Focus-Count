@@ -18,10 +18,14 @@ import AppKit
         return database.draft.isRunning
     }
     var isResting: Bool { database.focusRoutine.map { $0.phase != .focus } ?? false }
-    func previewModeSound(volume: Double? = nil) { playModeSound("Glass", volume: volume ?? modeSettings.volume) }
+    func previewModeSound(id: String = "Glass", volume: Double? = nil) { playModeSound(id, volume: volume ?? modeSettings.volume) }
     private func playModeSound(_ name: String, volume: Double) {
         playingSound?.stop()
-        playingSound = NSSound(named: NSSound.Name(name))
+        playingSound = SoundLibrary.shared.sound(name)
+        if playingSound == nil {
+            error = "所选提示音无法播放，已使用默认提示音。请在设置中检查音频文件。"
+            playingSound = NSSound(named: NSSound.Name("Glass"))
+        }
         playingSound?.volume = Float(volume)
         playingSound?.play()
     }
@@ -58,7 +62,8 @@ import AppKit
         database.focusRoutine = routine
         routineTick = now
         if phase != routine.phase && soundsEnabled && elapsed < 2 {
-            let sound = routine.phase == .microRest ? "Glass" : routine.phase == .focus ? "Pop" : routine.phase == .longRest ? "Hero" : "Glass"
+            let sound = (routine.phase == .microRest || routine.phase == .longRest)
+                ? (routine.settings.restSound ?? "Glass") : (routine.settings.focusSound ?? "Pop")
             playModeSound(sound, volume: routine.settings.volume)
         }
     }
@@ -218,6 +223,7 @@ import AppKit
     func toggle() {
         guard !blocked, database.pendingEnd == nil else { return }
         advanceRoutine()
+        let beginsRound = database.draft.startedAt == nil || database.focusRoutine?.phase == .ready
         if database.draft.startedAt == nil {
             database.timerID = UUID()
             database.draft.toggle()
@@ -229,6 +235,9 @@ import AppKit
             database.draft.runningSince = !routine.suspended && routine.phase == .focus ? StudyClock.now : nil
             routineTick = StudyClock.now
         } else { database.draft.toggle() }
+        if beginsRound, soundsEnabled, let routine = database.focusRoutine {
+            playModeSound(routine.settings.focusSound ?? "Pop", volume: routine.settings.volume)
+        }
         persist()
     }
     func pause() {

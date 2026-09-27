@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var showToday = false
     @State private var showModes = false
     @State private var showModeSettings = false
+    @State private var showSettings = false
     @State private var showTarget = false
     @StateObject private var targetCountdown: TargetCountdownStore
     init() {
@@ -38,7 +39,7 @@ struct ContentView: View {
     private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { colorScheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
     private var backdrop: Color { colorScheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
-    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showToday || showModeSettings || showModes || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
+    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showSettings || showToday || showModeSettings || showModes || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 1000
@@ -64,6 +65,9 @@ struct ContentView: View {
                     Button { showData = true } label: {
                         Image(systemName: "arrow.up.arrow.down").frame(width: 32, height: 28)
                     }.help("数据管理").accessibilityLabel("数据管理")
+                    Button { showSettings = true; revealControls() } label: {
+                        Image(systemName: "gearshape").frame(width: 32, height: 28)
+                    }.help("设置").accessibilityLabel("设置")
                     Button { focusWindow.toggle(); revealControls() } label: {
                         Image(systemName: focusWindow.fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                             .frame(width: 32, height: 28)
@@ -119,7 +123,7 @@ struct ContentView: View {
                             FocusFlow(running: phase == 1, reduceMotion: reduceMotion, tint: phase == 1 ? .teal : pauseInk)
                                 .frame(maxWidth: wide ? 460 : 300)
                             if let routine = store.database.focusRoutine {
-                                Text("MICRO BREAK MODE · \(Int(ceil(routine.roundRemaining / 60)))min").font(.system(size: 10, weight: .medium)).tracking(1.5).foregroundStyle(.secondary)
+                                Text("MICRO BREAK MODE · \(Int(ceil(routine.roundRemaining / 60)))min").font(.system(size: 10, weight: .medium)).tracking(1.5).foregroundStyle(Color.accentColor)
                             }
                             Text(phase == 1 ? "Stay with this moment. 🌊" : "Take a breath. Come back when you’re ready. 🍃")
                                 .font(.system(size: 13)).foregroundStyle(.secondary)
@@ -203,6 +207,7 @@ struct ContentView: View {
                         }
                     }
                     .sheet(isPresented: $showModeSettings) { FocusModeSettingsView(store: store) }
+                    .sheet(isPresented: $showSettings) { SoundSettingsView(store: store) }
                     .padding(.trailing, wide ? 64 : 32).padding(.bottom, 18)
                     .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
             }

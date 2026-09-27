@@ -33,7 +33,7 @@ struct FocusModeMenuView: View {
                 }.buttonStyle(.plain).disabled(store.blocked || store.database.pendingEnd != nil)
             }
             Divider()
-            Button(action: adjust) { Label("调整微休息参数与声音", systemImage: "slider.horizontal.3") }
+            Button(action: adjust) { Label("调整模式参数与声音", systemImage: "slider.horizontal.3") }
                 .buttonStyle(.plain).font(.callout).padding(8)
         }.padding(16).frame(width: 300)
     }
@@ -43,36 +43,53 @@ struct FocusModeSettingsView: View {
     @ObservedObject var store: StudyStore
     @Environment(\.dismiss) private var dismiss
     @State private var settings = FocusRoutineSettings()
+    @State private var selectedMode: FocusMode = .standard
+    @ObservedObject private var library = SoundLibrary.shared
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: FocusMode.microBreak.symbol).foregroundStyle(.teal)
-                Text("微休息设置").font(.headline)
+                Image(systemName: selectedMode.symbol).foregroundStyle(.teal)
+                Text("模式设置").font(.headline)
                 Spacer()
                 Button("取消") { dismiss() }.keyboardShortcut(.cancelAction)
             }.padding(20)
             Divider()
+            Picker("选择要调整的模式", selection: $selectedMode) {
+                ForEach(FocusMode.allCases, id: \.self) { mode in
+                    Label(mode.title, systemImage: mode.symbol).tag(mode)
+                }
+            }.pickerStyle(.segmented).padding(.horizontal, 20).padding(.vertical, 12)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text("提醒节奏").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                    Stepper("随机间隔下限：\(settings.minimumMinutes) 分钟", value: $settings.minimumMinutes, in: 1...180)
-                    Stepper("随机间隔上限：\(settings.maximumMinutes) 分钟", value: $settings.maximumMinutes, in: 1...180)
-                    Stepper("微休息：\(settings.microSeconds) 秒", value: $settings.microSeconds, in: 1...300)
-                    Divider()
-                    Text("专注与长休息").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                    Stepper("每轮专注：\(settings.roundMinutes) 分钟", value: $settings.roundMinutes, in: 1...360)
-                    Stepper("长休息：\(settings.restMinutes) 分钟", value: $settings.restMinutes, in: 1...180)
-                    HStack { Text("音量"); Slider(value: $settings.volume, in: 0...1); Button("试听") { store.previewModeSound(volume: settings.volume) } }
-                    if !settings.isValid { Text("随机间隔上限不能小于下限。").font(.caption).foregroundStyle(.red) }
-                    Text("每轮包含微休息；所有休息均不计入专注时长。长休息结束需手动继续。休眠或重启后暂停，需手动恢复。")
-                        .font(.caption).foregroundStyle(.secondary)
-                    Text("参数在下一轮生效。保存设置不会切换当前模式。")
-                        .font(.caption).foregroundStyle(.secondary)
+                    if selectedMode == .microBreak {
+                        Text("提醒节奏").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                        Stepper("随机间隔下限：\(settings.minimumMinutes) 分钟", value: $settings.minimumMinutes, in: 1...180)
+                        Stepper("随机间隔上限：\(settings.maximumMinutes) 分钟", value: $settings.maximumMinutes, in: 1...180)
+                        Stepper("微休息：\(settings.microSeconds) 秒", value: $settings.microSeconds, in: 1...300)
+                        Divider()
+                        Text("专注与长休息").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                        Stepper("每轮专注：\(settings.roundMinutes) 分钟", value: $settings.roundMinutes, in: 1...360)
+                        Stepper("长休息：\(settings.restMinutes) 分钟", value: $settings.restMinutes, in: 1...180)
+                        soundPicker("开始休息", selection: $settings.restSound, fallback: "Glass")
+                        soundPicker("开始专注", selection: $settings.focusSound, fallback: "Pop")
+                        HStack { Text("音量"); Slider(value: $settings.volume, in: 0...1) }
+                        Text("可在主页右上角「设置 → 提示音」导入并命名自己的声音。")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if !settings.isValid { Text("随机间隔上限不能小于下限。").font(.caption).foregroundStyle(.red) }
+                        Text("每轮包含微休息；所有休息均不计入专注时长。长休息结束需手动继续。休眠或重启后暂停，需手动恢复。")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text("参数在下一轮生效。保存设置不会切换当前模式。")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Label("按自己的节奏专注", systemImage: FocusMode.standard.symbol).font(.headline)
+                        Text("普通专注不自动安排休息，也不播放周期提醒，暂时无需调整参数。")
+                            .foregroundStyle(.secondary)
+                    }
                 }.padding(20)
             }
             Divider()
             HStack {
-                Button("恢复默认参数") { settings = FocusRoutineSettings() }
+                Button("恢复默认参数") { settings = FocusRoutineSettings() }.disabled(selectedMode == .standard)
                 Spacer()
                 Button("应用") {
                     settings.mode = store.modeSettings.mode
@@ -81,7 +98,18 @@ struct FocusModeSettingsView: View {
                     .keyboardShortcut(.defaultAction)
             }.padding(20)
         }.frame(width: 440, height: 480)
-            .onAppear { settings = store.modeSettings }
+            .onAppear { settings = store.modeSettings; selectedMode = store.modeSettings.mode }
+    }
+    private func soundPicker(_ title: String, selection: Binding<String?>, fallback: String) -> some View {
+        HStack {
+            Picker(title, selection: Binding(get: { selection.wrappedValue ?? fallback }, set: { selection.wrappedValue = $0 })) {
+                ForEach(library.sounds) { sound in Text(sound.name).tag(sound.id) }
+                if let id = selection.wrappedValue, !library.sounds.contains(where: { $0.id == id }) {
+                    Text("提示音不可用，请重新选择").tag(id)
+                }
+            }
+            Button("试听") { store.previewModeSound(id: selection.wrappedValue ?? fallback, volume: settings.volume) }
+        }
     }
 }
 
@@ -99,7 +127,8 @@ struct ModeRestView: View {
                     .font(.callout).foregroundStyle(.secondary)
                 Text("已专注 " + duration(store.database.draft.seconds())).font(.caption).foregroundStyle(.secondary)
                 if routine.phase != .ready {
-                    Button("跳过这次休息") { store.skipModeRest() }.buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
+                    Button { store.skipModeRest() } label: { Text("跳过这次休息").underline() }
+                        .buttonStyle(.plain).font(.caption.weight(.semibold)).foregroundStyle(Color.accentColor)
                 }
             }
         }
