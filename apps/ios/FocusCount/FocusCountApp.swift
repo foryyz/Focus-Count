@@ -78,13 +78,10 @@ struct TimerScreen: View {
             .background(backdrop.ignoresSafeArea())
             .navigationTitle("").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if !immersive {
-                        HStack(spacing: 6) {
-                            Text("🧠").font(.system(size: 20))
-                            Text("foryyz").font(.system(size: 14, weight: .medium, design: .rounded))
-                        }.lineLimit(1).foregroundStyle(.secondary)
-                    }
+                if #available(iOS 26.0, *) {
+                    brandItem.sharedBackgroundVisibility(.hidden)
+                } else {
+                    brandItem
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if !immersive {
@@ -162,19 +159,32 @@ struct TimerScreen: View {
             }
         }
     }
+    private var brandItem: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            if !immersive {
+                (Text("🧠 ").font(.system(size: 20))
+                 + Text("foryyz").font(.system(size: 14, weight: .medium, design: .rounded)))
+                    .fixedSize(horizontal: true, vertical: false)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("foryyz")
+            }
+        }
+    }
     private var welcome: some View {
-        VStack(spacing: 28) {
+        VStack(spacing: 16) {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 let minutes = Int(store.today(at: context.date).seconds) / 60
                 VStack(spacing: 12) {
-                    (Text("Today’s ").foregroundColor(.secondary)
-                     + Text("focus").fontWeight(.semibold).foregroundColor(ink))
-                        .font(.system(size: 32.76, weight: .regular, design: .rounded))
-                        .lineLimit(1).minimumScaleFactor(0.8)
-                    (Text("\(minutes / 60)H").font(.system(size: 64, weight: .medium, design: .rounded)).foregroundColor(ink)
-                     + Text("  \(minutes % 60)m").font(.system(size: 30, weight: .regular, design: .rounded)).foregroundColor(.secondary))
-                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
-                        .accessibilityLabel("今日已保存专注时长，\(minutes / 60) 小时 \(minutes % 60) 分钟")
+                    VStack(spacing: 4) {
+                        (Text("Today’s ").foregroundColor(.secondary)
+                         + Text("focus").fontWeight(.semibold).foregroundColor(ink))
+                            .font(.system(size: 32.76, weight: .regular, design: .rounded))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                        (Text("\(minutes / 60)H").font(.system(size: 64, weight: .medium, design: .rounded)).foregroundColor(ink)
+                         + Text("  \(minutes % 60)m").font(.system(size: 30, weight: .regular, design: .rounded)).foregroundColor(.secondary))
+                            .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                            .accessibilityLabel("今日已保存专注时长，\(minutes / 60) 小时 \(minutes % 60) 分钟")
+                    }
                     Text(Self.greetings[encouragement].1).font(.footnote).foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                 }
@@ -195,7 +205,7 @@ struct TimerScreen: View {
                 .background(ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
             Button { startOrMark() } label: {
                 Label("开始专注", systemImage: "play.fill").font(.headline)
-            }.buttonStyle(PrismaticStartStyle()).disabled(store.blocked)
+            }.buttonStyle(PrismaticStartStyle()).disabled(store.blocked).padding(.top, 12)
         }
     }
     private func timer(width: CGFloat) -> some View {
