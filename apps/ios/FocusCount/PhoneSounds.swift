@@ -143,7 +143,7 @@ struct PhoneSoundSettings: View {
                     }
                 }
                 Section {
-                    Text("点击自定义声音的名称即可重命名。支持常见音频格式，最大 50 MB；音频复制到本机，随新版同步文件一同导出。声音受静音开关和系统音量影响。")
+                    Text("点击自定义声音的名称即可重命名。支持常见音频格式，最大 50 MB；音频复制到本机，仅保存在本机，不参与同步。声音受静音开关和系统音量影响。")
                         .font(.footnote).foregroundStyle(.secondary)
                     if let error = sounds.error { Text(error).foregroundStyle(.red) }
                 }

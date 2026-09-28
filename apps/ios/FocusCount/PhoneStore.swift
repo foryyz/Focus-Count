@@ -262,7 +262,6 @@ struct PhoneState: Codable {
             try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("before-import-\(identifier).json"), options: .atomic)
             try export().write(to: directory.appendingPathComponent("before-import-complete-\(identifier).json"), options: .atomic)
             try RecordExchange.encode(database).write(to: directory.appendingPathComponent("incoming-\(identifier).json"), options: .atomic)
-            if let sounds = incoming.sounds { try soundLibrary.importSounds(sounds) }
             let success = commit {
                 $0.goal = GoalSnapshot.merge($0.goal, incoming.goal)
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(incoming.purgedIDs ?? [])
@@ -271,6 +270,9 @@ struct PhoneState: Codable {
                 if syncTimer, let timer = incoming.timerTransfer {
                     $0.routine = nil
                     if var routine = incoming.focusRoutine {
+                        routine.settings.restSound = modeSettings.restSound
+                        routine.settings.focusSound = modeSettings.focusSound
+                        routine.settings.volume = modeSettings.volume
                         let focus = routine.advance(max(0, Date().timeIntervalSince(timer.capturedAt)))
                         $0.routine = PhoneRoutine(routine: routine)
                         $0.clock = MobileClock(); $0.clock.startedAt = timer.startedAt
@@ -308,8 +310,11 @@ struct PhoneState: Codable {
             isRunning: state.clock.isRunning, pendingEnd: state.clock.pendingEnd, activity: state.activity, timerID: state.timerID)
         var snapshot = Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd, timerTransfer: transfer, activity: state.activity, goal: state.goal)
         snapshot.sharedSettings = SharedPreferences.capture(preferences)
-        snapshot.sounds = try soundLibrary.exportSounds()
+        snapshot.sounds = nil
         snapshot.focusRoutine = state.routine?.portable
+        snapshot.focusRoutine?.settings.restSound = nil
+        snapshot.focusRoutine?.settings.focusSound = nil
+        snapshot.focusRoutine?.settings.volume = FocusRoutineSettings().volume
         return try RecordExchange.encode(snapshot)
     }
 }

@@ -152,3 +152,8 @@ bash scripts/generate-icons.sh
 Mac 传来的较密集模式若一轮超过 64 条通知，iPhone 会提示当前先安排前 64 条，重新打开应用时补齐后续提醒。正常在 iPhone 设置的参数仍受整轮提醒数量检查。
 
 首页左上角仅保留大脑图标；Today’s focus 标题与时长分两行，保留 Mac 一致的深浅。
+
+
+### 2026-09-28 同步规则调整
+
+Mac 1.19.1 / iPhone 1.5.1 的 `sharedSettings.entries.mode` 只含五个时间数值（minimumMinutes、maximumMinutes、microSeconds、roundMinutes、restMinutes），旧字段仍可读取但声音与模式偏好部分被忽略。音量、声音选择与自定义音频留在本机，不导出、不导入；`sounds` 不再输出，旧附件不安装。计时接续保留阶段与剩余时间，采用接收端本机声音。其余 emoji、颜色、分类、目标和记录同步保持不变。此规则取代此前的音频同步说明。iPhone 试听按钮与选择器分属独立表单行。

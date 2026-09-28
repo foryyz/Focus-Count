@@ -75,7 +75,7 @@ final class PhoneStoreTests: XCTestCase {
         try Data("invalid".utf8).write(to: invalid)
         XCTAssertThrowsError(try sounds.add(invalid))
     }
-    @MainActor func testCompleteSettingsSoundAndRestStateExchange() throws {
+    @MainActor func testNumericSettingsAndRestStateExchangeWithoutSounds() throws {
         let root = directory()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = PhoneStore(directory: root)
@@ -98,8 +98,8 @@ final class PhoneStoreTests: XCTestCase {
         let output = try RecordExchange.decode(store.export())
         XCTAssertEqual(output.sharedSettings?.entries["emoji/冥想"]?.value, "🧘")
         XCTAssertEqual(output.sharedSettings?.entries["markerColor/冥想"]?.value, "AABBCC")
-        XCTAssertEqual(output.sounds?.first?.data, incoming.sounds?.first?.data)
-        XCTAssertEqual(output.sounds?.first?.name, "我的铃声")
+        XCTAssertNil(output.sounds)
+        XCTAssertNil(output.focusRoutine?.settings.restSound)
         XCTAssertEqual(output.focusRoutine?.phase, .microRest)
         let peer = PhoneStore(directory: root.appendingPathComponent("peer"))
         XCTAssertTrue(peer.importRecords(output, syncTimer: true))

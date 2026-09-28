@@ -324,7 +324,6 @@ import AppKit
             try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
             try export().write(to: backupFolder.appendingPathComponent("before-import.json"), options: .atomic)
             try RecordExchange.encode(incoming).write(to: backupFolder.appendingPathComponent("incoming.json"), options: .atomic)
-            if let sounds = validated.sounds { try soundLibrary.importSounds(sounds) }
             let success = commit {
                 $0.goal = GoalSnapshot.merge($0.goal, validated.goal)
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(validated.purgedIDs ?? [])
@@ -333,6 +332,9 @@ import AppKit
                 if syncTimer, let timer = validated.timerTransfer {
                     $0.focusRoutine = validated.focusRoutine
                     if var routine = $0.focusRoutine {
+                        routine.settings.restSound = modeSettings.restSound
+                        routine.settings.focusSound = modeSettings.focusSound
+                        routine.settings.volume = modeSettings.volume
                         let focus = routine.advance(max(0, Date().timeIntervalSince(timer.capturedAt)))
                         $0.focusRoutine = routine
                         $0.draft = TimerState(startedAt: timer.startedAt, accumulated: timer.accumulated + focus)
@@ -359,12 +361,15 @@ import AppKit
         advanceRoutine()
         var snapshot = database
         snapshot.sharedSettings = modeDefaults.map { SharedPreferences.capture($0) }
-        snapshot.sounds = try soundLibrary.exportSounds()
+        snapshot.sounds = nil
         let capturedAt = Date()
         snapshot.draft = database.draft.checkpoint()
         snapshot.timerTransfer = TimerTransfer(capturedAt: capturedAt, startedAt: snapshot.draft.startedAt,
             accumulated: snapshot.draft.accumulated, isRunning: database.draft.isRunning,
             pendingEnd: database.pendingEnd, activity: database.activity, timerID: database.timerID)
+        snapshot.focusRoutine?.settings.restSound = nil
+        snapshot.focusRoutine?.settings.focusSound = nil
+        snapshot.focusRoutine?.settings.volume = FocusRoutineSettings().volume
         return try RecordExchange.encode(snapshot)
     }
     func restoreVersion(_ snapshot: SessionSnapshot) -> Bool {

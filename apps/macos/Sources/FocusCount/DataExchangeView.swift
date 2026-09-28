@@ -68,8 +68,8 @@ struct DataExchangeView: View {
                         Text("合并后保留 \(RecordExchange.archivedCount(merged)) 个历史版本，不重复计入统计。")
                         Text("彻底删除标记会同步清除对应记录及其历史版本。修改时间较新的版本作为当前记录；时间相同按固定规则选定，两端结果一致。其他版本保留，可恢复。导入前备份双方数据，可选择是否同步计时。")
                             .font(.caption).foregroundStyle(.secondary)
-                        if incoming.sharedSettings != nil { Text("包含 emoji、颜色、分类、目标显示设置和模式参数，按条目合并较新的修改。") .font(.caption).foregroundStyle(.secondary) }
-                        if let sounds = incoming.sounds, !sounds.isEmpty { Text("包含 \(sounds.count) 个自定义提示音，音频与名称一起导入。") .font(.caption).foregroundStyle(.secondary) }
+                        if incoming.sharedSettings != nil { Text("包含 emoji、颜色、分类、目标显示设置和模式数值参数，按条目合并；声音与音量保持本机设置。") .font(.caption).foregroundStyle(.secondary) }
+                        if let sounds = incoming.sounds, !sounds.isEmpty { Text("旧版文件含 \(sounds.count) 个提示音附件，本次忽略，保留本机声音。") .font(.caption).foregroundStyle(.secondary) }
                         if incoming.goal != nil { Text("包含目标日期，将按修改时间合并；新版文件也同步目标隐藏状态与显示方式。") .font(.caption).foregroundStyle(.secondary) }
                         if let timer = incoming.timerTransfer {
                             Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
@@ -92,7 +92,7 @@ struct DataExchangeView: View {
                                     let addedSessions = store.database.sessions.filter { !sessionIDs.contains($0.id) }.count
                                     let addedEvents = (store.database.events ?? []).filter { !eventIDs.contains($0.id) }.count
                                     self.incoming = nil
-                                    message = "合并完成，新增 \(addedSessions + addedEvents) 个（专注记录 \(addedSessions) 个，时间标记 \(addedEvents) 个，含最近删除）。设置与提示音已合并，备份与历史版本已保留。" + (syncTimer ? "计时状态已同步。" : "本机计时保持不变。")
+                                    message = "合并完成，新增 \(addedSessions + addedEvents) 个（专注记录 \(addedSessions) 个，时间标记 \(addedEvents) 个，含最近删除）。设置已合并，提示音保持本机设置，备份与历史版本已保留。" + (syncTimer ? "计时状态已同步。" : "本机计时保持不变。")
                                 }
                             }.buttonStyle(.borderedProminent).tint(.teal)
                         }

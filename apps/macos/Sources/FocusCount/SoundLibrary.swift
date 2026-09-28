@@ -109,7 +109,7 @@ struct SoundSettingsView: View {
                         Divider()
                         HStack { Text("我的提示音").font(.headline); Spacer(); Button("导入音频…") { library.importSound() } }
                         ForEach(library.custom) { sound in SoundNameRow(sound: sound, store: store) }
-                        Text("点击自定义名称编辑，回车或点击保存。音频会复制到本机数据目录，不依赖原文件；随新版同步文件一同导出。")
+                        Text("点击自定义名称编辑，回车或点击保存。音频会复制到本机数据目录，不依赖原文件；仅保存在本机，不参与同步。")
                             .font(.caption).foregroundStyle(.secondary)
                         if let error = library.error { Text(error).font(.caption).foregroundStyle(.red) }
                     }.padding(20)

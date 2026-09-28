@@ -3,7 +3,7 @@ import FocusCountCore
 @testable import FocusCount
 
 @MainActor final class FocusModeTests: XCTestCase {
-    func testSharedSettingsAndSoundsTravelWithExport() throws {
+    func testSharedSettingsTravelWithoutSounds() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let store = StudyStore(directory: root, observeSystem: false)
@@ -15,9 +15,9 @@ import FocusCountCore
         XCTAssertTrue(store.importRecords(incoming))
         let output = try RecordExchange.decode(store.export())
         XCTAssertEqual(output.sharedSettings?.entries["emoji/sex"]?.value, "❤️")
-        XCTAssertEqual(output.sounds?.first?.data, incoming.sounds?.first?.data)
+        XCTAssertNil(output.sounds)
         XCTAssertTrue(store.importRecords(output))
-        XCTAssertEqual(try RecordExchange.decode(store.export()).sounds?.count, 1)
+        XCTAssertNil(try RecordExchange.decode(store.export()).sounds)
     }
     func testRestAccountingRestartAndDisable() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

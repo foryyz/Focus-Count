@@ -2,6 +2,31 @@ import XCTest
 @testable import FocusCountCore
 
 final class SharedPreferencesTests: XCTestCase {
+    func testLegacySoundSettingsAreIgnoredAndOnlyNumbersExport() throws {
+        let name = UUID().uuidString, defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        var local = FocusRoutineSettings(); local.mode = .microBreak
+        local.restSound = "local-rest"; local.focusSound = "local-focus"; local.volume = 0.75
+        defaults.set(try JSONEncoder().encode(local), forKey: "focus-modes-v1")
+        SharedPreferences.capture(defaults)
+        var remote = FocusRoutineSettings(); remote.roundMinutes = 45
+        remote.restSound = "remote-rest"; remote.focusSound = "remote-focus"; remote.volume = 0.1
+        var incoming = SharedSettings()
+        incoming.entries["mode"] = PreferenceValue(value: try JSONEncoder().encode(remote).base64EncodedString(), modified: Date())
+        SharedPreferences.apply(incoming, defaults: defaults)
+        let actual = try JSONDecoder().decode(FocusRoutineSettings.self, from: XCTUnwrap(defaults.data(forKey: "focus-modes-v1")))
+        XCTAssertEqual(actual.roundMinutes, 45)
+        XCTAssertEqual(actual.mode, .microBreak)
+        XCTAssertEqual(actual.restSound, "local-rest")
+        XCTAssertEqual(actual.focusSound, "local-focus")
+        XCTAssertEqual(actual.volume, 0.75)
+        let exported = SharedPreferences.capture(defaults)
+        let json = try JSONSerialization.jsonObject(with: XCTUnwrap(Data(base64Encoded: XCTUnwrap(exported.entries["mode"]?.value)))) as! [String: Any]
+        XCTAssertEqual(Set(json.keys), ["minimumMinutes", "maximumMinutes", "microSeconds", "roundMinutes", "restMinutes"])
+        var soundOnly = actual; soundOnly.volume = 0.2
+        defaults.set(try JSONEncoder().encode(soundOnly), forKey: "focus-modes-v1")
+        XCTAssertEqual(SharedPreferences.capture(defaults), exported)
+    }
     func testUnionClearAndOldImportDoesNotResurrect() throws {
         let aName = "sync-a-" + UUID().uuidString, bName = "sync-b-" + UUID().uuidString
         let a = UserDefaults(suiteName: aName)!, b = UserDefaults(suiteName: bName)!

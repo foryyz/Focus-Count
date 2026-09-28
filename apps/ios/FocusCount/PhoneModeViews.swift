@@ -100,13 +100,14 @@ struct PhoneModeSettings: View {
         }
     }
     private func soundPicker(_ title: String, id: Binding<String?>, fallback: String) -> some View {
-        VStack(alignment: .leading) {
+        Group {
             Picker(title, selection: Binding(get: { id.wrappedValue ?? fallback }, set: { id.wrappedValue = $0 })) {
                 ForEach(sounds.sounds) { sound in Text(sound.name).tag(sound.id) }
                 if let selected = id.wrappedValue, !sounds.sounds.contains(where: { $0.id == selected }) { Text("声音不可用").tag(selected) }
             }
             Button { sounds.play(id.wrappedValue ?? fallback, volume: settings.volume) } label: { Label("试听", systemImage: "play.circle") }
-                .font(.subheadline).frame(minHeight: 36)
+                .buttonStyle(.borderless).font(.subheadline).frame(minHeight: 44)
+                .accessibilityLabel("试听" + title + "提示音")
         }
     }
 }

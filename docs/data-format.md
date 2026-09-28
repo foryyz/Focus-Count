@@ -110,3 +110,8 @@ iPhone 本机 `PhoneState` 新增可选 `modeSettings` 和 `routine`。`routine`
 保持 v5 兼容，新增可选 `sharedSettings.entries`（键 → `{value, modified}`，value 为 null 表示删除）和 `sounds`（UUID、名称、扩展名、Base64 音频、modified）。设置包含 markerColor/、emoji/、category/、assignment/、focusColor/、目标隐藏/格式、mode。每键较新修改优先，相同时间使用值字符串排序决胜；未出现的条目保持本机数据。旧外观偏好迁移时间为 distantPast，后续修改有真实时间。模式参数作为一个设置项合并。声音用 UUID 合并，名称采用较新修改，时间相同按名称固定顺序选择。
 
 `focusRoutine` 从仅本机字段扩展为可交换的当前模式阶段；需明确勾选同步计时才应用。导出/导入时按 capturedAt 补齐阶段流逝，并仅累积专注阶段；iPhone 据此生成剩余阶段及通知。不同平台后续随机时刻可以不同，当前阶段与剩余时间会接续。上述内容替代旧版本对本机字段及导出剔除的描述。
+
+
+### 2026-09-28 同步规则调整
+
+Mac 1.19.1 / iPhone 1.5.1 的 `sharedSettings.entries.mode` 只含五个时间数值（minimumMinutes、maximumMinutes、microSeconds、roundMinutes、restMinutes），旧字段仍可读取但声音与模式偏好部分被忽略。音量、声音选择与自定义音频留在本机，不导出、不导入；`sounds` 不再输出，旧附件不安装。计时接续保留阶段与剩余时间，采用接收端本机声音。其余 emoji、颜色、分类、目标和记录同步保持不变。此规则取代此前的音频同步说明。iPhone 试听按钮与选择器分属独立表单行。

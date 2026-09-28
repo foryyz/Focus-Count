@@ -46,8 +46,8 @@ struct ExchangeScreen: View {
                         LabeledContent("合并后历史版本", value: "\(RecordExchange.archivedCount(merged)) 个")
                         Text("相同记录不会重复新增；较旧修改保留在历史版本中。彻底删除过的记录不会重新出现。")
                             .font(.footnote).foregroundStyle(.secondary)
-                        if pending.sharedSettings != nil { Text("包含 emoji、颜色、分类、目标显示设置和模式参数，按条目合并较新的修改。") .font(.caption).foregroundStyle(.secondary) }
-                        if let sounds = pending.sounds, !sounds.isEmpty { Text("包含 \(sounds.count) 个自定义提示音，音频与名称一起导入。") .font(.caption).foregroundStyle(.secondary) }
+                        if pending.sharedSettings != nil { Text("包含 emoji、颜色、分类、目标显示设置和模式数值参数，按条目合并；声音与音量保持本机设置。") .font(.caption).foregroundStyle(.secondary) }
+                        if let sounds = pending.sounds, !sounds.isEmpty { Text("旧版文件含 \(sounds.count) 个提示音附件，本次忽略，保留本机声音。") .font(.caption).foregroundStyle(.secondary) }
                         if pending.goal != nil { Text("包含目标日期，将按修改时间合并；新版文件也同步目标隐藏状态与显示方式。") .font(.caption).foregroundStyle(.secondary) }
                         if let timer = pending.timerTransfer {
                             Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
@@ -70,7 +70,7 @@ struct ExchangeScreen: View {
                                 }.count
                                 let removedCount = before.filter { record in !after.contains { $0.id == record.id } }.count
                                 message = "新增 \(addedCount) 条，更新 \(changedCount) 条，彻底删除 \(removedCount) 条。\n当前专注记录 \(store.sessions.count) 条，最近删除 \(after.count - store.sessions.count) 条，历史版本 \(RecordExchange.archivedCount(after)) 个。\n时间标记 \((store.state.events ?? []).filter { $0.deletedAt == nil }.count) 次，可在主页“时间标记”查看。\n相同记录不重复新增，较旧修改请在历史版本中查看。"
-                                message = (message ?? "") + "\n个性化设置与提示音已合并。" + (syncTimer ? "\n计时状态已同步。" : "\n本机计时保持不变。")
+                                message = (message ?? "") + "\n个性化设置已合并，提示音保持本机设置。" + (syncTimer ? "\n计时状态已同步。" : "\n本机计时保持不变。")
                                 self.pending = nil
                                 showResult = true
                             } else { failure = store.error ?? "导入未完成，请重试。" }
@@ -92,7 +92,7 @@ struct ExchangeScreen: View {
                         do { document = JSONDocument(data: try store.export()); exporting = true }
                         catch { failure = error.localizedDescription }
                     } label: { Label("导出 JSON", systemImage: "square.and.arrow.up") }.disabled(store.blocked)
-                } footer: { Text("兼容 Mac 的 sessions.json。导入合并记录，可选择同步计时状态；导出包含已删除标记、emoji、颜色、分类、目标显示设置、模式参数和自定义提示音。") }
+                } footer: { Text("兼容 Mac 的 sessions.json。导入合并记录，可选择同步计时状态；导出包含已删除标记、emoji、颜色、分类、目标显示设置、模式数值参数；不包含提示音设置和音频。") }
                 Section {
                     Button { showVersions = true } label: { Label("历史版本与恢复", systemImage: "clock.arrow.circlepath") }
                 } footer: { Text("不同修改会保留为历史版本，不重复计入统计。两端都需更新到支持 v5 的版本。") }
