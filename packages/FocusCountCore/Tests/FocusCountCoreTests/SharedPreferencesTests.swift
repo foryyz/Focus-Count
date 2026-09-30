@@ -2,6 +2,21 @@ import XCTest
 @testable import FocusCountCore
 
 final class SharedPreferencesTests: XCTestCase {
+    func testImportChoicesDefaultOffPersistAndStayDeviceLocal() {
+        let name = UUID().uuidString, defaults = UserDefaults(suiteName: name)!
+        defer { defaults.removePersistentDomain(forName: name) }
+        XCTAssertFalse(defaults.bool(forKey: SyncPreferences.soundsKey))
+        XCTAssertFalse(defaults.bool(forKey: SyncPreferences.parametersKey))
+        defaults.set(true, forKey: SyncPreferences.soundsKey)
+        let reopened = UserDefaults(suiteName: name)!
+        XCTAssertTrue(reopened.bool(forKey: SyncPreferences.soundsKey))
+        let shared = SharedPreferences.capture(defaults)
+        XCTAssertNil(shared.entries[SyncPreferences.soundsKey])
+        XCTAssertNil(shared.entries[SyncPreferences.parametersKey])
+        SharedPreferences.apply(SharedSettings(), defaults: defaults)
+        XCTAssertTrue(defaults.bool(forKey: SyncPreferences.soundsKey))
+        XCTAssertFalse(defaults.bool(forKey: SyncPreferences.parametersKey))
+    }
     func testLegacySoundSettingsAreIgnoredAndOnlyNumbersExport() throws {
         let name = UUID().uuidString, defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }

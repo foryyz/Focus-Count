@@ -12,8 +12,11 @@ struct JSONDocument: FileDocument {
 
 struct ExchangeScreen: View {
     @ObservedObject var store: PhoneStore
+    var initialImport: Database? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var syncTimer = false
+    @AppStorage(SyncPreferences.soundsKey) private var syncSounds = false
+    @AppStorage(SyncPreferences.parametersKey) private var syncParameters = false
     @State private var importing = false
     @State private var exporting = false
     @State private var document = JSONDocument(data: Data())
@@ -22,14 +25,9 @@ struct ExchangeScreen: View {
     @State private var failure: String?
     @State private var showVersions = false
     @State private var reading = false
+    @State private var didLoadInitial = false
     @State private var filename = ""
     @State private var showResult = false
-    private var merged: [StudySession] {
-        guard let pending else { return store.state.sessions }
-        return RecordExchange.merge(local: store.state.sessions, incoming: pending.sessions,
-            purgedIDs: (store.state.purgedIDs ?? []).union(pending.purgedIDs ?? []))
-    }
-    private var added: Int { pending?.sessions.filter { record in !(store.state.purgedIDs ?? []).contains(record.id) && !store.state.sessions.contains { $0.id == record.id } }.count ?? 0 }
     var body: some View {
         NavigationStack {
             Form {
@@ -38,39 +36,18 @@ struct ExchangeScreen: View {
                 if let pending {
                     Section("请确认导入 · 尚未写入") {
                         Text(filename).font(.headline)
-                        Text("文件包含 \(pending.events?.count ?? 0) 个时间标记，随记录一起合并。")
-                        LabeledContent("文件记录", value: "\(pending.sessions.count) 条")
-                        LabeledContent("新增记录（含最近删除）", value: "\(added) 条")
-                        LabeledContent("合并后专注记录", value: "\(merged.filter { $0.deletedAt == nil }.count) 条")
-                        LabeledContent("合并后最近删除", value: "\(merged.filter { $0.deletedAt != nil }.count) 条")
-                        LabeledContent("合并后历史版本", value: "\(RecordExchange.archivedCount(merged)) 个")
-                        Text("相同记录不会重复新增；较旧修改保留在历史版本中。彻底删除过的记录不会重新出现。")
-                            .font(.footnote).foregroundStyle(.secondary)
-                        if pending.sharedSettings != nil { Text("包含 emoji、颜色、分类、目标显示设置和模式数值参数，按条目合并；声音与音量保持本机设置。") .font(.caption).foregroundStyle(.secondary) }
-                        if let sounds = pending.sounds, !sounds.isEmpty { Text("旧版文件含 \(sounds.count) 个提示音附件，本次忽略，保留本机声音。") .font(.caption).foregroundStyle(.secondary) }
-                        if pending.goal != nil { Text("包含目标日期，将按修改时间合并；新版文件也同步目标隐藏状态与显示方式。") .font(.caption).foregroundStyle(.secondary) }
+                        Text(ExchangePreview.source(pending)).font(.footnote).foregroundStyle(.secondary)
+                        ForEach(store.importPreview(pending, syncParameters: syncParameters, syncSounds: syncSounds), id: \.self) { Text($0) }
+                        Text(ExchangePreview.rules).font(.footnote).foregroundStyle(.secondary)
                         if let timer = pending.timerTransfer {
                             Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
-                            Text("导出于 \(timer.capturedAt.formatted(date: .abbreviated, time: .standard)) · \(phoneDuration(timer.accumulated)) · \(timer.activity ?? "未填写活动")")
-                                .font(.footnote).foregroundStyle(.secondary)
-                            if syncTimer {
-                                Text("将替换本机当前计时（替换前会备份原状态）。运行中的计时会补上文件传递期间的时间；原设备不会自动停止。请勿在两端分别保存同一次专注。")
-                                    .font(.footnote).foregroundStyle(.orange)
-                            }
-                        } else {
-                            Text("旧文件未提供可同步计时，请在新版应用重新导出。").font(.footnote).foregroundStyle(.secondary)
+                            if syncTimer { Text("替换本机计时并接续已过时间；原设备不会自动停止。") .font(.footnote).foregroundStyle(.orange) }
+                            if syncTimer && !syncParameters { Text("本轮按原节奏接续，下轮沿用本机参数。").font(.caption).foregroundStyle(.secondary) }
                         }
                         Button {
-                            let before = store.state.sessions
-                            if store.importRecords(pending, syncTimer: syncTimer) {
-                                let after = store.state.sessions
-                                let addedCount = after.filter { record in !before.contains { $0.id == record.id } }.count
-                                let changedCount = after.filter { record in
-                                    before.contains { $0.id == record.id && SessionSnapshot($0) != SessionSnapshot(record) }
-                                }.count
-                                let removedCount = before.filter { record in !after.contains { $0.id == record.id } }.count
-                                message = "新增 \(addedCount) 条，更新 \(changedCount) 条，彻底删除 \(removedCount) 条。\n当前专注记录 \(store.sessions.count) 条，最近删除 \(after.count - store.sessions.count) 条，历史版本 \(RecordExchange.archivedCount(after)) 个。\n时间标记 \((store.state.events ?? []).filter { $0.deletedAt == nil }.count) 次，可在主页“时间标记”查看。\n相同记录不重复新增，较旧修改请在历史版本中查看。"
-                                message = (message ?? "") + "\n个性化设置已合并，提示音保持本机设置。" + (syncTimer ? "\n计时状态已同步。" : "\n本机计时保持不变。")
+                            let changes = store.importPreview(pending, syncParameters: syncParameters, syncSounds: syncSounds)
+                            if store.importRecords(pending, syncTimer: syncTimer, syncSounds: syncSounds, syncParameters: syncParameters) {
+                                message = (["合并完成，已按所选项目同步。"] + changes + ["本次备份可在历史版本查看。"]).joined(separator: "\n")
                                 self.pending = nil
                                 showResult = true
                             } else { failure = store.error ?? "导入未完成，请重试。" }
@@ -92,12 +69,17 @@ struct ExchangeScreen: View {
                         do { document = JSONDocument(data: try store.export()); exporting = true }
                         catch { failure = error.localizedDescription }
                     } label: { Label("导出 JSON", systemImage: "square.and.arrow.up") }.disabled(store.blocked)
-                } footer: { Text("兼容 Mac 的 sessions.json。导入合并记录，可选择同步计时状态；导出包含已删除标记、emoji、颜色、分类、目标显示设置、模式数值参数；不包含提示音设置和音频。") }
+                } footer: { Text("交换记录、标记与个性化设置。提示音与模式参数按“设置 → 同步设置”执行；计时可在本页选择。") }
                 Section {
                     Button { showVersions = true } label: { Label("历史版本与恢复", systemImage: "clock.arrow.circlepath") }
-                } footer: { Text("不同修改会保留为历史版本，不重复计入统计。两端都需更新到支持 v5 的版本。") }
+                } footer: { Text("查看历次导入备份和记录旧修改，不重复计入统计。") }
                 if let message { Section { Text(message).foregroundStyle(.teal) } }
                 if let error = store.error { Section { Text(error).foregroundStyle(.red).font(.footnote) } }
+            }
+            .onAppear {
+                guard !didLoadInitial else { return }
+                didLoadInitial = true
+                if let initialImport { pending = initialImport; filename = "历史备份" }
             }
             .id(pending != nil) // Reset the form scroll position when a file is ready.
             .navigationTitle("数据管理").navigationBarTitleDisplayMode(.inline)
@@ -144,11 +126,44 @@ struct PhoneVersionHistory: View {
     @ObservedObject var store: PhoneStore
     @Environment(\.dismiss) private var dismiss
     @State private var restoring: SessionSnapshot?
+    @State private var deletingArchive: ImportArchive?
+    @State private var deletingVersion: SessionSnapshot?
+    @State private var deletingAll = false
+    @State private var archives: [ImportArchive] = []
+    @State private var archiveDatabase: Database?
+    @State private var previewBackup = false
+    @State private var archiveError: String?
     private var records: [StudySession] { store.state.sessions.filter { !($0.history ?? []).isEmpty }.sorted { $0.startedAt > $1.startedAt } }
     var body: some View {
         NavigationStack {
             List {
-                if records.isEmpty { ContentUnavailableView("暂无历史版本", systemImage: "clock.arrow.circlepath", description: Text("编辑或合并不同版本后会自动保留。")) }
+                Section {
+                    Button(role: .destructive) { deletingAll = true } label: { Label("删除全部历史版本", systemImage: "trash") }
+                        .disabled(store.blocked || (archives.isEmpty && records.isEmpty))
+                }
+                Section("导入历史") {
+                    if archives.isEmpty { Text("暂无导入备份").foregroundStyle(.secondary) }
+                    ForEach(archives) { archive in
+                        HStack {
+                            Button {
+                                do { archiveDatabase = try archive.read(); previewBackup = true }
+                                catch { archiveError = "备份读取失败：\(error.localizedDescription)" }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(archive.title)
+                                    Text("备份文件修改于 " + archive.date.formatted(date: .abbreviated, time: .standard)).font(.caption).foregroundStyle(.secondary)
+                                    Text("查看并合并").font(.caption)
+                                }
+                            }.buttonStyle(.borderless)
+                            Spacer()
+                            Button(role: .destructive) { deletingArchive = archive } label: { Image(systemName: "trash") }
+                                .buttonStyle(.borderless).accessibilityLabel("删除此备份")
+                        }.disabled(store.blocked)
+                    }
+                    Text("备份会重新进入导入预览；合并不会撤销永久删除。").font(.caption).foregroundStyle(.secondary)
+                }
+                if let archiveError { Text(archiveError).foregroundStyle(.red) }
+                if records.isEmpty { Text("暂无记录修改版本。仅新增数据不会产生旧修改，请查看上方导入历史。").foregroundStyle(.secondary) }
                 ForEach(records) { session in
                     Section {
                         Text("当前：\(phoneDuration(session.activeSeconds)) · \(session.focus)\(session.deletedAt == nil ? "" : " · 已删除")").font(.caption).foregroundStyle(.secondary)
@@ -157,14 +172,50 @@ struct PhoneVersionHistory: View {
                                 Text("\(snapshot.subject) · \(phoneDuration(snapshot.activeSeconds)) · \(snapshot.focus)").font(.headline)
                                 Text("\(snapshot.startedAt.formatted(date: .abbreviated, time: .shortened)) — \(snapshot.endedAt.formatted(date: .abbreviated, time: .shortened))").font(.caption)
                                 Text("修改于 \(RecordExchange.modified(snapshot.session).formatted(date: .abbreviated, time: .standard))\(snapshot.deletedAt == nil ? "" : " · 已删除")").font(.caption).foregroundStyle(.secondary)
-                                Button("恢复此版本") { restoring = snapshot }.disabled(store.blocked)
+                                HStack {
+                                    Button("恢复此版本") { restoring = snapshot }.buttonStyle(.borderless)
+                                    Spacer()
+                                    Button(role: .destructive) { deletingVersion = snapshot } label: { Label("删除", systemImage: "trash") }.buttonStyle(.borderless)
+                                }.disabled(store.blocked)
                             }.padding(.vertical, 4)
                         }
                     } header: { Text("\(session.subject) · \(session.startedAt.formatted(date: .abbreviated, time: .shortened))") }
                 }
                 if let error = store.error { Text(error).foregroundStyle(.red) }
-            }.navigationTitle("历史版本").navigationBarTitleDisplayMode(.inline)
+            }
+                .onAppear { do { archives = try store.importArchives() } catch { archiveError = error.localizedDescription } }
+                .sheet(isPresented: $previewBackup, onDismiss: { do { archives = try store.importArchives() } catch { archiveError = error.localizedDescription } }) {
+                    ExchangeScreen(store: store, initialImport: archiveDatabase)
+                }
+                .navigationTitle("历史版本").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+                .alert("删除全部历史版本？", isPresented: $deletingAll) {
+                    Button("取消", role: .cancel) {}
+                    Button("全部删除", role: .destructive) {
+                        let success = store.deleteAllHistory()
+                        do { archives = try store.importArchives() } catch { archiveError = error.localizedDescription }
+                        deletingArchive = nil; deletingVersion = nil; restoring = nil
+                        archiveDatabase = nil
+                        if success { archiveError = nil }
+                    }
+                } message: {
+                    Text("将永久删除本机全部 \(archives.count) 份导入备份及 \(RecordExchange.archivedCount(store.state.sessions)) 个记录旧版本。当前记录、最近删除中的记录和计时状态均保留。旧版本删除标记随数据同步，此操作无法撤销。")
+                }
+                .alert("删除此历史版本？", isPresented: Binding(get: { deletingArchive != nil || deletingVersion != nil }, set: { if !$0 { deletingArchive = nil; deletingVersion = nil } })) {
+                    Button("取消", role: .cancel) { deletingArchive = nil; deletingVersion = nil }
+                    Button("删除", role: .destructive) {
+                        if let archive = deletingArchive, store.deleteArchive(archive) {
+                            do { archives = try store.importArchives() } catch { archiveError = error.localizedDescription }
+                            archiveDatabase = nil
+                        }
+                        if let snapshot = deletingVersion { _ = store.deleteVersion(snapshot) }
+                        deletingArchive = nil; deletingVersion = nil
+                    }
+                } message: {
+                    Text(deletingArchive != nil
+                        ? "将永久删除这份本机备份文件，不影响当前记录或其他备份。"
+                        : "将永久删除这条旧修改，不影响当前记录。删除标记随数据同步，旧文件不会重新带回该版本。")
+                }
                 .alert("恢复此历史版本？", isPresented: Binding(get: { restoring != nil }, set: { if !$0 { restoring = nil } })) {
                     Button("取消", role: .cancel) { restoring = nil }
                     Button("恢复") { if let restoring { store.restoreVersion(restoring) }; restoring = nil }

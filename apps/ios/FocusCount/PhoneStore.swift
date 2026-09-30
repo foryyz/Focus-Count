@@ -247,7 +247,7 @@ struct PhoneState: Codable {
         guard goal.isValid else { return false }
         return commit { $0.goal = goal }
     }
-    func importRecords(_ database: Database, syncTimer: Bool = false) -> Bool {
+    func importRecords(_ database: Database, syncTimer: Bool = false, syncSounds: Bool = true, syncParameters: Bool = true) -> Bool {
         guard !blocked else { return false }
         do {
             let incoming = try RecordExchange.decode(RecordExchange.encode(database))
@@ -262,7 +262,25 @@ struct PhoneState: Codable {
             try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("before-import-\(identifier).json"), options: .atomic)
             try export().write(to: directory.appendingPathComponent("before-import-complete-\(identifier).json"), options: .atomic)
             try RecordExchange.encode(database).write(to: directory.appendingPathComponent("incoming-\(identifier).json"), options: .atomic)
+            var importedMode = modeSettings
+            importedMode = SharedPreferences.mergedMode(incoming.sharedSettings, defaults: preferences, local: modeSettings, syncParameters: syncParameters)
+            if syncSounds, let audio = incoming.soundPreferences {
+                let available = Set(soundLibrary.sounds.map(\.id) + (incoming.sounds ?? []).map(\.id))
+                guard [audio.restSound, audio.focusSound].compactMap({ $0 }).allSatisfy({ available.contains($0) }) else {
+                    throw RecordExchange.ExchangeError.invalid("提示音设置引用了缺失的音频，请关闭提示音同步或重新导出。")
+                }
+                importedMode = audio.applying(to: importedMode)
+            }
+            var soundTransaction: SoundFileTransaction?
+            var importFinished = false
+            defer {
+                if !importFinished, let soundTransaction {
+                    do { try soundTransaction.rollback() } catch { self.error = "提示音回滚失败，请保留备份：\(error.localizedDescription)" }
+                }
+            }
+            if syncSounds, let sounds = incoming.sounds, !sounds.isEmpty { soundTransaction = try soundLibrary.stageSounds(sounds) }
             let success = commit {
+                $0.modeSettings = importedMode
                 $0.goal = GoalSnapshot.merge($0.goal, incoming.goal)
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(incoming.purgedIDs ?? [])
                 $0.sessions = RecordExchange.merge(local: $0.sessions, incoming: incoming.sessions, purgedIDs: $0.purgedIDs ?? [])
@@ -270,9 +288,9 @@ struct PhoneState: Codable {
                 if syncTimer, let timer = incoming.timerTransfer {
                     $0.routine = nil
                     if var routine = incoming.focusRoutine {
-                        routine.settings.restSound = modeSettings.restSound
-                        routine.settings.focusSound = modeSettings.focusSound
-                        routine.settings.volume = modeSettings.volume
+                        routine.settings.restSound = importedMode.restSound
+                        routine.settings.focusSound = importedMode.focusSound
+                        routine.settings.volume = importedMode.volume
                         let focus = routine.advance(max(0, Date().timeIntervalSince(timer.capturedAt)))
                         $0.routine = PhoneRoutine(routine: routine)
                         $0.clock = MobileClock(); $0.clock.startedAt = timer.startedAt
@@ -287,15 +305,64 @@ struct PhoneState: Codable {
             }
             if success {
                 if let settings = incoming.sharedSettings {
-                    SharedPreferences.apply(settings, defaults: preferences)
-                    if let data = preferences.data(forKey: "focus-modes-v1"), let value = try? JSONDecoder().decode(FocusRoutineSettings.self, from: data) { _ = commit { $0.modeSettings = value } }
+                    SharedPreferences.apply(settings, defaults: preferences, syncParameters: syncParameters)
                 }
+                preferences.set(try JSONEncoder().encode(importedMode), forKey: "focus-modes-v1")
                 refreshNotifications()
             }
+            if success { soundTransaction?.finish(); importFinished = true }
             return success
-        } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
+        } catch { self.error = "导入未完成：\(error.localizedDescription)"; return false }
+    }
+    @discardableResult func deleteAllHistory() -> Bool {
+        guard !blocked else { return false }
+        do {
+            let archives = try importArchives()
+            // Persist deletion markers first; a failed database write must not remove backups.
+            guard commit({ $0.sessions = $0.sessions.map { RecordExchange.deletingAllVersions(from: $0) } }) else { return false }
+            for archive in archives { try archive.delete(directory: directory, phone: true) }
+            error = nil
+            return true
+        } catch {
+            self.error = "清理未全部完成，剩余备份仍在列表中，可重试：\(error.localizedDescription)"
+            return false
+        }
+    }
+    @discardableResult func deleteArchive(_ archive: ImportArchive) -> Bool {
+        guard !blocked else { return false }
+        do { try archive.delete(directory: directory, phone: true); error = nil; return true }
+        catch { self.error = "备份删除失败：\(error.localizedDescription)"; return false }
+    }
+    @discardableResult func deleteVersion(_ snapshot: SessionSnapshot) -> Bool {
+        guard state.sessions.contains(where: { $0.id == snapshot.sessionID && ($0.history ?? []).contains(where: { $0.id == snapshot.id }) }) else { return false }
+        return commit {
+            guard let index = $0.sessions.firstIndex(where: { $0.id == snapshot.sessionID }) else { return }
+            $0.sessions[index] = RecordExchange.deletingVersion(snapshot, from: $0.sessions[index])
+        }
+    }
+    func importArchives() throws -> [ImportArchive] { try ImportArchive.list(directory: directory, phone: true) }
+    func importPreview(_ incoming: Database, syncParameters: Bool, syncSounds: Bool = true) -> [String] {
+        var local = Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, goal: state.goal)
+        local.sharedSettings = SharedPreferences.capture(preferences)
+        // Compare numbers against the actual defaults, even before they have been saved.
+        var changes = ExchangePreview.changes(local: local, incoming: incoming, syncParameters: false)
+        let nextMode = SharedPreferences.mergedMode(incoming.sharedSettings, defaults: preferences, local: modeSettings, syncParameters: syncParameters)
+        if ModeParameters(nextMode) != ModeParameters(modeSettings) { changes.append("更新模式数值参数") }
+        if syncSounds {
+            let changedSounds = (incoming.sounds ?? []).filter { sound in
+                guard let old = soundLibrary.custom.first(where: { $0.id == sound.id }) else { return true }
+                let oldDate = old.modified ?? .distantPast
+                return sound.modified > oldDate || (sound.modified == oldDate && sound.name > old.name)
+            }.count
+            if changedSounds > 0 { changes.append("合并 \(changedSounds) 个新增或更新的自定义提示音（含文件）") }
+            if let audio = incoming.soundPreferences, audio != SoundPreferences(modeSettings) { changes.append("更新提示音选择与音量") }
+        }
+        return changes
     }
     func restoreVersion(_ snapshot: SessionSnapshot) {
+        guard let current = state.sessions.first(where: { $0.id == snapshot.sessionID }),
+              (current.history ?? []).contains(where: { $0.id == snapshot.id }),
+              !(current.purgedHistoryIDs ?? []).contains(snapshot.id) else { return }
         commit {
             guard let index = $0.sessions.firstIndex(where: { $0.id == snapshot.sessionID }) else { return }
             $0.sessions[index] = RecordExchange.replacing($0.sessions[index], with: snapshot.session)
@@ -310,7 +377,9 @@ struct PhoneState: Codable {
             isRunning: state.clock.isRunning, pendingEnd: state.clock.pendingEnd, activity: state.activity, timerID: state.timerID)
         var snapshot = Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd, timerTransfer: transfer, activity: state.activity, goal: state.goal)
         snapshot.sharedSettings = SharedPreferences.capture(preferences)
-        snapshot.sounds = nil
+        snapshot.sounds = try soundLibrary.exportSounds()
+        snapshot.soundPreferences = SoundPreferences(modeSettings)
+        snapshot.source = ExchangeSource(device: UIDevice.current.name, platform: "iPhone")
         snapshot.focusRoutine = state.routine?.portable
         snapshot.focusRoutine?.settings.restSound = nil
         snapshot.focusRoutine?.settings.focusSound = nil

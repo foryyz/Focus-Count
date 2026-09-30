@@ -310,7 +310,7 @@ import AppKit
         guard goal.isValid else { return false }
         return commit { $0.goal = goal }
     }
-    func importRecords(_ incoming: Database, syncTimer: Bool = false) -> Bool {
+    func importRecords(_ incoming: Database, syncTimer: Bool = false, syncSounds: Bool = true, syncParameters: Bool = true) -> Bool {
         guard !blocked else { return false }
         do {
             let validated = try RecordExchange.decode(RecordExchange.encode(incoming))
@@ -324,6 +324,23 @@ import AppKit
             try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
             try export().write(to: backupFolder.appendingPathComponent("before-import.json"), options: .atomic)
             try RecordExchange.encode(incoming).write(to: backupFolder.appendingPathComponent("incoming.json"), options: .atomic)
+            var importedMode = modeSettings
+            if let defaults = modeDefaults { importedMode = SharedPreferences.mergedMode(validated.sharedSettings, defaults: defaults, local: modeSettings, syncParameters: syncParameters) }
+            if syncSounds, let audio = validated.soundPreferences {
+                let available = Set(soundLibrary.sounds.map(\.id) + (validated.sounds ?? []).map(\.id))
+                guard [audio.restSound, audio.focusSound].compactMap({ $0 }).allSatisfy({ available.contains($0) }) else {
+                    throw RecordExchange.ExchangeError.invalid("提示音设置引用了缺失的音频，请关闭提示音同步或重新导出。")
+                }
+                importedMode = audio.applying(to: importedMode)
+            }
+            var soundTransaction: SoundFileTransaction?
+            var importFinished = false
+            defer {
+                if !importFinished, let soundTransaction {
+                    do { try soundTransaction.rollback() } catch { self.error = "提示音回滚失败，请保留备份：\(error.localizedDescription)" }
+                }
+            }
+            if syncSounds, let sounds = validated.sounds, !sounds.isEmpty { soundTransaction = try soundLibrary.stageSounds(sounds) }
             let success = commit {
                 $0.goal = GoalSnapshot.merge($0.goal, validated.goal)
                 $0.purgedIDs = ($0.purgedIDs ?? []).union(validated.purgedIDs ?? [])
@@ -332,9 +349,9 @@ import AppKit
                 if syncTimer, let timer = validated.timerTransfer {
                     $0.focusRoutine = validated.focusRoutine
                     if var routine = $0.focusRoutine {
-                        routine.settings.restSound = modeSettings.restSound
-                        routine.settings.focusSound = modeSettings.focusSound
-                        routine.settings.volume = modeSettings.volume
+                        routine.settings.restSound = importedMode.restSound
+                        routine.settings.focusSound = importedMode.focusSound
+                        routine.settings.volume = importedMode.volume
                         let focus = routine.advance(max(0, Date().timeIntervalSince(timer.capturedAt)))
                         $0.focusRoutine = routine
                         $0.draft = TimerState(startedAt: timer.startedAt, accumulated: timer.accumulated + focus)
@@ -348,20 +365,24 @@ import AppKit
             }
             if success {
                 if let settings = validated.sharedSettings, let defaults = modeDefaults {
-                    SharedPreferences.apply(settings, defaults: defaults)
-                    if let data = defaults.data(forKey: "focus-modes-v1"), let value = try? JSONDecoder().decode(FocusRoutineSettings.self, from: data) { modeSettings = value }
+                    SharedPreferences.apply(settings, defaults: defaults, syncParameters: syncParameters)
                 }
+                modeSettings = importedMode
+                modeDefaults?.set(try JSONEncoder().encode(importedMode), forKey: "focus-modes-v1")
                 routineTick = StudyClock.now
             }
+            if success { soundTransaction?.finish(); importFinished = true }
             return success
-        } catch { self.error = "导入失败，原数据未修改：\(error.localizedDescription)"; return false }
+        } catch { self.error = "导入未完成：\(error.localizedDescription)"; return false }
     }
     func export() throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("数据读取失败，无法导出。") }
         advanceRoutine()
         var snapshot = database
         snapshot.sharedSettings = modeDefaults.map { SharedPreferences.capture($0) }
-        snapshot.sounds = nil
+        snapshot.sounds = try soundLibrary.exportSounds()
+        snapshot.soundPreferences = SoundPreferences(modeSettings)
+        snapshot.source = ExchangeSource(device: Host.current().localizedName ?? "Mac", platform: "macOS")
         let capturedAt = Date()
         snapshot.draft = database.draft.checkpoint()
         snapshot.timerTransfer = TimerTransfer(capturedAt: capturedAt, startedAt: snapshot.draft.startedAt,
@@ -372,8 +393,55 @@ import AppKit
         snapshot.focusRoutine?.settings.volume = FocusRoutineSettings().volume
         return try RecordExchange.encode(snapshot)
     }
+    @discardableResult func deleteAllHistory() -> Bool {
+        guard !blocked else { return false }
+        do {
+            let archives = try importArchives()
+            // Persist deletion markers first; a failed database write must not remove backups.
+            guard commit({ $0.sessions = $0.sessions.map { RecordExchange.deletingAllVersions(from: $0) } }) else { return false }
+            for archive in archives { try archive.delete(directory: directory, phone: false) }
+            error = nil
+            return true
+        } catch {
+            self.error = "清理未全部完成，剩余备份仍在列表中，可重试：\(error.localizedDescription)"
+            return false
+        }
+    }
+    @discardableResult func deleteArchive(_ archive: ImportArchive) -> Bool {
+        guard !blocked else { return false }
+        do { try archive.delete(directory: directory, phone: false); error = nil; return true }
+        catch { self.error = "备份删除失败：\(error.localizedDescription)"; return false }
+    }
+    @discardableResult func deleteVersion(_ snapshot: SessionSnapshot) -> Bool {
+        guard database.sessions.contains(where: { $0.id == snapshot.sessionID && ($0.history ?? []).contains(where: { $0.id == snapshot.id }) }) else { return false }
+        return commit {
+            guard let index = $0.sessions.firstIndex(where: { $0.id == snapshot.sessionID }) else { return }
+            $0.sessions[index] = RecordExchange.deletingVersion(snapshot, from: $0.sessions[index])
+        }
+    }
+    func importArchives() throws -> [ImportArchive] { try ImportArchive.list(directory: directory, phone: false) }
+    func importPreview(_ incoming: Database, syncParameters: Bool, syncSounds: Bool = true) -> [String] {
+        var local = database
+        local.sharedSettings = modeDefaults.map { SharedPreferences.capture($0) }
+        // Compare numbers against the actual defaults, even before they have been saved.
+        var changes = ExchangePreview.changes(local: local, incoming: incoming, syncParameters: false)
+        let nextMode = modeDefaults.map { SharedPreferences.mergedMode(incoming.sharedSettings, defaults: $0, local: modeSettings, syncParameters: syncParameters) } ?? modeSettings
+        if ModeParameters(nextMode) != ModeParameters(modeSettings) { changes.append("更新模式数值参数") }
+        if syncSounds {
+            let changedSounds = (incoming.sounds ?? []).filter { sound in
+                guard let old = soundLibrary.custom.first(where: { $0.id == sound.id }) else { return true }
+                let oldDate = old.modified ?? .distantPast
+                return sound.modified > oldDate || (sound.modified == oldDate && sound.name > old.name)
+            }.count
+            if changedSounds > 0 { changes.append("合并 \(changedSounds) 个新增或更新的自定义提示音（含文件）") }
+            if let audio = incoming.soundPreferences, audio != SoundPreferences(modeSettings) { changes.append("更新提示音选择与音量") }
+        }
+        return changes
+    }
     func restoreVersion(_ snapshot: SessionSnapshot) -> Bool {
-        guard let current = database.sessions.first(where: { $0.id == snapshot.sessionID }) else { return false }
+        guard let current = database.sessions.first(where: { $0.id == snapshot.sessionID }),
+              (current.history ?? []).contains(where: { $0.id == snapshot.id }),
+              !(current.purgedHistoryIDs ?? []).contains(snapshot.id) else { return false }
         // Restore as a new edit, retaining both the current and all archived versions.
         return commit { database in
             if let index = database.sessions.firstIndex(where: { $0.id == current.id }) {

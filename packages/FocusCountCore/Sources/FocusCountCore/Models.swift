@@ -11,6 +11,7 @@ public struct StudySession: Codable, Identifiable {
     public var updatedAt: Date?
     public var deletedAt: Date?
     public var history: [SessionSnapshot]?
+    public var purgedHistoryIDs: Set<String>?
 
     public init(id: UUID = UUID(), startedAt: Date, endedAt: Date, activeSeconds: Double, subject: String, focus: String, updatedAt: Date? = nil, deletedAt: Date? = nil, history: [SessionSnapshot]? = nil) {
         self.id = id; self.startedAt = startedAt; self.endedAt = endedAt
@@ -68,6 +69,8 @@ public struct TimerState: Codable {
 }
 
 public struct Database: Codable {
+    public var source: ExchangeSource?
+    public var soundPreferences: SoundPreferences?
     public var sharedSettings: SharedSettings?
     public var sounds: [SharedSound]?
     public var focusRoutine: FocusRoutine?

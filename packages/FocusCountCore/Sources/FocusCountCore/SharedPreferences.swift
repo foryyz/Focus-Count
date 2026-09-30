@@ -1,5 +1,11 @@
 import Foundation
 
+/// Device-local import choices. Deliberately excluded from shared settings.
+public enum SyncPreferences {
+    public static let soundsKey = "import-sync-sounds-v1"
+    public static let parametersKey = "import-sync-parameters-v1"
+}
+
 public struct PreferenceValue: Codable, Equatable {
     public var value: String?
     public var modified: Date
@@ -94,7 +100,16 @@ public enum SharedPreferences {
             return value == "true" || value == "false"
         }
     }
-    public static func apply(_ incoming: SharedSettings, defaults: UserDefaults = .standard) {
+    public static func mergedMode(_ incoming: SharedSettings?, defaults: UserDefaults, local: FocusRoutineSettings, syncParameters: Bool) -> FocusRoutineSettings {
+        guard syncParameters, let incoming else { return local }
+        let merged = SharedSettings.merge(capture(defaults), numbersOnly(incoming))
+        guard let text = merged.entries["mode"]?.value, let data = Data(base64Encoded: text),
+              let parameters = try? JSONDecoder().decode(ModeParameters.self, from: data) else { return local }
+        return parameters.applying(to: local)
+    }
+    public static func apply(_ incoming: SharedSettings, defaults: UserDefaults = .standard, syncParameters: Bool = true) {
+        var incoming = incoming
+        if !syncParameters { incoming.entries.removeValue(forKey: "mode") }
         let merged = SharedSettings.merge(capture(defaults), numbersOnly(incoming))
         var colors: [String: String] = [:], emojis: [String: String] = [:], appearance = Appearance()
         for (key, item) in merged.entries {

@@ -67,18 +67,27 @@ struct FocusSound: Codable, Identifiable, Equatable {
         }
     }
     func importSounds(_ incoming: [SharedSound]) throws {
+        let transaction = try stageSounds(incoming)
+        transaction.finish()
+    }
+    func stageSounds(_ incoming: [SharedSound]) throws -> SoundFileTransaction {
         guard let folder = root else { throw CocoaError(.fileNoSuchFile) }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let previous = custom
         var next = custom
+        var files: [String: Data] = [:]
         for sound in incoming {
             guard sound.isValid else { throw CocoaError(.fileReadCorruptFile) }
             if let old = next.first(where: { $0.id == sound.id }), (old.modified ?? .distantPast) > sound.modified || ((old.modified ?? .distantPast) == sound.modified && old.name > sound.name) { continue }
             let file = sound.id + "." + sound.fileExtension
-            try sound.data.write(to: folder.appendingPathComponent(file), options: .atomic)
+            guard NSSound(data: sound.data) != nil else { throw CocoaError(.fileReadCorruptFile) }
+            files[file] = sound.data
             let entry = FocusSound(id: sound.id, name: sound.name, file: file, modified: sound.modified)
             next.removeAll { $0.id == sound.id }; next.append(entry)
         }
-        try save(next)
+        let transaction = try SoundFileTransaction(directory: folder, files: files, index: JSONEncoder().encode(next)) { [weak self] in self?.custom = previous }
+        custom = next
+        return transaction
     }
     func rename(_ id: String, to name: String) {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -92,27 +101,48 @@ struct SoundSettingsView: View {
     @ObservedObject var store: StudyStore
     @ObservedObject private var library = SoundLibrary.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var section = 0
+    @AppStorage(SyncPreferences.soundsKey) private var syncSounds = false
+    @AppStorage(SyncPreferences.parametersKey) private var syncParameters = false
     var body: some View {
         VStack(spacing: 0) {
             HStack { Text("设置").font(.headline); Spacer(); Button("完成") { dismiss() } }.padding(20)
             Divider()
             HStack(alignment: .top, spacing: 0) {
-                Label("提示音", systemImage: "speaker.wave.2").font(.callout.weight(.medium))
-                    .padding(14).frame(width: 120).background(Color.teal.opacity(0.08))
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(0..<2) { index in
+                        Button { section = index } label: {
+                            Label(index == 0 ? "提示音" : "同步设置", systemImage: index == 0 ? "speaker.wave.2" : "arrow.triangle.2.circlepath")
+                                .font(.callout.weight(.medium)).frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12).background(section == index ? Color.teal.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                        }.buttonStyle(.plain)
+                    }
+                    Spacer()
+                }.padding(8).frame(width: 140)
                 Divider()
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("内置提示音").font(.headline)
-                        ForEach(SoundLibrary.builtins) { sound in
-                            HStack { Text(sound.name); Spacer(); Button("试听") { store.previewModeSound(id: sound.id) } }
-                        }
-                        Divider()
-                        HStack { Text("我的提示音").font(.headline); Spacer(); Button("导入音频…") { library.importSound() } }
-                        ForEach(library.custom) { sound in SoundNameRow(sound: sound, store: store) }
-                        Text("点击自定义名称编辑，回车或点击保存。音频会复制到本机数据目录，不依赖原文件；仅保存在本机，不参与同步。")
-                            .font(.caption).foregroundStyle(.secondary)
-                        if let error = library.error { Text(error).font(.caption).foregroundStyle(.red) }
-                    }.padding(20)
+                    if section == 1 {
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text("同步设置").font(.headline)
+                            Toggle("同步自定义提示音与声音设置", isOn: $syncSounds)
+                            Toggle("同步模式数值参数", isOn: $syncParameters)
+                            Text("默认关闭。选择会保存在本机，并用于之后每次导入；计时状态仍在导入时单独选择。")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("内置提示音").font(.headline)
+                            ForEach(SoundLibrary.builtins) { sound in
+                                HStack { Text(sound.name); Spacer(); Button("试听") { store.previewModeSound(id: sound.id) } }
+                            }
+                            Divider()
+                            HStack { Text("我的提示音").font(.headline); Spacer(); Button("导入音频…") { library.importSound() } }
+                            ForEach(library.custom) { sound in SoundNameRow(sound: sound, store: store) }
+                            Text("点击自定义名称编辑，回车或点击保存。音频会复制到本机数据目录，不依赖原文件；导入其他设备的提示音可在“同步设置”中开启。")
+                                .font(.caption).foregroundStyle(.secondary)
+                            if let error = library.error { Text(error).font(.caption).foregroundStyle(.red) }
+                        }.padding(20)
+                    }
                 }
             }
         }.frame(width: 600, height: 460)

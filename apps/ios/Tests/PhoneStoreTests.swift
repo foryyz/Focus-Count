@@ -5,6 +5,120 @@ import FocusCountCore
 @testable import FocusCount
 
 final class PhoneStoreTests: XCTestCase {
+    @MainActor func testDeleteAllHistoryPreservesRecordsTimerAndDeletionMarkers() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        let start = Date().addingTimeInterval(-120)
+        let original = StudySession(startedAt: start, endedAt: start.addingTimeInterval(60), activeSeconds: 30, subject: "原活动", focus: "A")
+        var edit = original; edit.subject = "新活动"
+        let current = RecordExchange.replacing(original, with: edit)
+        var deleted = original; deleted.id = UUID()
+        var deletedEdit = deleted; deletedEdit.deletedAt = Date()
+        deleted = RecordExchange.replacing(deleted, with: deletedEdit)
+        let incoming = Database(events: [TimeEvent(kind: "冥想", occurredAt: start)], sessions: [current, deleted])
+        XCTAssertTrue(store.importRecords(incoming))
+        XCTAssertTrue(store.start(activity: "正在计时")); store.toggle()
+        let before = try RecordExchange.decode(store.export())
+        XCTAssertEqual(try store.importArchives().count, 2)
+        XCTAssertTrue(store.deleteAllHistory())
+        XCTAssertTrue(try store.importArchives().isEmpty)
+        let after = try RecordExchange.decode(store.export())
+        XCTAssertEqual(after.sessions.map(SessionSnapshot.init), before.sessions.map(SessionSnapshot.init))
+        XCTAssertEqual(after.events, before.events)
+        XCTAssertEqual(after.timerTransfer?.startedAt, before.timerTransfer?.startedAt)
+        XCTAssertEqual(after.timerTransfer?.accumulated, before.timerTransfer?.accumulated)
+        XCTAssertEqual(RecordExchange.archivedCount(after.sessions), 0)
+        XCTAssertTrue(after.sessions.allSatisfy { !($0.purgedHistoryIDs ?? []).isEmpty })
+        let reopened = PhoneStore(directory: root)
+        XCTAssertEqual(RecordExchange.archivedCount(try RecordExchange.decode(reopened.export()).sessions), 0)
+        XCTAssertTrue(reopened.importRecords(incoming))
+        XCTAssertEqual(RecordExchange.archivedCount(try RecordExchange.decode(reopened.export()).sessions), 0)
+        XCTAssertTrue(reopened.deleteAllHistory())
+        XCTAssertTrue(reopened.deleteAllHistory())
+    }
+    @MainActor func testDeleteAllHistoryWriteFailureKeepsBackups() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        XCTAssertTrue(store.importRecords(Database()))
+        let file = root.appendingPathComponent("app-state.json")
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
+        XCTAssertFalse(store.deleteAllHistory())
+        XCTAssertEqual(try store.importArchives().count, 2)
+    }
+
+    @MainActor func testDeleteHistoryPersistsWithoutDeletingCurrentRecord() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        let start = Date().addingTimeInterval(-120)
+        let original = StudySession(startedAt: start, endedAt: start.addingTimeInterval(60), activeSeconds: 30, subject: "原活动", focus: "A")
+        var edited = original; edited.subject = "新活动"
+        let current = RecordExchange.replacing(original, with: edited)
+        let file = Database(sessions: [current])
+        XCTAssertTrue(store.importRecords(file))
+        XCTAssertTrue(store.deleteVersion(SessionSnapshot(original)))
+        store.restoreVersion(SessionSnapshot(original))
+        XCTAssertEqual(store.sessions.count, 1)
+        XCTAssertEqual(store.sessions[0].subject, "新活动")
+        XCTAssertTrue(store.importRecords(file))
+        XCTAssertEqual(store.sessions[0].history?.count ?? 0, 0)
+        let archive = try XCTUnwrap(store.importArchives().first)
+        XCTAssertTrue(store.deleteArchive(archive))
+        XCTAssertEqual(try store.importArchives().count, 3)
+        let reopened = PhoneStore(directory: root)
+        XCTAssertEqual(reopened.sessions[0].history?.count ?? 0, 0)
+        XCTAssertEqual(reopened.sessions[0].subject, "新活动")
+    }
+
+    @MainActor func testFailedRecordWriteRollsBackImportedAudio() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        let audio = try XCTUnwrap(PhoneSounds(directory: root).url("Glass"))
+        let sound = SharedSound(id: UUID().uuidString, name: "原提示音", fileExtension: "wav", data: try Data(contentsOf: audio), modified: Date())
+        var initial = Database(); initial.sounds = [sound]
+        XCTAssertTrue(store.importRecords(initial))
+        var changed = sound; changed.name = "改名"; changed.modified = Date().addingTimeInterval(1)
+        var incoming = Database(events: [TimeEvent(kind: "不应写入", occurredAt: Date())]); incoming.sounds = [changed]
+        let file = root.appendingPathComponent("app-state.json")
+        try FileManager.default.removeItem(at: file)
+        try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
+        XCTAssertFalse(store.importRecords(incoming))
+        let after = try RecordExchange.decode(store.export())
+        XCTAssertEqual(after.sounds?.first?.name, "原提示音")
+        XCTAssertEqual(after.events?.count ?? 0, 0)
+        XCTAssertEqual(try store.importArchives().count, 4)
+    }
+
+    @MainActor func testImportOptionsIndependentlyPreserveLocalSettings() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        var local = FocusRoutineSettings(); local.restSound = "Ping"; local.volume = 0.7
+        XCTAssertTrue(store.setMode(local))
+        var remote = FocusRoutineSettings(); remote.roundMinutes = 45; remote.restSound = "Hero"; remote.volume = 0.2
+        var incoming = Database(), shared = SharedSettings()
+        shared.entries["mode"] = PreferenceValue(value: try JSONEncoder().encode(ModeParameters(remote)).base64EncodedString(), modified: Date().addingTimeInterval(1))
+        incoming.sharedSettings = shared; incoming.soundPreferences = SoundPreferences(remote)
+        XCTAssertTrue(store.importRecords(incoming, syncSounds: false, syncParameters: false))
+        XCTAssertEqual(store.modeSettings.roundMinutes, 90)
+        XCTAssertEqual(store.modeSettings.restSound, "Ping")
+        XCTAssertEqual(store.modeSettings.volume, 0.7)
+        XCTAssertTrue(store.importRecords(incoming, syncSounds: false))
+        XCTAssertEqual(store.modeSettings.roundMinutes, 45)
+        XCTAssertEqual(store.modeSettings.restSound, "Ping")
+        XCTAssertTrue(store.importRecords(incoming, syncParameters: false))
+        XCTAssertEqual(store.modeSettings.restSound, "Hero")
+        XCTAssertEqual(store.modeSettings.volume, 0.2)
+        let output = try RecordExchange.decode(store.export())
+        XCTAssertEqual(output.soundPreferences, SoundPreferences(remote))
+        XCTAssertNotNil(output.source)
+        XCTAssertEqual(try store.importArchives().count, 6)
+    }
+
     @MainActor func testModePauseRestartAndTimerImport() throws {
         let root = directory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -75,7 +189,7 @@ final class PhoneStoreTests: XCTestCase {
         try Data("invalid".utf8).write(to: invalid)
         XCTAssertThrowsError(try sounds.add(invalid))
     }
-    @MainActor func testNumericSettingsAndRestStateExchangeWithoutSounds() throws {
+    @MainActor func testNumericSettingsAndRestStateExchangeWithOptionalSounds() throws {
         let root = directory()
         defer { try? FileManager.default.removeItem(at: root) }
         let store = PhoneStore(directory: root)
@@ -91,19 +205,23 @@ final class PhoneStoreTests: XCTestCase {
         incoming.timerTransfer = TimerTransfer(capturedAt: Date(), startedAt: Date().addingTimeInterval(-120), accumulated: 100, isRunning: false, pendingEnd: nil, activity: "阅读", timerID: UUID())
         let asset = try XCTUnwrap(PhoneSounds(directory: root).url("Glass"))
         incoming.sounds = [SharedSound(id: UUID().uuidString, name: "我的铃声", fileExtension: "wav", data: try Data(contentsOf: asset), modified: Date())]
-        XCTAssertTrue(store.importRecords(incoming, syncTimer: true))
+        XCTAssertTrue(store.importRecords(incoming, syncTimer: true, syncSounds: false))
         XCTAssertEqual(store.state.routine?.phase, .microRest)
         XCTAssertEqual(store.state.routine?.remaining, 8)
         XCTAssertEqual(store.state.clock.seconds(), 100)
         let output = try RecordExchange.decode(store.export())
         XCTAssertEqual(output.sharedSettings?.entries["emoji/冥想"]?.value, "🧘")
         XCTAssertEqual(output.sharedSettings?.entries["markerColor/冥想"]?.value, "AABBCC")
-        XCTAssertNil(output.sounds)
+        XCTAssertEqual(output.sounds?.count, 0)
         XCTAssertNil(output.focusRoutine?.settings.restSound)
         XCTAssertEqual(output.focusRoutine?.phase, .microRest)
         let peer = PhoneStore(directory: root.appendingPathComponent("peer"))
         XCTAssertTrue(peer.importRecords(output, syncTimer: true))
         XCTAssertEqual(peer.state.routine?.phase, .microRest)
+        XCTAssertTrue(store.importRecords(incoming))
+        XCTAssertEqual(try RecordExchange.decode(store.export()).sounds?.count, 1)
+        XCTAssertEqual(try store.importArchives().count, 4)
+
     }
     @MainActor func testGoalExchangeAndDeletionSurviveRestart() throws {
         let root = directory()
@@ -603,6 +721,15 @@ final class MarkerPointLayoutTests: XCTestCase {
         await render(PhoneTodaySheet(store: store, appearance: appearance), name: "today-compact", size: CGSize(width: 375, height: 667))
         await render(PhoneFocusAnalysis(store: store, appearance: appearance), name: "analysis-compact", size: CGSize(width: 375, height: 667))
         await render(PhoneMarkerCharts(mode: .constant(0), events: events, start: start, end: end, isWeek: false, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "frequency-compact", size: CGSize(width: 375, height: 460))
+        var dense: [TimeEvent] = []
+        for name in names.prefix(3) {
+            for (day, count) in [1, 2, 3, 4, 5, 10, 100].enumerated() {
+                let date = cal.date(byAdding: .day, value: day, to: start)!
+                dense += (0..<count).map { _ in TimeEvent(kind: name, occurredAt: date) }
+            }
+        }
+        await render(MarkerFrequencyOverview(events: dense, start: start, end: cal.date(byAdding: .day, value: 7, to: start)!, isWeek: true, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "frequency-counts-small", size: CGSize(width: 375, height: 460))
+
         await render(PhoneMarkerCharts(mode: .constant(2), events: events, start: start, end: end, isWeek: false, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "time-compact", size: CGSize(width: 375, height: 460))
         await render(PhoneMarkerCharts(mode: .constant(2), events: events, start: start, end: end, isWeek: false, colors: colors, edit: { _ in }, delete: { _ in }, compact: true).padding(), name: "time-landscape", size: CGSize(width: 740, height: 310))
     }
@@ -617,6 +744,21 @@ final class MarkerPointLayoutTests: XCTestCase {
         await render(PhoneModeSettings(store: store), name: "mode-settings-small", size: CGSize(width: 375, height: 667))
         await render(PhoneModeSettings(store: store), name: "mode-settings-landscape", size: CGSize(width: 740, height: 350))
         await render(PhoneSoundSettings(), name: "sound-library", size: CGSize(width: 375, height: 667))
+    }
+    func testExchangeScreens() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        var incoming = Database(events: [TimeEvent(kind: "冥想", occurredAt: Date())])
+        incoming.source = ExchangeSource(device: "工作 Mac", platform: "macOS")
+        incoming.soundPreferences = SoundPreferences(FocusRoutineSettings())
+        var settings = SharedSettings()
+        settings.entries["mode"] = PreferenceValue(value: try JSONEncoder().encode(ModeParameters(FocusRoutineSettings())).base64EncodedString(), modified: Date())
+        incoming.sharedSettings = settings
+        incoming.timerTransfer = TimerTransfer(capturedAt: Date(), startedAt: Date().addingTimeInterval(-30), accumulated: 10, isRunning: false, pendingEnd: nil, activity: "阅读", timerID: UUID())
+        await render(ExchangeScreen(store: store, initialImport: incoming), name: "exchange-preview-small", size: CGSize(width: 375, height: 667))
+        XCTAssertTrue(store.importRecords(incoming))
+        await render(PhoneVersionHistory(store: store), name: "exchange-history-small", size: CGSize(width: 375, height: 667))
     }
     private func render<V: View>(_ view: V, name: String, size: CGSize) async {
         let host = UIHostingController(rootView: view)

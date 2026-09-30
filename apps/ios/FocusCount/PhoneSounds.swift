@@ -37,7 +37,9 @@ struct PhoneSound: Codable, Identifiable {
         let folder = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("Sounds")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let destination = folder.appendingPathComponent(id + ".caf")
-        if !FileManager.default.fileExists(atPath: destination.path) {
+        let sourceDate = (try? source.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+        let cacheDate = (try? destination.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+        if !FileManager.default.fileExists(atPath: destination.path) || sourceDate > cacheDate {
             let input = try AVAudioFile(forReading: source)
             let format = input.processingFormat
             // Notification audio must be shorter than 30 seconds. Use the first 29 seconds.
@@ -98,18 +100,27 @@ struct PhoneSound: Codable, Identifiable {
         }
     }
     func importSounds(_ incoming: [SharedSound]) throws {
+        let transaction = try stageSounds(incoming)
+        transaction.finish()
+    }
+    func stageSounds(_ incoming: [SharedSound]) throws -> SoundFileTransaction {
         let folder = directory
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let previous = custom
         var next = custom
+        var files: [String: Data] = [:]
         for sound in incoming {
             guard sound.isValid else { throw CocoaError(.fileReadCorruptFile) }
             if let old = next.first(where: { $0.id == sound.id }), (old.modified ?? .distantPast) > sound.modified || ((old.modified ?? .distantPast) == sound.modified && old.name > sound.name) { continue }
             let file = sound.id + "." + sound.fileExtension
-            try sound.data.write(to: folder.appendingPathComponent(file), options: .atomic)
+            _ = try AVAudioPlayer(data: sound.data)
+            files[file] = sound.data
             let entry = PhoneSound(id: sound.id, name: sound.name, file: file, modified: sound.modified)
             next.removeAll { $0.id == sound.id }; next.append(entry)
         }
-        try save(next)
+        let transaction = try SoundFileTransaction(directory: folder, files: files, index: JSONEncoder().encode(next)) { [weak self] in self?.custom = previous }
+        custom = next
+        return transaction
     }
     func rename(_ id: String, name: String) {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -122,12 +133,20 @@ struct PhoneSound: Codable, Identifiable {
 struct PhoneSoundSettings: View {
     @ObservedObject private var sounds = PhoneSounds.shared
     @Environment(\.dismiss) private var dismiss
+    @AppStorage(SyncPreferences.soundsKey) private var syncSounds = false
+    @AppStorage(SyncPreferences.parametersKey) private var syncParameters = false
     @State private var importing = false
     @State private var renameID: String?
     @State private var name = ""
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Toggle("同步自定义提示音与声音设置", isOn: $syncSounds)
+                    Toggle("同步模式数值参数", isOn: $syncParameters)
+                } header: { Text("同步设置") } footer: {
+                    Text("默认关闭。选择会保存在本机，并用于之后每次导入；计时状态仍在导入时单独选择。")
+                }
                 Section("提示音 · 内置声音") {
                     ForEach(PhoneSounds.presets) { sound in
                         HStack { Text(sound.name); Spacer(); preview(sound) }
@@ -143,11 +162,11 @@ struct PhoneSoundSettings: View {
                     }
                 }
                 Section {
-                    Text("点击自定义声音的名称即可重命名。支持常见音频格式，最大 50 MB；音频复制到本机，仅保存在本机，不参与同步。声音受静音开关和系统音量影响。")
+                    Text("点击自定义声音的名称即可重命名。支持常见音频格式，最大 50 MB；音频复制到本机；导入其他设备的提示音可在“同步设置”中开启。声音受静音开关和系统音量影响。")
                         .font(.footnote).foregroundStyle(.secondary)
                     if let error = sounds.error { Text(error).foregroundStyle(.red) }
                 }
-            }.navigationTitle("提示音设置").navigationBarTitleDisplayMode(.inline)
+            }.navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
                 .fileImporter(isPresented: $importing, allowedContentTypes: [.audio]) { result in
                     do { try sounds.add(result.get()) } catch { sounds.error = "导入失败：\(error.localizedDescription)" }

@@ -6,6 +6,25 @@ final class CoreTests: XCTestCase {
         StudySession(id: id, startedAt: Date(timeIntervalSince1970: 0), endedAt: Date(timeIntervalSince1970: 60), activeSeconds: 30, subject: "数学", focus: "A", updatedAt: Date(timeIntervalSince1970: updated))
     }
 
+    func testDeletedHistoryDoesNotReappearThroughMergeOrEdits() throws {
+        let original = sample()
+        var edited = original; edited.subject = "物理"
+        let current = RecordExchange.replacing(original, with: edited, now: Date(timeIntervalSince1970: 200))
+        let removed = RecordExchange.deletingVersion(SessionSnapshot(original), from: current)
+        XCTAssertEqual(SessionSnapshot(removed), SessionSnapshot(current))
+        XCTAssertEqual(removed.history?.count ?? 0, 0)
+        XCTAssertEqual(ExchangePreview.changes(local: Database(sessions: [current]), incoming: Database(sessions: [removed])), ["删除 1 个记录历史版本"])
+        let left = RecordExchange.merge(local: [removed], incoming: [current, original])
+        let right = RecordExchange.merge(local: [original, current], incoming: [removed])
+        XCTAssertEqual(try RecordExchange.encode(Database(sessions: left)), try RecordExchange.encode(Database(sessions: right)))
+        XCTAssertEqual(left[0].history?.count ?? 0, 0)
+        let reopened = try RecordExchange.decode(RecordExchange.encode(Database(sessions: left)))
+        XCTAssertEqual(reopened.sessions[0].purgedHistoryIDs, [SessionSnapshot(original).id])
+        var newEdit = reopened.sessions[0]; newEdit.subject = "新活动"
+        let next = RecordExchange.replacing(reopened.sessions[0], with: newEdit)
+        XCTAssertFalse((next.history ?? []).contains { $0.id == SessionSnapshot(original).id })
+        XCTAssertEqual(next.history?.count, 1)
+    }
     func testEventExchangeAndDeletion() throws {
         let event = TimeEvent(kind: "SEX", occurredAt: Date(timeIntervalSince1970: 100))
         var deleted = event

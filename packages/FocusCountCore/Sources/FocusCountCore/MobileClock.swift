@@ -34,6 +34,8 @@ public struct MobileClock: Codable {
 public enum RecordExchange {
     public static func decode(_ data: Data) throws -> Database {
         var database = try JSONDecoder().decode(Database.self, from: data)
+        if let source = database.source, !source.exportedAt.timeIntervalSince1970.isFinite || source.device.count > 1000 || source.platform.count > 100 { throw ExchangeError.invalid("来源信息无效。") }
+        if let audio = database.soundPreferences, !audio.isValid { throw ExchangeError.invalid("提示音设置无效。") }
         if let settings = database.sharedSettings, !SharedPreferences.validate(settings) { throw ExchangeError.invalid("同步设置无效。") }
         if let sounds = database.sounds, !sounds.allSatisfy(\.isValid) || Set(sounds.map(\.id)).count != sounds.count { throw ExchangeError.invalid("同步提示音无效。") }
         guard [1, 2, 3, 4, 5].contains(database.version) else { throw ExchangeError.invalid("不支持此数据版本。") }
@@ -52,7 +54,9 @@ public enum RecordExchange {
                     throw ExchangeError.invalid("记录历史版本无效。")
                 }
             }
+            guard (session.purgedHistoryIDs ?? []).allSatisfy({ $0.count == 64 && $0.allSatisfy { "0123456789abcdef".contains($0) } }) else { throw ExchangeError.invalid("历史版本删除标记无效。") }
             database.sessions[index].updatedAt = session.updatedAt ?? session.endedAt
+            database.sessions[index].history = session.history?.filter { !(session.purgedHistoryIDs ?? []).contains($0.id) }
         }
         database.sessions.removeAll { (database.purgedIDs ?? []).contains($0.id) }
         for event in database.events ?? [] {
@@ -82,7 +86,9 @@ public enum RecordExchange {
     private static func retainingVersions(winner: StudySession, sources: [StudySession]) -> StudySession {
         var result = winner
         result.updatedAt = winner.updatedAt ?? winner.endedAt
-        var versions = Set(sources.flatMap { ($0.history ?? []) + [SessionSnapshot($0)] })
+        let purged = sources.reduce(winner.purgedHistoryIDs ?? []) { $0.union($1.purgedHistoryIDs ?? []) }
+        result.purgedHistoryIDs = purged.isEmpty ? nil : purged
+        var versions = Set(sources.flatMap { ($0.history ?? []) + [SessionSnapshot($0)] }.filter { !purged.contains($0.id) })
         versions.remove(SessionSnapshot(result))
         let ordered = versions.sorted { $0.id < $1.id }
         result.history = ordered.isEmpty ? nil : ordered
@@ -92,6 +98,21 @@ public enum RecordExchange {
         var next = edited
         next.updatedAt = max(now, modified(old).addingTimeInterval(0.001))
         return retainingVersions(winner: next, sources: [old])
+    }
+    public static func deletingVersion(_ snapshot: SessionSnapshot, from session: StudySession) -> StudySession {
+        guard snapshot.sessionID == session.id, (session.history ?? []).contains(where: { $0.id == snapshot.id }) else { return session }
+        var result = session
+        result.purgedHistoryIDs = (session.purgedHistoryIDs ?? []).union([snapshot.id])
+        result.history = session.history?.filter { $0.id != snapshot.id }
+        if result.history?.isEmpty == true { result.history = nil }
+        return result
+    }
+    public static func deletingAllVersions(from session: StudySession) -> StudySession {
+        var result = session
+        let ids = (session.purgedHistoryIDs ?? []).union((session.history ?? []).map(\.id))
+        result.purgedHistoryIDs = ids.isEmpty ? nil : ids
+        result.history = nil
+        return result
     }
     public static func archivedCount(_ sessions: [StudySession]) -> Int {
         sessions.reduce(0) { $0 + ($1.history?.count ?? 0) }
