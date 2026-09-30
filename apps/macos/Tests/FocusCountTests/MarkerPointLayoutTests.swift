@@ -9,6 +9,20 @@ final class MarkerPointLayoutTests: XCTestCase {
         return value
     }
     private var start: Date { Date(timeIntervalSince1970: 0) }
+    func testCrowdedPairIsDistinctFromTripleAndBadgesFitAtDayEdges() {
+        func group(_ count: Int, seconds: Double) -> MarkerPointLayout.Item {
+            let events = (0..<count).map { _ in TimeEvent(kind: "a", occurredAt: start.addingTimeInterval(seconds)) }
+            return MarkerPointLayout.items(events: events, start: start, offset: 0, visibleDays: 1, width: 40, hourHeight: 12, calendar: calendar)[0]
+        }
+        let pair = group(2, seconds: 3600), triple = group(3, seconds: 3600)
+        XCTAssertLessThan(pair.diameter, triple.diameter * 0.8)
+        for seconds in [0.0, 86399.0] {
+            let item = group(4, seconds: seconds)
+            XCTAssertEqual(item.events.count, 4)
+            XCTAssertGreaterThanOrEqual(item.y - item.layoutHeight / 2, 0)
+            XCTAssertLessThanOrEqual(item.y + item.layoutHeight / 2, 24 * 12)
+        }
+    }
     func testCoincidentRecordsArePlacedSideBySideWithoutChangingTime() {
         let events = (0..<3).map { _ in TimeEvent(kind: "a", occurredAt: start.addingTimeInterval(12 * 3600 + 30 * 60)) }
         let items = MarkerPointLayout.items(events: events, start: start, offset: 0, visibleDays: 1, width: 200, calendar: calendar)

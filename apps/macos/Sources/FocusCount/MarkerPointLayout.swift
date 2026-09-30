@@ -10,6 +10,13 @@ struct MarkerPointLayout {
         let anchorY: Double
         let diameter: Double
         var id: UUID { events[0].id }
+        var layoutHeight: Double {
+            #if os(macOS)
+            diameter + (events.count >= 4 ? 16 : 0)
+            #else
+            diameter
+            #endif
+        }
     }
     static func items(events: [TimeEvent], start: Date, offset: Double, visibleDays: Double, width: Double, hourHeight: Double = 30, calendar: Calendar = .current) -> [Item] {
         let dayWidth = width / max(1, visibleDays)
@@ -49,7 +56,12 @@ struct MarkerPointLayout {
                     #if os(iOS)
                     let diameter = group.count == 1 ? 22.0 : min(40, 26 + sqrt(Double(group.count - 1)) * 5)
                     #else
-                    let diameter = group.count == 1 ? 24.0 : min(72, 34 + sqrt(Double(group.count - 1)) * 10)
+                    let diameter = group.count == 1 ? 24.0 : group.count == 2 ? 34.0 : min(72, 34 + sqrt(Double(group.count - 1)) * 10)
+                    #endif
+                    #if os(macOS)
+                    let layoutHeight = diameter + (group.count >= 4 ? 16 : 0)
+                    #else
+                    let layoutHeight = diameter
                     #endif
                     let columns = max(1, Int((dayWidth - 10) / (diameter + 4)))
                     let preferredLane = lanes.count == cluster.count ? lanes[index] : index % columns
@@ -57,7 +69,7 @@ struct MarkerPointLayout {
                     var candidates: [(Double, Double)] = []
                     for displacement in 0...Int(ceil(height / 8)) {
                         for sign in displacement == 0 ? [1.0] : [-1.0, 1.0] {
-                            let targetY = min(height - diameter / 2, max(diameter / 2, anchor + Double(displacement) * 8 * sign))
+                            let targetY = min(height - layoutHeight / 2, max(layoutHeight / 2, anchor + Double(displacement) * 8 * sign))
                             for lane in 0..<usedColumns {
                                 let currentLane = (lane + preferredLane) % usedColumns
                                 let targetX = center + (Double(currentLane) - Double(usedColumns - 1) / 2) * (diameter + 4)
@@ -66,8 +78,8 @@ struct MarkerPointLayout {
                         }
                     }
                     let position = candidates.first { x, yy in
-                        !placed.contains { abs($0.x - x) < ($0.diameter + diameter) / 2 + 3 && abs($0.y - yy) < ($0.diameter + diameter) / 2 + 3 }
-                    } ?? (center, min(height - diameter / 2, max(diameter / 2, anchor)))
+                        !placed.contains { abs($0.x - x) < ($0.diameter + diameter) / 2 + 3 && abs($0.y - yy) < ($0.layoutHeight + layoutHeight) / 2 + 3 }
+                    } ?? (center, min(height - layoutHeight / 2, max(layoutHeight / 2, anchor)))
                     placed.append(Item(events: group, x: position.0, y: position.1, grouped: group.count > 1, anchorY: anchor, diameter: diameter))
                 }
             }

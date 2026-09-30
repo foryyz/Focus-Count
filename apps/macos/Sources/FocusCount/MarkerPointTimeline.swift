@@ -91,6 +91,11 @@ struct MarkerPointTimeline: View {
                                     Circle().fill(colors.color(name)).frame(width: item.diameter * 0.65, height: item.diameter * 0.65).frame(width: item.diameter, height: item.diameter)
                                 }
                             }.buttonStyle(.plain)
+                                #if os(macOS)
+                                .overlay(alignment: .bottom) {
+                                    if item.events.count >= 4 { MarkerCountBadge(count: item.events.count).offset(y: 14) }
+                                }
+                                #endif
                                 .help(item.events.map { $0.kind + " · " + $0.occurredAt.formatted(date: .abbreviated, time: .standard) }.joined(separator: "\n"))
                                 .accessibilityLabel(item.grouped ? item.events[0].kind + "，共 \(item.events.count) 次，展开" : item.events[0].kind + " " + item.events[0].occurredAt.formatted(date: .abbreviated, time: .standard))
                                 .position(x: 48 + item.x, y: 14 + item.y)

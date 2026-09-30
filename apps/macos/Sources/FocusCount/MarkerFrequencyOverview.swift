@@ -53,8 +53,10 @@ struct MarkerFrequencyOverview: View {
         return bucket.start.formatted(.dateTime.month(.twoDigits).day(.twoDigits))
     }
     private func scale(_ snapshot: MarkerOverviewData, width: Double) -> (column: Double, unit: Double, limit: Double) {
-        let column = max(granularity == .automatic ? 3 : 18, (width - 84) / Double(max(1, snapshot.buckets.count)))
-        let limit = max(2, min(42, column - 3))
+        let largest = snapshot.cells.map { $0.events.count }.max() ?? 0
+        let badgeWidth = largest >= 4 ? Double(String(largest).count * 6 + 10) : 0
+        let column = max(badgeWidth, max(granularity == .automatic ? 3 : 18, (width - 84) / Double(max(1, snapshot.buckets.count))))
+        let limit = max(2, min(Double(rowHeight) - 16, min(42, column - 3)))
         let counts = snapshot.cells.map { $0.events.count }.sorted()
         let reference = max(3, counts.isEmpty ? 3 : counts[min(counts.count - 1, Int(Double(counts.count - 1) * 0.95))])
         return (column, min(18, limit / sqrt(Double(reference))), limit)
@@ -103,7 +105,7 @@ struct MarkerFrequencyOverview: View {
                 }
                 Spacer()
             }.foregroundStyle(.secondary).frame(height: 44)
-            Text("* 尺寸封顶，图中显示实际次数 · 空白表示无记录 · 底线表示未完整周期 · 拖选日期栏放大 · 点击气泡查看原始记录")
+            Text("* 尺寸封顶 · ≥4 次显示小数字 · 空白表示无记录 · 底线表示未完整周期 · 拖选日期栏放大 · 点击气泡查看原始记录")
                 .font(.caption2).foregroundStyle(.secondary)
             }
         }
@@ -189,7 +191,7 @@ struct MarkerFrequencyOverview: View {
                                     ForEach(cells[name] ?? []) { cell in
                                         if let index = bucketIndices[cell.bucket.id] {
                                             bubble(cell, unit: unit, limit: limit)
-                                                .position(x: (Double(index) + 0.5) * column, y: rowHeight / 2)
+                                                .position(x: (Double(index) + 0.5) * column, y: rowHeight / 2 - (cell.events.count >= 4 ? 7 : 0))
                                         }
                                     }
                                 }.frame(width: plotWidth, height: rowHeight)
@@ -209,7 +211,6 @@ struct MarkerFrequencyOverview: View {
     }
     private func bubble(_ cell: MarkerOverviewData.Cell, unit: Double, limit: Double) -> some View {
         let diameter = MarkerOverviewData.diameter(count: cell.events.count, unit: unit, limit: limit)
-        let capped = unit * sqrt(Double(cell.events.count)) > limit + 0.01
         return Button { selected = cell } label: {
             ZStack {
                 Circle().fill(colors.color(cell.kind).opacity(0.68))
@@ -217,7 +218,7 @@ struct MarkerFrequencyOverview: View {
                 if diameter >= 17, let emoji = colors.emojis[cell.kind], !emoji.isEmpty {
                     Text(emoji).font(.system(size: max(12, diameter * 0.65)))
                 }
-                if capped && limit >= 14 { Text("\(cell.events.count)").font(.system(size: 9, weight: .bold)).padding(2).background(.regularMaterial, in: Capsule()).offset(y: diameter / 2) }
+                if cell.events.count >= 4 { MarkerCountBadge(count: cell.events.count).offset(y: diameter / 2 + 6) }
             }.frame(width: max(3, diameter), height: max(3, diameter)).frame(minWidth: 14, minHeight: 24)
         }.buttonStyle(.plain)
             .help(cell.kind + " · \(cell.events.count) 次\n" + cell.bucket.start.formatted(date: .abbreviated, time: .omitted) + " — " + cell.bucket.end.addingTimeInterval(-1).formatted(date: .abbreviated, time: .omitted) + (cell.bucket.partial ? "\n未完整周期" : ""))
@@ -285,5 +286,16 @@ struct MarkerFrequencyOverview: View {
                 }
             }
         }.padding(12).background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+
+/// Shared count treatment for frequency bubbles and crowded timeline markers.
+struct MarkerCountBadge: View {
+    let count: Int
+    var body: some View {
+        Text("\(count)").font(.system(size: 9, weight: .bold)).monospacedDigit()
+            .foregroundStyle(.primary).padding(2).background(.regularMaterial, in: Capsule())
+            .fixedSize().allowsHitTesting(false).accessibilityHidden(true)
     }
 }
