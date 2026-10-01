@@ -70,7 +70,9 @@ Mac 使用包含休眠时间的连续单调时钟，熄屏和休眠继续累计�
 
 ## Mac 独立应用存储
 
-默认数据目录与应用路径无关。旧项目数据仅在首次从项目启动时自动发现，验证并备份双方后合并到 Application Support。迁移标记为 project-storage-migration.json；原项目数据保留。先移动应用的用户可在数据管理中手动导入旧 sessions.json。
+Mac 1.20.0 起只从 `~/Library/Application Support/FocusCount/` 读取本机数据。设置存于 `settings.plist`（plist 外层 `version = 1` 与 `values`），包含模式参数、声音选择、颜色/emoji、分类、目标显示、同步选择、窗口尺寸和设置修订账本。记录和目标仍在 `sessions.json`，音频在 `sounds/`，历史文件在 `backups/`。设置文件不参与直接跨设备合并，交换仍经 JSON v5 的 `sharedSettings` / `soundPreferences` 等字段。
+
+启动不再自动发现旧项目数据或迁移旧 UserDefaults。目录不存在时使用空记录、默认参数；设置文件缺失使用默认设置，损坏则报错并保留。完整重置须先退出应用再删除整个目录；只删主 JSON 不重置设置。
 
 ## 时间标记（v5）
 

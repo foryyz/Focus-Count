@@ -11,7 +11,7 @@ import AppKit
     @Published private(set) var modeSettings = FocusRoutineSettings()
     private var routineTick: Double?
     private var soundsEnabled = false
-    private var modeDefaults: UserDefaults?
+    private var modeDefaults: (any PreferenceStorage)?
     private let soundLibrary: SoundLibrary
     private var playingSound: NSSound?
     var isRunning: Bool {
@@ -96,12 +96,12 @@ import AppKit
         soundLibrary = directory.map { SoundLibrary(directory: $0.appendingPathComponent("sounds")) } ?? SoundLibrary.shared
         customDirectory = directory
         soundsEnabled = observeSystem
-        modeDefaults = directory == nil ? .standard : UserDefaults(suiteName: "FocusCount-test-" + Data(directory!.path.utf8).base64EncodedString())
+        modeDefaults = directory.map { FilePreferences(directory: $0) } ?? FilePreferences.shared
         if let modeDefaults { SharedPreferences.capture(modeDefaults) }
         if let data = modeDefaults?.data(forKey: "focus-modes-v1"), let settings = try? JSONDecoder().decode(FocusRoutineSettings.self, from: data), settings.isValid { modeSettings = settings }
         do {
-            if customDirectory == nil, let executable = Bundle.main.executableURL {
-                try Storage.migrateProjectData(executable: executable, to: self.directory)
+            if let failure = (modeDefaults as? FilePreferences)?.error {
+                throw NSError(domain: "FocusCount.Settings", code: 1, userInfo: [NSLocalizedDescriptionKey: failure])
             }
             if try FileManager.default.fileExists(atPath: file.path) {
                 let contents = try Data(contentsOf: file)
@@ -123,8 +123,7 @@ import AppKit
             blocked = true
             self.error = "无法读取数据，已停止写入以保护原文件。请检查数据目录：\(error.localizedDescription)"
         }
-        if let routine = database.focusRoutine {
-            if modeSettings.mode == .standard { modeSettings = routine.settings }
+        if database.focusRoutine != nil {
             database.focusRoutine?.suspended = true
             routineTick = StudyClock.now
         }

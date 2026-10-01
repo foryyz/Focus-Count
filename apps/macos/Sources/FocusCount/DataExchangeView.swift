@@ -14,8 +14,8 @@ struct DataExchangeView: View {
     @ObservedObject var store: StudyStore
     @Environment(\.dismiss) private var dismiss
     @State private var syncTimer = false
-    @AppStorage(SyncPreferences.soundsKey) private var syncSounds = false
-    @AppStorage(SyncPreferences.parametersKey) private var syncParameters = false
+    @DirectoryPreference(SyncPreferences.soundsKey) private var syncSounds = false
+    @DirectoryPreference(SyncPreferences.parametersKey) private var syncParameters = false
     @State private var archives: [ImportArchive] = []
     @State private var importing = false
     @State private var exporting = false

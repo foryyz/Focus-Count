@@ -1,6 +1,6 @@
 # FocusCount 开发与交接指南
 
-核对日期：2026-10-02。对应当前工作区：Mac 1.19.8 / iPhone 1.5.6。具体功能、文件和函数见 [code-map.md](code-map.md)。本文说明修改方法和必须保持的行为。
+核对日期：2026-10-02。对应当前工作区：Mac 1.20.0 / iPhone 1.5.6。具体功能、文件和函数见 [code-map.md](code-map.md)。本文说明修改方法和必须保持的行为。
 
 ## 1. 接手顺序
 
@@ -31,10 +31,10 @@
 
 ### 存储位置
 
-- Mac：`~/Library/Application Support/FocusCount/`，主要包括 `sessions.json`、`sessions.csv`、`backups/` 和 `sounds/`。实际入口是 Mac `Models.swift` 的 `Storage.directory`。`legacyDirectory` 的命名不代表这个路径已经废弃。
+- Mac：`~/Library/Application Support/FocusCount/`，主要包括 `sessions.json`、`settings.plist`、`sessions.csv`、`backups/` 和 `sounds/`。实际入口是 Mac `Models.swift` 的 `Storage.directory`。`legacyDirectory` 的命名不代表这个路径已经废弃。
 - iPhone：应用沙盒中的 `app-state.json`，具体目录创建见 `PhoneStore.init`；音频由 `PhoneSounds` 管理。
-- 颜色、emoji、分类、目标显示偏好等还使用 UserDefaults，交换时由 `SharedPreferences` 捕获并应用。
-- 项目旧数据迁移逻辑仍保留；当前正常使用不要求数据跟随 `.app` 或存放在源码目录。
+- Mac 所有应用设置保存在目录内的 `settings.plist`；iPhone 设置继续使用 UserDefaults。交换时由 `SharedPreferences` 经统一 `PreferenceStorage` 接口捕获并应用。
+- Mac 启动不再调用旧项目数据自动迁移；旧数据需手动导入，不能因目录清空而重新灌入旧记录。
 
 不要把 iPhone 的 `PhoneState` 本机文件直接当作跨平台 `Database` 交换文件。数据备份应通过各端的导出入口生成。
 
@@ -286,7 +286,7 @@ Mac 正式包的偏好文件为 `~/Library/Preferences/local.focuscount.app.plis
 
 “同步自定义提示音与声音设置”和“同步模式数值参数”移至设置中的“同步设置”，默认关闭，按设备持久记忆。导入预览不再显示这两个开关，每次直接使用本机选择；计时状态仍在预览中临时选择，默认关闭。
 
-共享常量 `SyncPreferences.soundsKey/parametersKey` 位于 Core `SharedPreferences.swift`；两端设置页和交换页通过 `@AppStorage` 使用同一组本机键。导入时仍向 Store 显式传入两个选择，预览变化也按相同选择计算。这两个偏好不进入 `SharedPreferences` 交换内容，导入其他设备的数据不会重置它们。导出内容不受本机导入偏好影响。此规则替代上一版“每次导入默认开启”的交互。
+共享常量 `SyncPreferences.soundsKey/parametersKey` 位于 Core `SharedPreferences.swift`；Mac 设置页和交换页通过 `@DirectoryPreference`、iPhone 通过 `@AppStorage` 使用同一组本机键。导入时仍向 Store 显式传入两个选择，预览变化也按相同选择计算。这两个偏好不进入 `SharedPreferences` 交换内容，导入其他设备的数据不会重置它们。导出内容不受本机导入偏好影响。此规则替代上一版“每次导入默认开启”的交互。
 
 
 ### 聚合标记数量（Mac 1.19.6 / iPhone 1.5.6）
@@ -296,3 +296,13 @@ Mac 正式包的偏好文件为 `~/Library/Preferences/local.focuscount.app.plis
 ### Mac 占比图标签（1.19.7）
 
 内部标签按实际尺寸判断，不按固定占比阈值。名称最多两行，字号下限 10pt；放不下才使用外侧引线。数字测量须使用等宽数字字体，避免百分比被截断。扇形和圆环使用同一套检测，圆环额外排除中心区域。外侧文字与引线同色，保持活动色相并按背景调整到至少 4.5:1 的对比度。改动后运行 Mac `ShareLabelTests`，检查 400/560pt 图表及浅深色预览；共享文件中的 Mac 实现以条件编译隔离，同时验证 iOS 编译。
+
+### 目录内设置（Mac 1.20.0）
+
+`PreferenceStorage` 定义读写接口，`UserDefaults` 实现用于 iPhone 与隔离测试；Mac 默认由 `ApplicationPreferences.current` 指向 `FilePreferences.shared`。文件是 `settings.plist`，外层 `version = 1`、`values` 保存键值。Data（例如模式配置及同步修订账本）由 plist 原生编码，写入使用原子替换。缺失返回空设置，坏文件拒绝覆盖并提示；写入失败不更新缓存。
+
+Mac 的模式、标记颜色/emoji、活动分类/颜色、目标显示、同步开关与分析窗口尺寸都使用此接口。新增 Mac 偏好必须接入该文件，不再用 `UserDefaults.standard` 或 `@AppStorage`。SwiftUI Bool 开关使用 `DirectoryPreference`。两个分析窗口不再调用 NSWindow 的偏好自动保存，而是把 frameDescriptor 写入设置文件。操作系统自身的偏好和窗口恢复元数据不属于业务数据。
+
+App 初始化调用 `FilePreferences.discardLegacyDefaults` 清理明确列出的旧应用键，不迁移旧值、不删除整个系统偏好域。已有主数据、目标和声音文件保留；首次没有设置文件时模式参数等恢复默认。关闭应用后删除目录才能彻底重置；运行中删除不保证清除内存内容。不能在设置缺失时从计时快照反向补写模式偏好。
+
+测试入口：Core `PreferenceStorageTests`（持久化/同步/坏文件/失败写入/旧键清理）；Mac `DirectorySettingsTests`（重启保留、删目录恢复默认、坏设置阻止数据写入）。

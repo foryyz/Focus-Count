@@ -10,10 +10,10 @@ import UIKit
     @Published private(set) var settings: FocusAppearance
     @Published var error: String?
     private var observer: NSObjectProtocol?
-    private let defaults: UserDefaults
+    private let defaults: any PreferenceStorage
     private let key = "focus-analysis-appearance-v1"
     private var readable = true
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: any PreferenceStorage = ApplicationPreferences.current) {
         self.defaults = defaults
         if let data = defaults.data(forKey: key) {
             do { settings = try JSONDecoder().decode(FocusAppearance.self, from: data) }

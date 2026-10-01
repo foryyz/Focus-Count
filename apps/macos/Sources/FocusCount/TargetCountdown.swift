@@ -34,13 +34,13 @@ struct TargetDate: Codable, Equatable {
     @Published private(set) var error: String?
     @Published private(set) var totalHours: Bool
     private var observer: NSObjectProtocol?
-    private let defaults: UserDefaults
+    private let defaults: any PreferenceStorage
     private let key = "focus-target-date-v1"
     private let hiddenKey = "focus-target-hidden-v1"
     private var snapshot: GoalSnapshot?
     private let writer: ((GoalSnapshot) -> Bool)?
 
-    init(defaults: UserDefaults = .standard, snapshot: GoalSnapshot? = nil, writer: ((GoalSnapshot) -> Bool)? = nil) {
+    init(defaults: any PreferenceStorage = ApplicationPreferences.current, snapshot: GoalSnapshot? = nil, writer: ((GoalSnapshot) -> Bool)? = nil) {
         self.defaults = defaults; self.writer = writer
         self.totalHours = defaults.bool(forKey: "focus-target-total-hours-v1")
         SharedPreferences.capture(defaults)

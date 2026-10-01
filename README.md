@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-- **macOS 1.19.8**：修复删除主数据后目标倒计时从旧偏好副本恢复的问题，目标内容只以主数据库为准。
+- **macOS 1.20.0**：记录和所有应用设置统一保存在 Application Support/FocusCount；删除整个目录后以空记录、默认参数启动。
 - **iPhone 1.5.6**：同步今日专注首页、今日概览、隐私目标倒数、独立专注分析及活动分类与颜色；重新适配手机标记图表，支持竖屏 3 天、横屏 7 天的时间分布。
 - 两端使用 JSON v5 手动导出、导入并合并记录和目标日期；同时交换分类、颜色、emoji 和目标显示设置；提示音与模式参数在设置中选择，默认关闭并记住本机选择；计时状态默认关闭。
 
@@ -12,7 +12,7 @@
 
 ### Mac
 
-当前本地打包产物为 [FocusCount-1.19.8-macOS.zip](dist/macos/FocusCount-1.19.8-macOS.zip)，适用于 **Apple 芯片 Mac、macOS 13 及以上**。
+当前本地打包产物为 [FocusCount-1.20.0-macOS.zip](dist/macos/FocusCount-1.20.0-macOS.zip)，适用于 **Apple 芯片 Mac、macOS 13 及以上**。
 
 1. 退出正在运行的 FocusCount。
 2. 解压 ZIP，将 `FocusCount.app` 放入“应用程序”文件夹；更新时替换旧应用。
@@ -64,7 +64,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer bash scripts/build-app.
 
 **应用可以独立运行**，可将 `dist/macos/FocusCount.app` 复制到“应用程序”目录，也可压缩后发给其他兼容 Mac。接收方无需项目源码、根目录标记或 Xcode。当前脚本生成本机架构，Apple 芯片构建不支持 Intel Mac；要求 macOS 13+。
 
-数据独立保存在当前用户的 `~/Library/Application Support/FocusCount/`，不会打包进应用。升级现有项目时，先从原项目目录启动一次新版，完成自动迁移，再移动应用。若先移动了应用，可手动导入原项目的 `data/sessions.json`。
+数据与设置统一保存在当前用户的 `~/Library/Application Support/FocusCount/`，不会打包进应用。启动不再自动导入旧项目数据，旧记录请通过数据管理手动导入。
 
 测试（需要完整 Xcode）：
 
@@ -95,7 +95,13 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun swift test --pack
 
 Mac 的主数据保存于 `~/Library/Application Support/FocusCount/sessions.json`，CSV 自动生成，备份在同目录 `backups/`。数据管理页面提供“打开数据目录”和“打开备份目录”。
 
-首次从带有 `.focuscount-root` 的旧项目运行新版时，自动发现 `data/sessions.json`，验证并备份双方原始文件，再按共享合并规则迁移。如果本地已有数据，保留本地计时草稿；项目草稿保存在迁移备份中。原项目文件及其旧备份不会删除。迁移完成后创建 `project-storage-migration.json` 标记，不会反复导入项目旧数据。迁移失败时停止写入并显示错误。
+Mac 1.20.0 起只读取此数据目录，不再自动恢复旧项目目录或系统 UserDefaults 中的数据。`settings.plist` 保存模式参数、声音选择、颜色、emoji、分类、目标显示偏好、同步开关和分析窗口尺寸；`sounds/` 保存自定义音频。
+
+首次升级时，目录里没有 `settings.plist` 就使用默认设置，不从旧系统偏好迁移；已有记录、目标和声音文件保留。软件会清理旧系统偏好中的应用设置键。
+
+完全退出应用后删除整个 `FocusCount` 目录，再启动就是空记录和默认参数（普通专注；微休息默认随机 3–5 分钟、闭眼 10 秒、专注 90 分钟、休息 20 分钟）。仅删 `sessions.json` 不会重置 `settings.plist` 中的设置。损坏的设置文件会报错并保留原文件，不按“缺失文件”处理。
+
+完整本机备份可在退出后复制整个数据目录；跨设备合并仍使用应用内 JSON 导出/导入。
 
 不同设备通过应用中的 JSON 导出和导入合并交换数据；不要直接覆盖运行中的主文件。移动或更新应用不影响用户数据，发送应用也不会发送个人记录。
 
@@ -105,7 +111,7 @@ Mac 的主数据保存于 `~/Library/Application Support/FocusCount/sessions.jso
 
 仓库：[foryyz/Focus-Count](https://github.com/foryyz/Focus-Count)，远程名 `origin`。`main` 保存可构建的稳定代码，后续新功能使用 `codex/<功能名>` 分支；按功能提交，合并后建立不可覆盖的附注版本标签。
 
-当前版本标签：`macos/v1.19.8`、`ios/v1.5.6`。两端独立编号；应用版本、构建号、文档和实际产物应一致。Git 标签保存源码快照，`dist/macos/history/` 保存本机旧安装包，两者用途不同。
+当前版本标签：`macos/v1.20.0`、`ios/v1.5.6`。两端独立编号；应用版本、构建号、文档和实际产物应一致。Git 标签保存源码快照，`dist/macos/history/` 保存本机旧安装包，两者用途不同。
 
 Git 跟踪源码、测试、脚本、文档及共享工程配置；忽略个人数据、`xcuserdata`、编译缓存和 `dist/`。本机 Apple Team 等签名配置不纳入功能提交。重新克隆后需要构建应用，个人记录通过应用内 JSON 导入合并恢复。
 

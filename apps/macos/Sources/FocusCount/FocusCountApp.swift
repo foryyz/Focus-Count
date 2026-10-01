@@ -242,6 +242,7 @@ struct ContentView: View {
                 }
             }
         } message: { Text("本次未保存的计时将被清除，不生成专注记录。已有专注记录不会受到影响。") }
+        .onReceive(FilePreferences.shared.$error) { if let error = $0 { store.error = error } }
         .onAppear { commandFocused = showMarkerInput; subject = store.database.activity ?? "" }
         .onChange(of: subject) { value in store.setActivity(value) }
         .onChange(of: store.database.activity) { value in subject = value ?? "" }
@@ -325,6 +326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main struct FocusCountApp: App {
+    init() { FilePreferences.discardLegacyDefaults(.standard) }
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
         Window("FocusCount · 专注计时", id: "main") { ContentView() }

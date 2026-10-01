@@ -11,9 +11,9 @@ import UIKit
     @Published private(set) var values: [String: String]
     @Published private(set) var emojis: [String: String]
     private var observer: NSObjectProtocol?
-    private let defaults: UserDefaults
+    private let defaults: any PreferenceStorage
     private let key = "marker-colors-v1"
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: any PreferenceStorage = ApplicationPreferences.current) {
         self.defaults = defaults
         values = defaults.dictionary(forKey: key) as? [String: String] ?? [:]
         emojis = defaults.dictionary(forKey: "marker-emojis-v1") as? [String: String] ?? [:]

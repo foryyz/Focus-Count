@@ -102,8 +102,8 @@ struct SoundSettingsView: View {
     @ObservedObject private var library = SoundLibrary.shared
     @Environment(\.dismiss) private var dismiss
     @State private var section = 0
-    @AppStorage(SyncPreferences.soundsKey) private var syncSounds = false
-    @AppStorage(SyncPreferences.parametersKey) private var syncParameters = false
+    @DirectoryPreference(SyncPreferences.soundsKey) private var syncSounds = false
+    @DirectoryPreference(SyncPreferences.parametersKey) private var syncParameters = false
     var body: some View {
         VStack(spacing: 0) {
             HStack { Text("设置").font(.headline); Spacer(); Button("完成") { dismiss() } }.padding(20)

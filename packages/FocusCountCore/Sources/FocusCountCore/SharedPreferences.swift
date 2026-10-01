@@ -52,7 +52,7 @@ public enum SharedPreferences {
         var categories: [Category] = []; var assignments: [String: UUID] = [:]; var colors: [String: String] = [:]
     }
     private static func canonical<T: Encodable>(_ value: T) throws -> Data { let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]; return try encoder.encode(value) }
-    private static func current(_ defaults: UserDefaults) -> [String: String] {
+    private static func current(_ defaults: any PreferenceStorage) -> [String: String] {
         var result: [String: String] = [:]
         for (key, prefix) in [("marker-colors-v1", "markerColor/"), ("marker-emojis-v1", "emoji/")] {
             for (name, value) in defaults.dictionary(forKey: key) as? [String: String] ?? [:] { result[prefix + name] = value }
@@ -74,7 +74,7 @@ public enum SharedPreferences {
         }
         return result
     }
-    @discardableResult public static func capture(_ defaults: UserDefaults = .standard, at date: Date = Date()) -> SharedSettings {
+    @discardableResult public static func capture(_ defaults: any PreferenceStorage = ApplicationPreferences.current, at date: Date = Date()) -> SharedSettings {
         let saved = defaults.data(forKey: ledger).flatMap { try? JSONDecoder().decode(SharedSettings.self, from: $0) }
         var result = numbersOnly(saved ?? SharedSettings())
         let values = current(defaults)
@@ -100,14 +100,14 @@ public enum SharedPreferences {
             return value == "true" || value == "false"
         }
     }
-    public static func mergedMode(_ incoming: SharedSettings?, defaults: UserDefaults, local: FocusRoutineSettings, syncParameters: Bool) -> FocusRoutineSettings {
+    public static func mergedMode(_ incoming: SharedSettings?, defaults: any PreferenceStorage, local: FocusRoutineSettings, syncParameters: Bool) -> FocusRoutineSettings {
         guard syncParameters, let incoming else { return local }
         let merged = SharedSettings.merge(capture(defaults), numbersOnly(incoming))
         guard let text = merged.entries["mode"]?.value, let data = Data(base64Encoded: text),
               let parameters = try? JSONDecoder().decode(ModeParameters.self, from: data) else { return local }
         return parameters.applying(to: local)
     }
-    public static func apply(_ incoming: SharedSettings, defaults: UserDefaults = .standard, syncParameters: Bool = true) {
+    public static func apply(_ incoming: SharedSettings, defaults: any PreferenceStorage = ApplicationPreferences.current, syncParameters: Bool = true) {
         var incoming = incoming
         if !syncParameters { incoming.entries.removeValue(forKey: "mode") }
         let merged = SharedSettings.merge(capture(defaults), numbersOnly(incoming))

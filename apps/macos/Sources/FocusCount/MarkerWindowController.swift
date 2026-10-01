@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import FocusCountCore
 
 /// A regular window can move independently; attached sheets cannot.
 @MainActor final class MarkerWindowController: NSWindowController, NSWindowDelegate {
@@ -30,12 +31,18 @@ import SwiftUI
         }))
         window.center()
         // Start once with the new 16:9 default, then retain subsequent user resizing.
-        window.setFrameAutosaveName("FocusCountMarkerWindowWide")
+        if let frame = FilePreferences.shared.object(forKey: "window-markers") as? String { window.setFrame(from: frame) }
         window.delegate = self
         self.window = window
         window.makeKeyAndOrderFront(nil)
     }
 
+    func windowDidMove(_ notification: Notification) { saveFrame() }
+    func windowDidResize(_ notification: Notification) { saveFrame() }
+    private func saveFrame() {
+        guard let window, !window.styleMask.contains(.fullScreen) else { return }
+        FilePreferences.shared.set(window.frameDescriptor, forKey: "window-markers")
+    }
     func windowWillClose(_ notification: Notification) {
         window = nil
     }

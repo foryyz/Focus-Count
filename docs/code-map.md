@@ -1,6 +1,6 @@
 # FocusCount 功能与代码定位索引
 
-核对日期：2026-10-02。对应当前工作区：Mac 1.19.8 / iPhone 1.5.6。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
+核对日期：2026-10-02。对应当前工作区：Mac 1.20.0 / iPhone 1.5.6。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
 
 ## 如何使用
 
@@ -141,7 +141,7 @@ iPhone 品牌使用 `brandItem`；iOS 26+ 调用 `sharedBackgroundVisibility(.hi
 | 仅同步模式数值 | 同文件：`ModeParameters.init(_:)`、`applying(to:)`；保留接收端的模式偏好和声音配置 |
 | Mac 导入导出 | `StudyStore.importRecords(_:syncTimer:syncSounds:syncParameters:)`、`export()`；[DataExchangeView.swift](../apps/macos/Sources/FocusCount/DataExchangeView.swift) 的预览、文件选择和确认按钮 |
 | 手机导入导出 | `PhoneStore.importRecords(_:syncTimer:syncSounds:syncParameters:)`、`export()`；[ExchangeScreen.swift](../apps/ios/FocusCount/ExchangeScreen.swift) 的文件读写 UI；`PhoneImportFile.read(_:)` 在 `PhoneStore.swift`，负责安全作用域与文件协调 |
-| Mac 路径、旧数据迁移、CSV | [Mac/Models.swift](../apps/macos/Sources/FocusCount/Models.swift)：`Storage.directory`、`legacyDirectory`、`projectDirectory`、`migrateProjectData`、`migrateLegacyData`、`csv` |
+| Mac 路径、旧迁移工具（启动不调用）、CSV | [Mac/Models.swift](../apps/macos/Sources/FocusCount/Models.swift)：`Storage.directory`、`legacyDirectory`、`projectDirectory`、`migrateProjectData`、`migrateLegacyData`、`csv` |
 
 调用链：文件选择 → `RecordExchange.decode` → 用户确认 → Store 的 `importRecords` → 备份 → 合并/写入 → `SharedPreferences.apply` → 外观 Store 监听 `SharedPreferences.changed` 刷新。
 
@@ -182,7 +182,7 @@ iPhone 品牌使用 `brandItem`；iOS 26+ 调用 `sharedBackgroundVisibility(.hi
 
 “同步自定义提示音与声音设置”和“同步模式数值参数”移至设置中的“同步设置”，默认关闭，按设备持久记忆。导入预览不再显示这两个开关，每次直接使用本机选择；计时状态仍在预览中临时选择，默认关闭。
 
-共享常量 `SyncPreferences.soundsKey/parametersKey` 位于 Core `SharedPreferences.swift`；两端设置页和交换页通过 `@AppStorage` 使用同一组本机键。导入时仍向 Store 显式传入两个选择，预览变化也按相同选择计算。这两个偏好不进入 `SharedPreferences` 交换内容，导入其他设备的数据不会重置它们。导出内容不受本机导入偏好影响。此规则替代上一版“每次导入默认开启”的交互。
+共享常量 `SyncPreferences.soundsKey/parametersKey` 位于 Core `SharedPreferences.swift`；Mac 设置页和交换页通过 `@DirectoryPreference`、iPhone 通过 `@AppStorage` 使用同一组本机键。导入时仍向 Store 显式传入两个选择，预览变化也按相同选择计算。这两个偏好不进入 `SharedPreferences` 交换内容，导入其他设备的数据不会重置它们。导出内容不受本机导入偏好影响。此规则替代上一版“每次导入默认开启”的交互。
 
 
 ### 聚合标记数量（Mac 1.19.6 / iPhone 1.5.6）
@@ -192,3 +192,11 @@ iPhone 品牌使用 `brandItem`；iOS 26+ 调用 `sharedBackgroundVisibility(.hi
 ### Mac 占比图标签（1.19.7）
 
 `FocusShareChart.swift` 中 Mac 使用 `MacFocusShareDiagram`：`placements` 测量名称和占比、搜索字号/换行宽度/位置；`layout` 按需预留外侧标签空间；`ink` 调整内外文字对比度。`ShareLabelGeometry.fits` 检查标签是否完整位于扇区内并避开圆环中心。iPhone 保留原有布局。几何边界与浅深色渲染回归见 `ShareLabelTests.swift`。
+
+### 目录内设置（Mac 1.20.0）
+
+- [PreferenceStorage.swift](../packages/FocusCountCore/Sources/FocusCountCore/PreferenceStorage.swift)：`PreferenceStorage`、`ApplicationPreferences.current`、`FilePreferences.init/set/removeObject/discardLegacyDefaults`。Mac `settings.plist` 的读写与错误状态，iPhone 保持 UserDefaults。
+- [DirectoryPreference.swift](../apps/macos/Sources/FocusCount/DirectoryPreference.swift)：设置页与导入页的响应式 Bool 绑定。
+- `StudyStore.init/setMode`：读取并保存模式配置；初始化不再调用旧项目迁移。`FocusCountApp.init` 清理旧系统偏好键，`ContentView` 显示文件设置错误。
+- `FocusAnalysisWindow.saveFrame`、`MarkerWindowController.saveFrame`：窗口尺寸/位置也写入目录设置。
+- Core `PreferenceStorageTests` 与 Mac `DirectorySettingsTests`：存储、清空、默认值及失败保护回归。

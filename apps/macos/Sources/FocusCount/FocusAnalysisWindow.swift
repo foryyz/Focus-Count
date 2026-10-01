@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import FocusCountCore
 
 @MainActor final class FocusAnalysisWindow: NSWindowController, NSWindowDelegate {
     static let shared = FocusAnalysisWindow()
@@ -17,10 +18,16 @@ import SwiftUI
         window.contentMinSize = NSSize(width: 960, height: 600)
         window.contentView = NSHostingView(rootView: FocusAnalysisView(store: store))
         window.center()
-        window.setFrameAutosaveName("FocusCountAnalysisWindow")
+        if let frame = FilePreferences.shared.object(forKey: "window-analysis") as? String { window.setFrame(from: frame) }
         window.delegate = self
         self.window = window
         window.makeKeyAndOrderFront(nil)
+    }
+    func windowDidMove(_ notification: Notification) { saveFrame() }
+    func windowDidResize(_ notification: Notification) { saveFrame() }
+    private func saveFrame() {
+        guard let window, !window.styleMask.contains(.fullScreen) else { return }
+        FilePreferences.shared.set(window.frameDescriptor, forKey: "window-analysis")
     }
     func windowWillClose(_ notification: Notification) { window = nil }
 }
