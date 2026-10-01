@@ -3,6 +3,41 @@ import FocusCountCore
 @testable import FocusCount
 
 final class TargetCountdownTests: XCTestCase {
+    @MainActor func testMissingDatabaseGoalDoesNotRestoreLegacyDefaults() throws {
+        let suite = "ClearedGoal-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let legacy = TargetDate(name: "旧目标", emoji: "", date: Date(), includesTime: true, hidden: false)
+        defaults.set(try JSONEncoder().encode(legacy), forKey: "focus-target-date-v1")
+        var writes = 0
+        let store = TargetCountdownStore(defaults: defaults, snapshot: nil, writer: { _ in writes += 1; return true })
+        XCTAssertNil(store.target)
+        XCTAssertEqual(writes, 0)
+        XCTAssertNil(defaults.object(forKey: "focus-target-date-v1"))
+    }
+    @MainActor func testDatabaseGoalNeverCreatesMirrorOrReturnsAfterDataRemoval() throws {
+        let suite = "DatabaseGoal-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let goal = GoalSnapshot(name: "当前目标", date: Date())
+        let legacy = TargetDate(name: "过期副本", emoji: "", date: Date(), includesTime: false, hidden: true)
+        defaults.set(try JSONEncoder().encode(legacy), forKey: "focus-target-date-v1")
+        var stored = goal
+        let store = TargetCountdownStore(defaults: defaults, snapshot: goal, writer: { stored = $0; return true })
+        XCTAssertEqual(store.target?.name, goal.name)
+        XCTAssertNil(defaults.object(forKey: "focus-target-date-v1"))
+        var edited = store.target!; edited.name = "新名称"
+        XCTAssertTrue(store.save(edited))
+        store.setHidden(false)
+        store.setTotalHours(true)
+        XCTAssertEqual(stored.name, edited.name)
+        XCTAssertNil(defaults.object(forKey: "focus-target-date-v1"))
+        XCTAssertNil(TargetCountdownStore(defaults: defaults, snapshot: nil, writer: { _ in XCTFail("Cleared data must not be rewritten"); return true }).target)
+        let deleted = GoalSnapshot(name: "", date: Date(), deleted: true)
+        defaults.set(try JSONEncoder().encode(legacy), forKey: "focus-target-date-v1")
+        XCTAssertNil(TargetCountdownStore(defaults: defaults, snapshot: deleted, writer: { _ in true }).target)
+        XCTAssertNil(defaults.object(forKey: "focus-target-date-v1"))
+    }
     @MainActor func testImportedGoalIsHiddenAndLocalPrivacyNeverExports() {
         let suite = "GoalPrivacy-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

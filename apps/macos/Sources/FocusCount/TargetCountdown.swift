@@ -51,12 +51,19 @@ struct TargetDate: Codable, Equatable {
                 self.receive(self.snapshot)
             }
         }
+        // Production stores use the database as the only source of goal content.
+        // A missing goal can mean the user deliberately cleared the database;
+        // never resurrect it from the old UserDefaults mirror.
+        if writer != nil {
+            receive(snapshot)
+            defaults.removeObject(forKey: key)
+            return
+        }
         let old = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(TargetDate.self, from: $0) }
         if let snapshot { receive(snapshot) }
         else if let old {
             target = old
             if defaults.object(forKey: hiddenKey) == nil { defaults.set(old.hidden, forKey: hiddenKey) }
-            if writer != nil { _ = save(old) }
         }
     }
     func receive(_ value: GoalSnapshot?) {
@@ -73,8 +80,13 @@ struct TargetDate: Codable, Equatable {
         let unchanged = snapshot.map { !$0.deleted && $0.name == value.name && $0.emoji == value.emoji && $0.date == value.date && $0.includesTime == value.includesTime } ?? false
         let next = unchanged ? snapshot! : GoalSnapshot(name: value.name, emoji: value.emoji, date: value.date, includesTime: value.includesTime, updatedAt: now)
         if !unchanged, let writer, !writer(next) { error = "保存失败，目标未修改。"; return false }
-        guard let data = try? JSONEncoder().encode(value) else { return false }
-        defaults.set(data, forKey: key); defaults.set(value.hidden, forKey: hiddenKey)
+        if writer == nil {
+            guard let data = try? JSONEncoder().encode(value) else { return false }
+            defaults.set(data, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+        defaults.set(value.hidden, forKey: hiddenKey)
         snapshot = next; target = value; error = nil
         return true
     }
@@ -91,7 +103,7 @@ struct TargetDate: Codable, Equatable {
         guard var value = target else { return }
         value.hidden = hidden
         defaults.set(hidden, forKey: hiddenKey)
-        if let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: key) }
+        if writer == nil, let data = try? JSONEncoder().encode(value) { defaults.set(data, forKey: key) }
         target = value
     }
     @discardableResult func remove() -> Bool {

@@ -1,6 +1,6 @@
 # FocusCount 功能与代码定位索引
 
-核对日期：2026-09-30。对应当前工作区：Mac 1.19.7 / iPhone 1.5.6。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
+核对日期：2026-10-02。对应当前工作区：Mac 1.19.8 / iPhone 1.5.6。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
 
 ## 如何使用
 

@@ -1,6 +1,6 @@
 # FocusCount 开发与交接指南
 
-核对日期：2026-09-30。对应当前工作区：Mac 1.19.7 / iPhone 1.5.6。具体功能、文件和函数见 [code-map.md](code-map.md)。本文说明修改方法和必须保持的行为。
+核对日期：2026-10-02。对应当前工作区：Mac 1.19.8 / iPhone 1.5.6。具体功能、文件和函数见 [code-map.md](code-map.md)。本文说明修改方法和必须保持的行为。
 
 ## 1. 接手顺序
 
@@ -252,6 +252,14 @@ git diff macos/v1.19.7..HEAD -- apps/macos packages/FocusCountCore
 ```
 
 查看旧代码可在独立检出目录打开对应标签，保留当前未提交工作。已共享提交需要撤销时使用 `git revert <提交号>` 产生新提交，不以 `reset --hard` 或强制推送改写公共历史。应用回退前另行备份数据并检查数据格式兼容性；源码标签或旧 ZIP 不包含用户数据，也不能让旧应用自动兼容新协议。
+
+### 目标倒计时清空修复（Mac 1.19.8）
+
+正式应用向 `TargetCountdownStore` 注入数据库 writer，初始化只接收数据库 `goal`（包括空值和删除标记），并移除 `focus-target-date-v1` 旧镜像。保存、隐藏目标时不再写回镜像；不得在数据库目标为空时自动恢复旧副本，因为用户可能主动清空了主数据。未注入 writer 的独立测试模式仍支持偏好存储，不用于正式应用。共享源码已修复，iPhone 下次构建也会使用此逻辑，本次仅发布 Mac。
+
+Mac 正式包的偏好文件为 `~/Library/Preferences/local.focuscount.app.plist`；`focus-target-date-v1` 是其中的键，不是单独文件。目标隐藏和显示格式仍由 UserDefaults 管理。系统会缓存偏好，不宜直接编辑整个 plist；删除整个文件还会影响其他设置。旧版已恢复并写回主数据库的目标不会在升级时被自动删除，应在目标设置中删除。
+
+回归测试为 `TargetCountdownTests.testMissingDatabaseGoalDoesNotRestoreLegacyDefaults` 和 `testDatabaseGoalNeverCreatesMirrorOrReturnsAfterDataRemoval`，覆盖旧镜像、空目标、保存/隐藏不再生成副本及删除标记。
 
 ## 10. 维护这两份文档
 

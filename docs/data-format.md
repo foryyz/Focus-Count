@@ -53,6 +53,10 @@ UTF-8 JSON 顶层包含 `version`（5）、`sessions`（记录数组）、`draft
 
 不要用同步工具直接覆盖正在运行客户端的主文件。直接覆盖文件不等于调用合并功能，多进程同时写同一主文件也不在本协议支持范围内。
 
+### 目标旧偏好副本清理（Mac 1.19.8）
+
+正式应用的目标内容仅以数据库 `goal` 为准，初始化清除 `focus-target-date-v1` 旧 UserDefaults 镜像，不再从中自动恢复目标。隐藏与显示格式偏好仍使用 UserDefaults。此修复不改变 JSON v5 或目标合并规则。
+
 ## 迁移
 
 Mac 兼容主文件 v1/v2/v3/v4/v5。升级前保留 sessions.v<旧版本>.backup.json，随后写入 v5。

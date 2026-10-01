@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-- **macOS 1.19.7**：专注分析的扇形图、环形图优先在分区内显示名称与占比，外侧标签和引线采用对应活动色并自动调整对比度。
+- **macOS 1.19.8**：修复删除主数据后目标倒计时从旧偏好副本恢复的问题，目标内容只以主数据库为准。
 - **iPhone 1.5.6**：同步今日专注首页、今日概览、隐私目标倒数、独立专注分析及活动分类与颜色；重新适配手机标记图表，支持竖屏 3 天、横屏 7 天的时间分布。
 - 两端使用 JSON v5 手动导出、导入并合并记录和目标日期；同时交换分类、颜色、emoji 和目标显示设置；提示音与模式参数在设置中选择，默认关闭并记住本机选择；计时状态默认关闭。
 
@@ -12,7 +12,7 @@
 
 ### Mac
 
-当前本地打包产物为 [FocusCount-1.19.7-macOS.zip](dist/macos/FocusCount-1.19.7-macOS.zip)，适用于 **Apple 芯片 Mac、macOS 13 及以上**。
+当前本地打包产物为 [FocusCount-1.19.8-macOS.zip](dist/macos/FocusCount-1.19.8-macOS.zip)，适用于 **Apple 芯片 Mac、macOS 13 及以上**。
 
 1. 退出正在运行的 FocusCount。
 2. 解压 ZIP，将 `FocusCount.app` 放入“应用程序”文件夹；更新时替换旧应用。
@@ -105,7 +105,7 @@ Mac 的主数据保存于 `~/Library/Application Support/FocusCount/sessions.jso
 
 仓库：[foryyz/Focus-Count](https://github.com/foryyz/Focus-Count)，远程名 `origin`。`main` 保存可构建的稳定代码，后续新功能使用 `codex/<功能名>` 分支；按功能提交，合并后建立不可覆盖的附注版本标签。
 
-当前版本标签：`macos/v1.19.7`、`ios/v1.5.6`。两端独立编号；应用版本、构建号、文档和实际产物应一致。Git 标签保存源码快照，`dist/macos/history/` 保存本机旧安装包，两者用途不同。
+当前版本标签：`macos/v1.19.8`、`ios/v1.5.6`。两端独立编号；应用版本、构建号、文档和实际产物应一致。Git 标签保存源码快照，`dist/macos/history/` 保存本机旧安装包，两者用途不同。
 
 Git 跟踪源码、测试、脚本、文档及共享工程配置；忽略个人数据、`xcuserdata`、编译缓存和 `dist/`。本机 Apple Team 等签名配置不纳入功能提交。重新克隆后需要构建应用，个人记录通过应用内 JSON 导入合并恢复。
 
