@@ -99,6 +99,9 @@ struct FocusModeSettingsView: View {
             }.padding(20)
         }.frame(width: 440, height: 480)
             .onAppear { settings = store.modeSettings; selectedMode = store.modeSettings.mode }
+            .onChange(of: library.custom.map(\.id)) { _ in
+                for id in [settings.restSound, settings.focusSound].compactMap({ $0 }) where !library.sounds.contains(where: { $0.id == id }) { settings = settings.removingSound(id) }
+            }
     }
     private func soundPicker(_ title: String, selection: Binding<String?>, fallback: String) -> some View {
         HStack {

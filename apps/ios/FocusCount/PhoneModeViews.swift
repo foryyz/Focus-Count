@@ -96,7 +96,10 @@ struct PhoneModeSettings: View {
                     }
                 }
                 .onAppear { settings = store.modeSettings; mode = store.modeSettings.mode }
-                .sheet(isPresented: $soundSettings) { PhoneSoundSettings() }
+                .onChange(of: sounds.custom.map(\.id)) { _ in
+                    for id in [settings.restSound, settings.focusSound].compactMap({ $0 }) where !sounds.sounds.contains(where: { $0.id == id }) { settings = settings.removingSound(id) }
+                }
+                .sheet(isPresented: $soundSettings) { PhoneSoundSettings(store: store) }
         }
     }
     private func soundPicker(_ title: String, id: Binding<String?>, fallback: String) -> some View {

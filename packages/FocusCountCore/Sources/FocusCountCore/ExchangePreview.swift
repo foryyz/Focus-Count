@@ -168,7 +168,7 @@ public final class SoundFileTransaction {
     private let hadOriginal: Bool
     private var finished = false
     private let restoreIndex: () -> Void
-    public init(directory: URL, files: [String: Data], index: Data, restoreIndex: @escaping () -> Void) throws {
+    public init(directory: URL, files: [String: Data], index: Data, removing: [String] = [], restoreIndex: @escaping () -> Void) throws {
         self.directory = directory; self.restoreIndex = restoreIndex
         let fm = FileManager.default, parent = directory.deletingLastPathComponent()
         let staging = parent.appendingPathComponent(".sounds-stage-" + UUID().uuidString)
@@ -178,6 +178,11 @@ public final class SoundFileTransaction {
         defer { try? fm.removeItem(at: staging) }
         if hadOriginal { try fm.copyItem(at: directory, to: staging) }
         else { try fm.createDirectory(at: staging, withIntermediateDirectories: true) }
+        for name in removing {
+            guard ![".", "..", "library.json"].contains(name), URL(fileURLWithPath: name).lastPathComponent == name else { throw CocoaError(.fileWriteInvalidFileName) }
+            let file = staging.appendingPathComponent(name)
+            if fm.fileExists(atPath: file.path) { try fm.removeItem(at: file) }
+        }
         for (name, data) in files {
             guard URL(fileURLWithPath: name).lastPathComponent == name else { throw CocoaError(.fileWriteInvalidFileName) }
             try data.write(to: staging.appendingPathComponent(name), options: .atomic)

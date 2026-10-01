@@ -1,6 +1,6 @@
 # FocusCount 功能与代码定位索引
 
-核对日期：2026-10-02。对应当前工作区：Mac 1.20.0 / iPhone 1.5.6。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
+核对日期：2026-10-02。对应当前工作区：Mac 1.20.1 / iPhone 1.5.7。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
 
 ## 如何使用
 
@@ -200,3 +200,7 @@ iPhone 品牌使用 `brandItem`；iOS 26+ 调用 `sharedBackgroundVisibility(.hi
 - `StudyStore.init/setMode`：读取并保存模式配置；初始化不再调用旧项目迁移。`FocusCountApp.init` 清理旧系统偏好键，`ContentView` 显示文件设置错误。
 - `FocusAnalysisWindow.saveFrame`、`MarkerWindowController.saveFrame`：窗口尺寸/位置也写入目录设置。
 - Core `PreferenceStorageTests` 与 Mac `DirectorySettingsTests`：存储、清空、默认值及失败保护回归。
+
+### 提示音反馈与删除（Mac 1.20.1 / iPhone 1.5.7）
+
+两端声音库的 `notice/error` 提供操作反馈，`rename` 返回成功状态并验证 1–80 字名称；`stageDeletion` 通过 `SoundFileTransaction(removing:)` 暂存删除，可回滚源文件与索引。Store 的 `deleteCustomSound` 更新当前模式与当前轮次引用，使用 Core `FocusRoutineSettings.removingSound` 恢复默认声音。Phone 刷新通知并清理 `Library/Sounds/<ID>.caf`；两端模式编辑视图监听声音列表变化，避免重新保存失效引用。`SoundSettingsView` / `PhoneSoundSettings` 使用传入 Store 的声音库，不能另外创建脱节的库实例。

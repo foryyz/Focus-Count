@@ -12,7 +12,7 @@ import AppKit
     private var routineTick: Double?
     private var soundsEnabled = false
     private var modeDefaults: (any PreferenceStorage)?
-    private let soundLibrary: SoundLibrary
+    let soundLibrary: SoundLibrary
     private var playingSound: NSSound?
     var isRunning: Bool {
         if let routine = database.focusRoutine { return !routine.suspended && routine.phase != .ready }
@@ -22,7 +22,7 @@ import AppKit
     func previewModeSound(id: String = "Glass", volume: Double? = nil) { playModeSound(id, volume: volume ?? modeSettings.volume) }
     private func playModeSound(_ name: String, volume: Double) {
         playingSound?.stop()
-        playingSound = SoundLibrary.shared.sound(name)
+        playingSound = soundLibrary.sound(name)
         if playingSound == nil {
             error = "所选提示音无法播放，已使用默认提示音。请在设置中检查音频文件。"
             playingSound = NSSound(named: NSSound.Name("Glass"))
@@ -53,6 +53,33 @@ import AppKit
         if let modeDefaults { SharedPreferences.capture(modeDefaults) }
         routineTick = StudyClock.now
         return true
+    }
+    @discardableResult func deleteCustomSound(_ id: String) -> Bool {
+        guard !blocked else { return false }
+        let previous = modeDefaults?.data(forKey: "focus-modes-v1")
+        var transaction: SoundFileTransaction?
+        do {
+            transaction = try soundLibrary.stageDeletion(id)
+            let next = modeSettings.removingSound(id)
+            modeDefaults?.set(try JSONEncoder().encode(next), forKey: "focus-modes-v1")
+            if let failure = (modeDefaults as? FilePreferences)?.error { throw NSError(domain: "FocusCount.Sound", code: 1, userInfo: [NSLocalizedDescriptionKey: failure]) }
+            guard commit({ state in
+                if var routine = state.focusRoutine { routine.settings = routine.settings.removingSound(id); state.focusRoutine = routine }
+            }) else { throw NSError(domain: "FocusCount.Sound", code: 2, userInfo: [NSLocalizedDescriptionKey: error ?? "无法保存模式设置"] ) }
+            modeSettings = next
+            playingSound?.stop()
+            transaction?.finish()
+            if let modeDefaults { SharedPreferences.capture(modeDefaults) }
+            soundLibrary.error = nil
+            soundLibrary.notice = "已删除提示音；使用该声音的提醒已恢复默认。"
+            return true
+        } catch {
+            modeDefaults?.set(previous, forKey: "focus-modes-v1")
+            var message = "删除失败：\(error.localizedDescription)"
+            do { try transaction?.rollback() } catch { message += "；回滚失败：\(error.localizedDescription)" }
+            self.error = message; soundLibrary.error = message; soundLibrary.notice = nil
+            return false
+        }
     }
     func advanceRoutine(now: Double = StudyClock.now) {
         guard var routine = database.focusRoutine else { routineTick = nil; return }

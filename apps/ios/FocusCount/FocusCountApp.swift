@@ -142,7 +142,7 @@ struct TimerScreen: View {
                 PhoneModeMenu(store: store) { modes = false; modeSettings = true }
             }
             .sheet(isPresented: $modeSettings) { PhoneModeSettings(store: store) }
-            .sheet(isPresented: $settings) { PhoneSoundSettings() }
+            .sheet(isPresented: $settings) { PhoneSoundSettings(store: store) }
             .sheet(isPresented: $history) { PhoneHistory(store: store) }
             .sheet(isPresented: $markers) { PhoneEventHistory(store: store) }
             .sheet(isPresented: $analysis) { PhoneFocusAnalysis(store: store, appearance: appearance) }

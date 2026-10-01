@@ -22,7 +22,7 @@ struct PhoneState: Codable {
     private var ticker: Timer?
     private let live: Bool
     private let preferences: UserDefaults
-    private let soundLibrary: PhoneSounds
+    let soundLibrary: PhoneSounds
     private var ticks = 0
     var modeSettings: FocusRoutineSettings { state.modeSettings ?? FocusRoutineSettings() }
     var isRunning: Bool { state.routine.map { !$0.suspended && $0.phase != .ready } ?? state.clock.isRunning }
@@ -116,6 +116,30 @@ struct PhoneState: Codable {
             refreshNotifications()
         }
         return success
+    }
+    @discardableResult func deleteCustomSound(_ id: String) -> Bool {
+        guard !blocked else { return false }
+        var transaction: SoundFileTransaction?
+        do {
+            transaction = try soundLibrary.stageDeletion(id)
+            let settings = modeSettings.removingSound(id)
+            guard commit({ next in
+                next.modeSettings = settings
+                if var plan = next.routine { plan.settings = plan.settings.removingSound(id); next.routine = plan }
+            }) else { throw NSError(domain: "FocusCount.Sound", code: 1, userInfo: [NSLocalizedDescriptionKey: error ?? "无法保存模式设置"]) }
+            preferences.set(try JSONEncoder().encode(settings), forKey: "focus-modes-v1")
+            SharedPreferences.capture(preferences)
+            transaction?.finish()
+            refreshNotifications()
+            soundLibrary.error = nil
+            soundLibrary.notice = "已删除提示音；使用该声音的提醒已恢复默认。"
+            return true
+        } catch {
+            var message = "删除失败：\(error.localizedDescription)"
+            do { try transaction?.rollback() } catch { message += "；回滚失败：\(error.localizedDescription)" }
+            self.error = message; soundLibrary.error = message; soundLibrary.notice = nil
+            return false
+        }
     }
     func skipRest() {
         let success = commit { next in

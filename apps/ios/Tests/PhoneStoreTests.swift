@@ -189,6 +189,30 @@ final class PhoneStoreTests: XCTestCase {
         try Data("invalid".utf8).write(to: invalid)
         XCTAssertThrowsError(try sounds.add(invalid))
     }
+    @MainActor func testSoundDeletionClearsFilesCacheAndModeReferences() throws {
+        let root = directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("sounds"), sounds = PhoneSounds(directory: root.appendingPathComponent("sounds"))
+        try sounds.add(XCTUnwrap(sounds.url("Glass")))
+        let sound = try XCTUnwrap(sounds.custom.first), source = try XCTUnwrap(sounds.url(sounds.custom[0].id))
+        XCTAssertNotNil(sounds.notice)
+        XCTAssertFalse(sounds.rename(sound.id, name: "  "))
+        XCTAssertTrue(sounds.rename(sound.id, name: "新名称"))
+        XCTAssertNil(sounds.error)
+        _ = try sounds.notificationSound(sound.id)
+        let cache = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("Sounds/" + sound.id + ".caf")
+        let store = PhoneStore(directory: root)
+        var mode = FocusRoutineSettings(); mode.mode = .microBreak; mode.restSound = sound.id; mode.focusSound = sound.id
+        XCTAssertTrue(store.setMode(mode)); XCTAssertTrue(store.start(activity: "Test"))
+        XCTAssertTrue(store.deleteCustomSound(sound.id))
+        XCTAssertNil(store.modeSettings.restSound)
+        XCTAssertNil(store.state.routine?.settings.focusSound)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cache.path))
+        XCTAssertTrue(PhoneSounds(directory: folder).custom.isEmpty)
+        XCTAssertNil(PhoneStore(directory: root).modeSettings.focusSound)
+        XCTAssertFalse(store.deleteCustomSound("Glass"))
+    }
     @MainActor func testNumericSettingsAndRestStateExchangeWithOptionalSounds() throws {
         let root = directory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -743,7 +767,9 @@ final class MarkerPointLayoutTests: XCTestCase {
         await render(PhoneModeMenu(store: store, adjust: {}), name: "mode-menu", size: CGSize(width: 375, height: 310))
         await render(PhoneModeSettings(store: store), name: "mode-settings-small", size: CGSize(width: 375, height: 667))
         await render(PhoneModeSettings(store: store), name: "mode-settings-landscape", size: CGSize(width: 740, height: 350))
-        await render(PhoneSoundSettings(), name: "sound-library", size: CGSize(width: 375, height: 667))
+        try store.soundLibrary.add(XCTUnwrap(store.soundLibrary.url("Glass")))
+        if let sound = store.soundLibrary.custom.first { store.soundLibrary.rename(sound.id, name: "我的自定义提示音") }
+        await render(PhoneSoundSettings(store: store), name: "sound-library", size: CGSize(width: 375, height: 667))
     }
     func testExchangeScreens() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

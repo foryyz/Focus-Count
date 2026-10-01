@@ -16,6 +16,8 @@ struct PhoneSound: Codable, Identifiable {
     static let presets = [PhoneSound(id: "Glass", name: "清脆"), PhoneSound(id: "Pop", name: "轻点"), PhoneSound(id: "Hero", name: "明亮"), PhoneSound(id: "Ping", name: "叮咚"), PhoneSound(id: "Tink", name: "轻铃"), PhoneSound(id: "Submarine", name: "水滴")]
     @Published private(set) var custom: [PhoneSound] = []
     @Published var error: String?
+    @Published var notice: String?
+    private var readable = true
     private var player: AVAudioPlayer?
     let directory: URL
     var sounds: [PhoneSound] { Self.presets + custom }
@@ -24,7 +26,7 @@ struct PhoneSound: Codable, Identifiable {
         let index = self.directory.appendingPathComponent("library.json")
         if FileManager.default.fileExists(atPath: index.path) {
             do { custom = try JSONDecoder().decode([PhoneSound].self, from: Data(contentsOf: index)) }
-            catch { self.error = "提示音库读取失败：\(error.localizedDescription)" }
+            catch { readable = false; self.error = "提示音库读取失败：\(error.localizedDescription)" }
         }
     }
     func url(_ id: String) -> URL? {
@@ -65,6 +67,7 @@ struct PhoneSound: Codable, Identifiable {
         }
     }
     private func save(_ items: [PhoneSound]) throws {
+        guard readable else { throw CocoaError(.fileReadCorruptFile) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try JSONEncoder().encode(items).write(to: directory.appendingPathComponent("library.json"), options: .atomic)
         custom = items; error = nil
@@ -79,17 +82,19 @@ struct PhoneSound: Codable, Identifiable {
                 let size = try source.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
                 guard size > 0, size <= 50 * 1024 * 1024 else { throw CocoaError(.fileReadTooLarge) }
                 _ = try AVAudioPlayer(contentsOf: source)
-                let id = UUID().uuidString, file = UUID().uuidString + "." + source.pathExtension
+                let id = UUID().uuidString
+                let file = id + "." + source.pathExtension
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 let destination = directory.appendingPathComponent(file)
                 try FileManager.default.copyItem(at: source, to: destination)
-                do { try save(custom + [PhoneSound(id: id, name: String(source.deletingPathExtension().lastPathComponent.prefix(80)), file: file)]) }
+                do { try save(custom + [PhoneSound(id: id, name: String(source.deletingPathExtension().lastPathComponent.prefix(80)), file: file, modified: Date())]) }
                 catch { try? FileManager.default.removeItem(at: destination); throw error }
             }
         }
         if let failure { throw failure }
         guard let outcome else { throw CocoaError(.fileReadUnknown) }
         try outcome.get()
+        notice = "已导入“\(custom.last?.name ?? "")”，可在模式设置中选择。"
     }
     func exportSounds() throws -> [SharedSound] {
         let folder = directory
@@ -104,6 +109,7 @@ struct PhoneSound: Codable, Identifiable {
         transaction.finish()
     }
     func stageSounds(_ incoming: [SharedSound]) throws -> SoundFileTransaction {
+        guard readable else { throw CocoaError(.fileReadCorruptFile) }
         let folder = directory
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let previous = custom
@@ -122,25 +128,56 @@ struct PhoneSound: Codable, Identifiable {
         custom = next
         return transaction
     }
-    func rename(_ id: String, name: String) {
+    @discardableResult func rename(_ id: String, name: String) -> Bool {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, let index = custom.firstIndex(where: { $0.id == id }) else { return }
-        var items = custom; items[index].name = String(name.prefix(80)); items[index].modified = Date()
-        do { try save(items) } catch { self.error = "名称保存失败：\(error.localizedDescription)" }
+        guard !name.isEmpty, name.count <= 80 else { error = "名称请填写 1–80 个字符。"; notice = nil; return false }
+        guard let index = custom.firstIndex(where: { $0.id == id }) else { error = "提示音不存在，请刷新列表。"; return false }
+        var items = custom; items[index].name = name; items[index].modified = Date()
+        do { try save(items); notice = "已保存“\(name)”"; return true }
+        catch { self.error = "名称保存失败：\(error.localizedDescription)"; notice = nil; return false }
     }
+    func stageDeletion(_ id: String) throws -> SoundFileTransaction {
+        guard let item = custom.first(where: { $0.id == id }), let file = item.file else { throw CocoaError(.fileNoSuchFile) }
+        let folder = directory
+        player?.stop()
+        let cache = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0].appendingPathComponent("Sounds").appendingPathComponent(id + ".caf")
+        guard UUID(uuidString: id) != nil else { throw CocoaError(.fileReadCorruptFile) }
+        if FileManager.default.fileExists(atPath: cache.path) { try FileManager.default.removeItem(at: cache) }
+        let previous = custom, next = custom.filter { $0.id != id }
+        let transaction = try SoundFileTransaction(directory: folder, files: [:], index: JSONEncoder().encode(next), removing: [file]) { [weak self] in self?.custom = previous }
+        custom = next
+        error = nil
+        return transaction
+    }
+
 }
 
 struct PhoneSoundSettings: View {
-    @ObservedObject private var sounds = PhoneSounds.shared
+    @ObservedObject var store: PhoneStore
+    @ObservedObject private var sounds: PhoneSounds
+    init(store: PhoneStore) { self.store = store; self.sounds = store.soundLibrary }
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SyncPreferences.soundsKey) private var syncSounds = false
     @AppStorage(SyncPreferences.parametersKey) private var syncParameters = false
     @State private var importing = false
+    @State private var deleting: PhoneSound?
     @State private var renameID: String?
     @State private var name = ""
     var body: some View {
         NavigationStack {
             List {
+                Section("我的提示音") {
+                    Button { importing = true } label: { Label("导入音频", systemImage: "plus.circle") }
+                    if let notice = sounds.notice, sounds.error == nil { Label(notice, systemImage: "checkmark.circle.fill").font(.footnote).foregroundStyle(.green) }
+                    if sounds.custom.isEmpty { Text("还没有自定义提示音").foregroundStyle(.secondary) }
+                    ForEach(sounds.custom) { sound in
+                        HStack {
+                            Button(sound.name) { name = sound.name; renameID = sound.id }.foregroundStyle(.primary).buttonStyle(.borderless)
+                            Spacer(); preview(sound)
+                            Button(role: .destructive) { deleting = sound } label: { Image(systemName: "trash").frame(width: 44, height: 44) }.buttonStyle(.borderless).disabled(store.blocked).accessibilityLabel("删除" + sound.name)
+                        }
+                    }
+                }
                 Section {
                     Toggle("同步自定义提示音与声音设置", isOn: $syncSounds)
                     Toggle("同步模式数值参数", isOn: $syncParameters)
@@ -152,17 +189,8 @@ struct PhoneSoundSettings: View {
                         HStack { Text(sound.name); Spacer(); preview(sound) }
                     }
                 }
-                Section("我的提示音") {
-                    Button { importing = true } label: { Label("导入音频", systemImage: "plus.circle") }
-                    ForEach(sounds.custom) { sound in
-                        HStack {
-                            Button(sound.name) { name = sound.name; renameID = sound.id }.foregroundStyle(.primary)
-                            Spacer(); preview(sound)
-                        }
-                    }
-                }
                 Section {
-                    Text("点击自定义声音的名称即可重命名。支持常见音频格式，最大 50 MB；音频复制到本机；导入其他设备的提示音可在“同步设置”中开启。声音受静音开关和系统音量影响。")
+                    Text("导入即保存音频，点击名称可重命名。支持常见音频格式，最大 50 MB。删除仅影响本机，旧导出文件仍可重新导入。声音受静音与系统音量影响。")
                         .font(.footnote).foregroundStyle(.secondary)
                     if let error = sounds.error { Text(error).foregroundStyle(.red) }
                 }
@@ -171,10 +199,14 @@ struct PhoneSoundSettings: View {
                 .fileImporter(isPresented: $importing, allowedContentTypes: [.audio]) { result in
                     do { try sounds.add(result.get()) } catch { sounds.error = "导入失败：\(error.localizedDescription)" }
                 }
+                .alert("删除自定义提示音？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+                    Button("取消", role: .cancel) { deleting = nil }
+                    Button("删除", role: .destructive) { if let deleting { _ = store.deleteCustomSound(deleting.id) }; deleting = nil }
+                } message: { Text("将删除“\(deleting?.name ?? "")”及本机音频文件，使用它的提醒恢复默认声音。") }
                 .alert("提示音名称", isPresented: Binding(get: { renameID != nil }, set: { if !$0 { renameID = nil } })) {
                     TextField("名称", text: $name)
                     Button("取消", role: .cancel) { renameID = nil }
-                    Button("保存") { if let id = renameID { sounds.rename(id, name: name) }; renameID = nil }
+                    Button("保存") { if let id = renameID { sounds.rename(id, name: name) }; renameID = nil }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || name.trimmingCharacters(in: .whitespacesAndNewlines).count > 80)
                 }
         }
     }

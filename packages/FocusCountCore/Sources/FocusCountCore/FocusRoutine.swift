@@ -15,6 +15,12 @@ public struct FocusRoutineSettings: Codable, Equatable {
     public var restSound: String?
     public var focusSound: String?
     public init() {}
+    public func removingSound(_ id: String) -> Self {
+        var next = self
+        if next.restSound == id { next.restSound = nil }
+        if next.focusSound == id { next.focusSound = nil }
+        return next
+    }
     public var isValid: Bool {
         (1...180).contains(minimumMinutes) && (minimumMinutes...180).contains(maximumMinutes) &&
         (1...300).contains(microSeconds) && (1...360).contains(roundMinutes) &&

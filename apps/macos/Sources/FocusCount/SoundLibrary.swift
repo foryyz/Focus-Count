@@ -15,19 +15,22 @@ struct FocusSound: Codable, Identifiable, Equatable {
     static let builtins = [FocusSound(id: "Glass", name: "清脆 · Glass"), FocusSound(id: "Pop", name: "轻点 · Pop"), FocusSound(id: "Hero", name: "明亮 · Hero"), FocusSound(id: "Ping", name: "叮咚 · Ping"), FocusSound(id: "Tink", name: "轻铃 · Tink"), FocusSound(id: "Submarine", name: "水滴 · Submarine")]
     @Published private(set) var custom: [FocusSound] = []
     @Published var error: String?
+    @Published var notice: String?
+    private var readable = true
     private let root: URL?
     var sounds: [FocusSound] { Self.builtins + custom }
     init(directory: URL? = nil) {
         root = directory ?? (try? Storage.directory.appendingPathComponent("sounds", isDirectory: true))
         guard let root, FileManager.default.fileExists(atPath: root.appendingPathComponent("library.json").path) else { return }
         do { custom = try JSONDecoder().decode([FocusSound].self, from: Data(contentsOf: root.appendingPathComponent("library.json"))) }
-        catch { self.error = "无法读取提示音库：\(error.localizedDescription)" }
+        catch { readable = false; self.error = "无法读取提示音库：\(error.localizedDescription)" }
     }
     private func save(_ items: [FocusSound]) throws {
+        guard readable else { throw CocoaError(.fileReadCorruptFile) }
         guard let root else { throw CocoaError(.fileNoSuchFile) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try JSONEncoder().encode(items).write(to: root.appendingPathComponent("library.json"), options: .atomic)
-        custom = items
+        custom = items; error = nil
     }
     func sound(_ id: String) -> NSSound? {
         if Self.builtins.contains(where: { $0.id == id }) { return NSSound(named: NSSound.Name(id)) }
@@ -55,8 +58,9 @@ struct FocusSound: Codable, Identifiable, Equatable {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let destination = root.appendingPathComponent(file)
         try FileManager.default.copyItem(at: url, to: destination)
-        do { try save(custom + [FocusSound(id: id, name: url.deletingPathExtension().lastPathComponent, file: file)]) }
+        do { try save(custom + [FocusSound(id: id, name: String(url.deletingPathExtension().lastPathComponent.prefix(80)), file: file, modified: Date())]) }
         catch { try? FileManager.default.removeItem(at: destination); throw error }
+        notice = "已导入“\(custom.last?.name ?? "")”，可在模式设置中选择。"
     }
     func exportSounds() throws -> [SharedSound] {
         guard let folder = root else { throw CocoaError(.fileNoSuchFile) }
@@ -71,6 +75,7 @@ struct FocusSound: Codable, Identifiable, Equatable {
         transaction.finish()
     }
     func stageSounds(_ incoming: [SharedSound]) throws -> SoundFileTransaction {
+        guard readable else { throw CocoaError(.fileReadCorruptFile) }
         guard let folder = root else { throw CocoaError(.fileNoSuchFile) }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let previous = custom
@@ -89,19 +94,33 @@ struct FocusSound: Codable, Identifiable, Equatable {
         custom = next
         return transaction
     }
-    func rename(_ id: String, to name: String) {
+    @discardableResult func rename(_ id: String, to name: String) -> Bool {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, let index = custom.firstIndex(where: { $0.id == id }) else { return }
-        var items = custom; items[index].name = String(name.prefix(80)); items[index].modified = Date()
-        do { try save(items) } catch { self.error = "保存名称失败：\(error.localizedDescription)" }
+        guard !name.isEmpty, name.count <= 80 else { error = "名称请填写 1–80 个字符。"; notice = nil; return false }
+        guard let index = custom.firstIndex(where: { $0.id == id }) else { error = "提示音不存在，请刷新列表。"; return false }
+        var items = custom; items[index].name = name; items[index].modified = Date()
+        do { try save(items); notice = "已保存“\(name)”"; return true }
+        catch { self.error = "名称保存失败：\(error.localizedDescription)"; notice = nil; return false }
     }
+    func stageDeletion(_ id: String) throws -> SoundFileTransaction {
+        guard let item = custom.first(where: { $0.id == id }), let file = item.file else { throw CocoaError(.fileNoSuchFile) }
+        guard let folder = root else { throw CocoaError(.fileNoSuchFile) }
+        let previous = custom, next = custom.filter { $0.id != id }
+        let transaction = try SoundFileTransaction(directory: folder, files: [:], index: JSONEncoder().encode(next), removing: [file]) { [weak self] in self?.custom = previous }
+        custom = next
+        error = nil
+        return transaction
+    }
+
 }
 
 struct SoundSettingsView: View {
     @ObservedObject var store: StudyStore
-    @ObservedObject private var library = SoundLibrary.shared
+    @ObservedObject private var library: SoundLibrary
+    init(store: StudyStore) { self.store = store; self.library = store.soundLibrary }
     @Environment(\.dismiss) private var dismiss
     @State private var section = 0
+    @State private var deleting: FocusSound?
     @DirectoryPreference(SyncPreferences.soundsKey) private var syncSounds = false
     @DirectoryPreference(SyncPreferences.parametersKey) private var syncParameters = false
     var body: some View {
@@ -137,8 +156,10 @@ struct SoundSettingsView: View {
                             }
                             Divider()
                             HStack { Text("我的提示音").font(.headline); Spacer(); Button("导入音频…") { library.importSound() } }
-                            ForEach(library.custom) { sound in SoundNameRow(sound: sound, store: store) }
-                            Text("点击自定义名称编辑，回车或点击保存。音频会复制到本机数据目录，不依赖原文件；导入其他设备的提示音可在“同步设置”中开启。")
+                            if let notice = library.notice, library.error == nil { Label(notice, systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.green).accessibilityLabel(notice) }
+                            if library.custom.isEmpty { Text("还没有自定义提示音，导入后会显示在这里。").font(.caption).foregroundStyle(.secondary) }
+                            ForEach(library.custom) { sound in SoundNameRow(sound: sound, store: store, delete: { deleting = sound }) }
+                            Text("导入即保存音频；修改名称后点击保存。文件使用唯一编号避免重名，列表显示自定义名称。删除仅影响本机，旧导出文件仍可能重新导入此声音。")
                                 .font(.caption).foregroundStyle(.secondary)
                             if let error = library.error { Text(error).font(.caption).foregroundStyle(.red) }
                         }.padding(20)
@@ -146,18 +167,28 @@ struct SoundSettingsView: View {
                 }
             }
         }.frame(width: 600, height: 460)
+        .alert("删除自定义提示音？", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+            Button("取消", role: .cancel) { deleting = nil }
+            Button("删除", role: .destructive) { if let deleting { _ = store.deleteCustomSound(deleting.id) }; deleting = nil }
+        } message: { Text("将删除“\(deleting?.name ?? "")”及本机音频文件，使用它的提醒恢复默认声音。") }
     }
 }
 
 private struct SoundNameRow: View {
     let sound: FocusSound
     @ObservedObject var store: StudyStore
-    @State private var name = ""
+    var delete: () -> Void
+    @State private var name: String
+    init(sound: FocusSound, store: StudyStore, delete: @escaping () -> Void) {
+        self.sound = sound; self.store = store; self.delete = delete
+        _name = State(initialValue: sound.name)
+    }
     var body: some View {
         HStack {
-            TextField("提示音名称", text: $name).onSubmit { SoundLibrary.shared.rename(sound.id, to: name) }
-            Button("保存") { SoundLibrary.shared.rename(sound.id, to: name) }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            TextField("提示音名称", text: $name).onSubmit { store.soundLibrary.rename(sound.id, to: name) }
+            Button(name == sound.name ? "已保存" : "保存名称") { store.soundLibrary.rename(sound.id, to: name) }.disabled(name == sound.name || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button("试听") { store.previewModeSound(id: sound.id) }
-        }.onAppear { name = sound.name }
+            Button(role: .destructive, action: delete) { Image(systemName: "trash") }.disabled(store.blocked).help("删除提示音").accessibilityLabel("删除" + sound.name)
+        }.onChange(of: sound.name) { name = $0 }
     }
 }
