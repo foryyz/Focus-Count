@@ -34,6 +34,7 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var focusWindow = FocusWindow()
     @State private var chromeVisible = true
+    @State private var showMoreFeatures = false
     @State private var interaction = Date()
     @State private var pointerLocation: CGPoint?
     private var phase: Int { store.isRunning ? 1 : store.database.draft.startedAt == nil ? 0 : 2 }
@@ -41,7 +42,7 @@ struct ContentView: View {
     private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { colorScheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
     private var backdrop: Color { colorScheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
-    private var visible: Bool { showHome || chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showSettings || showToday || showModeSettings || showModes || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
+    private var visible: Bool { showHome || chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showMoreFeatures || showSettings || showToday || showModeSettings || showModes || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 1000
@@ -60,35 +61,37 @@ struct ContentView: View {
                         }.foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Menu {
-                        Button { showHistory = true; revealControls() } label: {
-                            Label("专注记录", systemImage: "list.bullet.rectangle")
-                        }
-                        Button { FocusAnalysisWindow.shared.show(store: store); revealControls() } label: {
-                            Label("专注分析", systemImage: "chart.bar.xaxis")
-                        }
-                        Button { MarkerWindowController.shared.show(store: store); revealControls() } label: {
-                            Label("时间标记", systemImage: "tag")
-                        }
-                        Button { showTarget = true; revealControls() } label: {
-                            Label("目标日期", systemImage: "calendar")
-                        }
-                    } label: {
-                        Image(systemName: "square.grid.2x2").frame(width: 32, height: 28)
-                    }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                        .modifier(ToolbarHoverSurface(seconds: TodaySummary(database: store.database).seconds))
+                    Button { showMoreFeatures.toggle(); revealControls() } label: {
+                        Image(systemName: "square.grid.2x2").frame(width: 32, height: 28).contentShape(Rectangle())
+                    }.modifier(ToolbarHoverSurface(seconds: TodaySummary(database: store.database).seconds))
                         .help("更多功能").accessibilityLabel("更多功能")
+                        .popover(isPresented: $showMoreFeatures, arrowEdge: .bottom) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Button { showMoreFeatures = false; showHistory = true; revealControls() } label: {
+                                    Label("专注记录", systemImage: "list.bullet.rectangle").frame(maxWidth: .infinity, alignment: .leading).padding(8).contentShape(Rectangle())
+                                }
+                                Button { showMoreFeatures = false; FocusAnalysisWindow.shared.show(store: store); revealControls() } label: {
+                                    Label("专注分析", systemImage: "chart.bar.xaxis").frame(maxWidth: .infinity, alignment: .leading).padding(8).contentShape(Rectangle())
+                                }
+                                Button { showMoreFeatures = false; MarkerWindowController.shared.show(store: store); revealControls() } label: {
+                                    Label("时间标记", systemImage: "tag").frame(maxWidth: .infinity, alignment: .leading).padding(8).contentShape(Rectangle())
+                                }
+                                Button { showMoreFeatures = false; showTarget = true; revealControls() } label: {
+                                    Label("目标日期", systemImage: "calendar").frame(maxWidth: .infinity, alignment: .leading).padding(8).contentShape(Rectangle())
+                                }
+                            }.buttonStyle(.plain).padding(8).frame(width: 172)
+                        }
                     Button { showSettings = true; revealControls() } label: {
-                        Image(systemName: "gearshape").frame(width: 32, height: 28)
+                        Image(systemName: "gearshape").frame(width: 32, height: 28).contentShape(Rectangle())
                     }.modifier(ToolbarHoverSurface(seconds: TodaySummary(database: store.database).seconds))
                         .help("设置").accessibilityLabel("设置")
                     Button { showData = true; revealControls() } label: {
-                        Image(systemName: "arrow.up.arrow.down").frame(width: 32, height: 28)
+                        Image(systemName: "arrow.up.arrow.down").frame(width: 32, height: 28).contentShape(Rectangle())
                     }.modifier(ToolbarHoverSurface(seconds: TodaySummary(database: store.database).seconds))
                         .help("数据管理").accessibilityLabel("数据管理")
                     Button { focusWindow.toggle(); revealControls() } label: {
                         Image(systemName: focusWindow.fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                            .frame(width: 32, height: 28)
+                            .frame(width: 32, height: 28).contentShape(Rectangle())
                     }.modifier(ToolbarHoverSurface(seconds: TodaySummary(database: store.database).seconds))
                         .help(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
                         .accessibilityLabel(focusWindow.fullScreen ? "退出全屏" : "进入全屏")

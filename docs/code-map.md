@@ -1,6 +1,6 @@
 # FocusCount 功能与代码定位索引
 
-核对日期：2026-10-04。对应当前工作区：Mac 1.29.2 / iPhone 1.14.2。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
+核对日期：2026-10-04。对应当前工作区：Mac 1.29.3 / iPhone 1.14.3。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
 
 ## 如何使用
 
@@ -253,7 +253,7 @@ Mac 1.21.4：主页直接按钮排序为折叠菜单、设置、数据管理、�
 | ThemeSettingsContent / ThemeEffectPreview | 经典与珠光流彩本机选择；独立 @State 模拟 0–10 小时，不修改 Store |
 | MilestoneHero | Mac 横排 / iPhone 纵排，9 小时 RGB xMins 倒计时，10 小时 🎉YOU MADE IT. |
 | MilestoneColors / PearlSilkField | 阶段调色与材质，MeshGradient 系统门槛、旧系统渐变、Canvas 丝绸反光 |
-| RoseFlowField | 9 小时深粉、紫、玫瑰红渐变，独立于灯带与开始按钮 |
+| RoseFlowField | 9 小时深粉、紫、玫瑰红渐变，中央珠光亮芯与斜向反射，独立于灯带与开始按钮 |
 | PearlInputSurface | isInput 区分活动输入框与工具装饰；5 小时灯带，8 小时粉/蓝/紫流动灯带，无绿 |
 | AchievementOrbit | 9 小时时间及 10 小时标题后方的精细椭圆反光弧 |
 | MilestoneHomeEffect / MilestoneAtmosphere / PaperCelebration | 本地日期时长刷新、背景、12/18/26 颗高阶段星星、10 小时常驻庆祝，后台暂停与减少动态效果 |
@@ -263,8 +263,8 @@ FocusCelebration 保留旧兼容 API 与历史测试，当前主题不再调用�
 
 验证：Core FocusMilestoneTests；iPhone PhoneLayoutTests.testMilestoneThemeScreens / testEffectPreviewAndHorizontalMilestones。Shared TodaySummaryView.swift 的主题部分同时编译进两端。
 
-### 主页工具栏悬停与简化（Mac 1.29.2 / iPhone 1.14.2）
+### 主页工具栏悬停与简化（Mac 1.29.3 / iPhone 1.14.3）
 
 - iPhone toolbar 三个入口移除 PearlInputSurface，两个主题使用相同系统按钮样式。
-- Mac 顶部四个控制分别在完整 Menu / Button 外层应用 ToolbarHoverSurface，与主题开关无关。Menu 不依赖 ButtonStyle，修复折叠菜单未获得悬停背景的问题。
+- Mac 顶部四个入口统一使用普通 Button，外层应用 ToolbarHoverSurface，与主题开关无关。更多功能按钮弹出四项入口，选择后关闭；四个按钮的 32×28 标签均使用 Rectangle contentShape，让留白边缘可点击。
 - ToolbarHoverSurface 在背景层提供柔和底色、细边与阴影，遵循减少动态效果，不拦截点击；预览工具图标不再叠加珠光框。

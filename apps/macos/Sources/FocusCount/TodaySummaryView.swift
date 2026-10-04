@@ -494,11 +494,29 @@ private struct LetteringSparkles: View {
     }
 }
 
+/// Reflections stay inside the glyphs: a luminous pearl core and a slow silk highlight.
 private struct RoseFlowField: View {
     let angle: Double
     var body: some View {
         AngularGradient(colors: MilestoneColors.roseSpectrum, center: .center, angle: .radians(angle.truncatingRemainder(dividingBy: 2 * .pi)))
             .overlay(LinearGradient(colors: [.white.opacity(0.18), .clear, .white.opacity(0.12)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay {
+                GeometryReader { geometry in
+                    RadialGradient(colors: [.white.opacity(0.72), MilestoneColors.rgb(0xFFD6EF).opacity(0.48), .clear],
+                        center: UnitPoint(x: 0.5 + 0.04 * sin(angle), y: 0.48), startRadius: 0,
+                        endRadius: min(geometry.size.width, geometry.size.height) * 0.72)
+                        .blendMode(.screen)
+                    LinearGradient(stops: [
+                        .init(color: .clear, location: 0.24),
+                        .init(color: .white.opacity(0.08), location: 0.39),
+                        .init(color: .white.opacity(0.56), location: 0.48),
+                        .init(color: MilestoneColors.rgb(0xF4C4F6).opacity(0.28), location: 0.53),
+                        .init(color: .clear, location: 0.66)
+                    ], startPoint: UnitPoint(x: 0.08 + 0.12 * sin(angle * 0.7), y: 0),
+                       endPoint: UnitPoint(x: 0.92 + 0.12 * sin(angle * 0.7), y: 1))
+                        .blur(radius: 0.8).blendMode(.screen)
+                }
+            }
             .allowsHitTesting(false).accessibilityHidden(true)
     }
 }
@@ -536,7 +554,7 @@ struct PearlInputSurface: ViewModifier {
     }
 }
 
-/// Apply to the whole control so native Menu and Button receive the same hover surface.
+/// Shared hover surface for the four plain toolbar buttons.
 struct ToolbarHoverSurface: ViewModifier {
     let seconds: Double
     @Environment(\.isEnabled) private var enabled
