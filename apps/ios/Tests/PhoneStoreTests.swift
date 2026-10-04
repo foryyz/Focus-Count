@@ -955,6 +955,12 @@ final class MarkerPointLayoutTests: XCTestCase {
                 .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.white)
                 .environment(\.colorScheme, .light), name: "milestone-\(hours)h", size: CGSize(width: 375, height: 280))
         }
+        for hours in [8, 9] {
+            await render(MilestoneHero(seconds: Double(hours * 3600 + 42 * 60), fontSize: 64)
+                .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.black)
+                .environment(\.colorScheme, .dark),
+                name: "milestone-\(hours)h-dark", size: CGSize(width: 375, height: 280))
+        }
         await render(MilestoneHero(seconds: 36000, fontSize: 64)
             .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.black)
             .environment(\.colorScheme, .dark),

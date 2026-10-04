@@ -246,6 +246,7 @@ struct MilestoneHero: View {
     var horizontal = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var scheme
     private var stage: FocusMilestone { FocusMilestone(seconds: seconds) }
     private var minutes: Int { Int(max(0, seconds.isFinite ? seconds : 0)) / 60 }
     private var palette: [Color] { MilestoneColors.palette(stage) }
@@ -324,7 +325,7 @@ struct MilestoneHero: View {
                                    stage: stage, colors: palette, angle: angle)
             } else {
                 Text("\(minutes % 60)m").font(.system(size: fontSize * 0.47, design: .rounded))
-                    .foregroundStyle(stage == .radiant ? MilestoneColors.rgb(0x7968B6) : Color.secondary)
+                    .foregroundStyle(stage == .radiant ? MilestoneColors.rgb(scheme == .dark ? 0xC8B6F0 : 0x9583CA) : Color.secondary)
             }
         }.monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
             .background { if stage == .finalPush { AchievementOrbit(stage: stage, angle: angle) } }
@@ -471,7 +472,7 @@ private struct MilestoneLettering: View {
                     LetteringSparkles(angle: angle, triumphant: stage == .achieved).mask(lettering)
                 }
             }
-            .brightness((scheme == .dark && MilestoneColors.materialStage(stage).rawValue >= 3 ? 0.14 : 0) + (stage.rawValue == 5 ? 0.08 : 0))
+            .brightness((scheme == .dark && MilestoneColors.materialStage(stage).rawValue >= 3 ? 0.14 : 0) + (stage.rawValue == 5 ? 0.08 : 0) + (stage == .finalPush ? 0.05 : 0))
             .shadow(color: materialColors[0].opacity(stage.rawValue >= 9 ? 0.16 : 0.08), radius: 2, y: 2)
             .lineLimit(1).minimumScaleFactor(0.5)
     }

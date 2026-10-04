@@ -1,6 +1,6 @@
 # FocusCount 功能与代码定位索引
 
-核对日期：2026-10-04。对应当前工作区：Mac 1.29.1 / iPhone 1.14.1。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
+核对日期：2026-10-04。对应当前工作区：Mac 1.29.2 / iPhone 1.14.2。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
 
 ## 如何使用
 
@@ -263,7 +263,7 @@ FocusCelebration 保留旧兼容 API 与历史测试，当前主题不再调用�
 
 验证：Core FocusMilestoneTests；iPhone PhoneLayoutTests.testMilestoneThemeScreens / testEffectPreviewAndHorizontalMilestones。Shared TodaySummaryView.swift 的主题部分同时编译进两端。
 
-### 主页工具栏悬停与简化（Mac 1.29.1 / iPhone 1.14.1）
+### 主页工具栏悬停与简化（Mac 1.29.2 / iPhone 1.14.2）
 
 - iPhone toolbar 三个入口移除 PearlInputSurface，两个主题使用相同系统按钮样式。
 - Mac 顶部四个控制分别在完整 Menu / Button 外层应用 ToolbarHoverSurface，与主题开关无关。Menu 不依赖 ButtonStyle，修复折叠菜单未获得悬停背景的问题。
