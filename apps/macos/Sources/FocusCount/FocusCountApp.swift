@@ -76,19 +76,23 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "square.grid.2x2").frame(width: 32, height: 28)
                     }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                        .modifier(ToolbarHoverSurface(seconds: TodaySummary(database: store.database).seconds))
                         .help("更多功能").accessibilityLabel("更多功能")
                     Button { showSettings = true; revealControls() } label: {
                         Image(systemName: "gearshape").frame(width: 32, height: 28)
-                    }.help("设置").accessibilityLabel("设置")
+                    }.modifier(ToolbarHoverSurface(seconds: TodaySummary(database: store.database).seconds))
+                        .help("设置").accessibilityLabel("设置")
                     Button { showData = true; revealControls() } label: {
                         Image(systemName: "arrow.up.arrow.down").frame(width: 32, height: 28)
-                    }.help("数据管理").accessibilityLabel("数据管理")
+                    }.modifier(ToolbarHoverSurface(seconds: TodaySummary(database: store.database).seconds))
+                        .help("数据管理").accessibilityLabel("数据管理")
                     Button { focusWindow.toggle(); revealControls() } label: {
                         Image(systemName: focusWindow.fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                             .frame(width: 32, height: 28)
-                    }.help(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
+                    }.modifier(ToolbarHoverSurface(seconds: TodaySummary(database: store.database).seconds))
+                        .help(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
                         .accessibilityLabel(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
-                }.buttonStyle(PearlChromeStyle(enabled: rewardsTheme && showHome, seconds: TodaySummary(database: store.database).seconds))
+                }.buttonStyle(.plain)
                     .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
                 Spacer(minLength: 24)
                 Group {

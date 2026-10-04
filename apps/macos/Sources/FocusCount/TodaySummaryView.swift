@@ -224,7 +224,6 @@ struct ThemeEffectPreview: View {
                         Image(systemName: "gearshape")
                         Image(systemName: "arrow.up.arrow.down")
                     }.foregroundStyle(.secondary).padding(12)
-                        .modifier(PearlInputSurface(seconds: simulatedSeconds, enabled: true))
                         .accessibilityHidden(true)
                     Spacer(minLength: 32)
                 }.padding(.horizontal, 12).frame(maxWidth: .infinity)
@@ -536,18 +535,24 @@ struct PearlInputSurface: ViewModifier {
     }
 }
 
-struct PearlChromeStyle: ButtonStyle {
-    let enabled: Bool
+/// Apply to the whole control so native Menu and Button receive the same hover surface.
+struct ToolbarHoverSurface: ViewModifier {
     let seconds: Double
+    @Environment(\.isEnabled) private var enabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var scheme
     @State private var hovering = false
-    func makeBody(configuration: Configuration) -> some View {
-        let color = MilestoneColors.palette(FocusMilestone(seconds: seconds))[0]
-        configuration.label.background {
-            if enabled && (hovering || configuration.isPressed) {
-                RoundedRectangle(cornerRadius: 9).fill(color.opacity(configuration.isPressed ? 0.14 : 0.07))
-                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.6)))
-            }
-        }.onHover { hovering = $0 }
+    func body(content: Content) -> some View {
+        let color = MilestoneColors.palette(FocusMilestone(seconds: seconds), dark: scheme == .dark)[0]
+        content.background {
+            RoundedRectangle(cornerRadius: 9)
+                .fill(color.opacity(hovering && enabled ? 0.08 : 0))
+                .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(hovering && enabled ? 0.6 : 0)))
+                .shadow(color: color.opacity(hovering && enabled ? 0.18 : 0), radius: 5, y: 2)
+                .allowsHitTesting(false)
+        }
+        .onHover { hovering = $0 }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: hovering)
     }
 }
 

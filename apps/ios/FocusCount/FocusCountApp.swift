@@ -96,13 +96,10 @@ struct TimerScreen: View {
                         Button { immersive.toggle(); activityFocused = false; markerFocused = false } label: {
                             Label(immersive ? "退出沉浸模式" : "沉浸模式", systemImage: immersive ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                         }
-                    } label: { Image(systemName: "square.grid.2x2").padding(5)
-                        .modifier(PearlInputSurface(seconds: store.today().seconds, enabled: rewardsTheme && showHome)) }.accessibilityLabel("更多功能")
+                    } label: { Image(systemName: "square.grid.2x2").padding(5) }.accessibilityLabel("更多功能")
                     if !immersive {
-                        Button { exchange = true } label: { Image(systemName: "arrow.up.arrow.down").padding(5)
-                            .modifier(PearlInputSurface(seconds: store.today().seconds, enabled: rewardsTheme && showHome)) }.accessibilityLabel("数据传输")
-                        Button { settings = true } label: { Image(systemName: "gearshape").padding(5)
-                            .modifier(PearlInputSurface(seconds: store.today().seconds, enabled: rewardsTheme && showHome)) }.accessibilityLabel("设置")
+                        Button { exchange = true } label: { Image(systemName: "arrow.up.arrow.down").padding(5) }.accessibilityLabel("数据传输")
+                        Button { settings = true } label: { Image(systemName: "gearshape").padding(5) }.accessibilityLabel("设置")
                     }
                 }
             }
