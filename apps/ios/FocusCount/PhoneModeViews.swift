@@ -2,8 +2,8 @@ import SwiftUI
 import FocusCountCore
 
 extension FocusMode {
-    var symbol: String { self == .standard ? "scope" : "leaf" }
-    var title: String { self == .standard ? "普通专注" : "微休息" }
+    var symbol: String { self == .standard ? "scope" : self == .course ? "graduationcap" : "leaf" }
+    var title: String { self == .standard ? "普通专注" : self == .course ? "课程模式" : "微休息" }
 }
 
 struct PhoneModeMenu: View {
@@ -22,7 +22,7 @@ struct PhoneModeMenu: View {
                         Image(systemName: mode.symbol).font(.title2).frame(width: 30)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(mode.title).font(.headline)
-                            Text(mode == .standard ? "按自己的节奏持续专注" : "随机提醒 · 闭眼休息 · 循环专注")
+                            Text(mode == .standard ? "按自己的节奏持续专注" : mode == .course ? "定时上课 · 课间休息 · 自动循环" : "随机提醒 · 闭眼休息 · 循环专注")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -32,7 +32,7 @@ struct PhoneModeMenu: View {
             }
             Divider()
             Button(action: adjust) { Label("调整模式参数与声音", systemImage: "slider.horizontal.3").frame(minHeight: 44) }
-        }.padding(24).presentationDetents([.height(310), .large]).presentationDragIndicator(.visible)
+        }.padding(24).presentationDetents([.height(410), .large]).presentationDragIndicator(.visible)
     }
 }
 
@@ -63,7 +63,7 @@ struct PhoneModeSettings: View {
                         Section("提示音") {
                             soundPicker("开始休息", id: $settings.restSound, fallback: "Glass")
                             soundPicker("开始专注", id: $settings.focusSound, fallback: "Pop")
-                            HStack { Text("前台音量"); Slider(value: $settings.volume, in: 0...1) }
+                            HStack { Text("前台音量"); Slider(value: Binding(get: { settings.volume(for: mode) }, set: { settings.setVolume($0, for: mode) }), in: 0...1) }
                             Button("管理与导入提示音") { soundSettings = true }
                             if let error = sounds.error { Text(error).foregroundStyle(.red) }
                         }
@@ -75,14 +75,34 @@ struct PhoneModeSettings: View {
                             }
                             Text("每轮包含微休息，休息不计入专注时长。长休息结束后手动继续下一轮。参数从下一轮生效，保存不会切换当前模式。")
                             Text("锁屏或切到后台仍继续计时，需允许通知。后台提示音由系统音量控制，静音和专注模式可能使声音不响；超过 29 秒的自定义声音在通知中只播放前 29 秒。")
-                            Button("恢复默认参数") { settings = FocusRoutineSettings() }
+                            Button("恢复默认参数") { settings = settings.restoringDefaults(for: mode) }
                         }.font(.footnote)
                     } else {
-                        Section {
-                            Label("按自己的节奏专注", systemImage: mode.symbol)
-                            Text("普通专注不安排自动休息，也不播放周期提醒，暂时无需调整参数。")
-                                .foregroundStyle(.secondary)
+                        if mode == .course {
+                            Section("课程与课间") {
+                                Stepper("一节课：\(settings.lessonMinutes) 分钟", value: $settings.lessonMinutes, in: 1...360)
+                                Stepper("课间休息：\(settings.classBreakMinutes) 分钟", value: $settings.classBreakMinutes, in: 1...180)
+                            }
                         }
+                        Section("提示音") {
+                            if mode == .course {
+                                soundPicker("上课", id: $settings.classStartSound, fallback: "Pop")
+                                soundPicker("下课", id: $settings.classEndSound, fallback: "Glass")
+                            } else {
+                                soundPicker("开始／继续", id: $settings.startSound, fallback: "Pop")
+                                soundPicker("暂停", id: $settings.pauseSound, fallback: "Glass")
+                            }
+                            HStack { Text("前台音量"); Slider(value: Binding(get: { settings.volume(for: mode) }, set: { settings.setVolume($0, for: mode) }), in: 0...1) }
+                            Button("管理与导入提示音") { soundSettings = true }
+                            if let error = sounds.error { Text(error).foregroundStyle(.red) }
+                        }
+                        Section {
+                            Text(mode == .course ? "开始时播放上课提示音，下课后进入课间休息，休息结束自动上课。课间不计入专注时长；暂停冻结当前阶段。重新开始课程后使用新参数。" : "开始或继续专注时播放开始提示音，暂停时播放暂停提示音。")
+                            if mode == .course {
+                                Text("锁屏或切到后台仍计时；需允许通知。后台声音由系统音量控制，静音和专注模式可能使声音不响。每次安排未来 32 节课的提醒，打开应用后补齐。")
+                            }
+                            Button("恢复默认参数") { settings = settings.restoringDefaults(for: mode) }
+                        }.font(.footnote)
                     }
                 }
             }.navigationTitle("模式设置").navigationBarTitleDisplayMode(.inline)
@@ -97,7 +117,7 @@ struct PhoneModeSettings: View {
                 }
                 .onAppear { settings = store.modeSettings; mode = store.modeSettings.mode }
                 .onChange(of: sounds.custom.map(\.id)) { _ in
-                    for id in [settings.restSound, settings.focusSound].compactMap({ $0 }) where !sounds.sounds.contains(where: { $0.id == id }) { settings = settings.removingSound(id) }
+                    for id in settings.soundIDs where !sounds.sounds.contains(where: { $0.id == id }) { settings = settings.removingSound(id) }
                 }
                 .sheet(isPresented: $soundSettings) { PhoneSoundSettings(store: store) }
         }
@@ -108,7 +128,7 @@ struct PhoneModeSettings: View {
                 ForEach(sounds.sounds) { sound in Text(sound.name).tag(sound.id) }
                 if let selected = id.wrappedValue, !sounds.sounds.contains(where: { $0.id == selected }) { Text("声音不可用").tag(selected) }
             }
-            Button { sounds.play(id.wrappedValue ?? fallback, volume: settings.volume) } label: { Label("试听", systemImage: "play.circle") }
+            Button { sounds.play(id.wrappedValue ?? fallback, volume: settings.volume(for: mode)) } label: { Label("试听", systemImage: "play.circle") }
                 .buttonStyle(.borderless).font(.subheadline).frame(minHeight: 44)
                 .accessibilityLabel("试听" + title + "提示音")
         }
@@ -120,7 +140,7 @@ struct PhoneRestView: View {
     var body: some View {
         if let plan = store.state.routine {
             VStack(spacing: 22) {
-                Text(plan.suspended ? "REST PAUSED" : plan.phase == .microRest ? "REST YOUR EYES" : plan.phase == .ready ? "READY WHEN YOU ARE" : "TAKE A BREAK")
+                Text(plan.suspended ? "REST PAUSED" : plan.phase == .microRest ? "REST YOUR EYES" : plan.phase == .ready ? "READY WHEN YOU ARE" : (plan.settings.mode == .course ? "CLASS BREAK" : "TAKE A BREAK"))
                     .font(.caption.weight(.semibold)).tracking(2).foregroundStyle(.secondary)
                 Text(plan.phase == .ready ? "下一轮" : phoneDuration(ceil(plan.remaining)))
                     .font(.system(size: 48, weight: .light, design: .rounded)).monospacedDigit().minimumScaleFactor(0.6).lineLimit(1)

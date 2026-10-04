@@ -62,7 +62,7 @@ final class TargetCountdownTests: XCTestCase {
         let store = StudyStore(directory: root, observeSystem: false)
         let goal = GoalSnapshot(name: "考试", date: Date())
         XCTAssertTrue(store.updateGoal(goal))
-        XCTAssertEqual(try RecordExchange.decode(store.export()).goal, goal)
+        XCTAssertEqual(try RecordExchange.decode(store.export(forBackup: true)).goal, goal)
         var deleted = goal; deleted.deleted = true; deleted.updatedAt = goal.updatedAt.addingTimeInterval(1)
         XCTAssertTrue(store.importRecords(Database(goal: deleted)))
         XCTAssertTrue(store.importRecords(Database(goal: goal)))

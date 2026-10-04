@@ -6,6 +6,21 @@ import AppKit
     @Published var database = Database()
     @Published var error: String?
     @Published var blocked = false
+    @Published private(set) var showingHome = false
+    /// Returning home pauses the existing timer; no new round is created.
+    func returnHome() {
+        guard !blocked, database.draft.startedAt != nil, database.pendingEnd == nil else { return }
+        if isRunning { pause() }
+        guard !isRunning else { return }
+        showingHome = true
+    }
+    @discardableResult func resumeFocus() -> Bool {
+        guard !blocked, database.draft.startedAt != nil, database.pendingEnd == nil else { return false }
+        if !isRunning { toggle() }
+        guard isRunning else { return false }
+        showingHome = false
+        return true
+    }
     private var ticker: Timer?
     private var ticks = 0
     @Published private(set) var modeSettings = FocusRoutineSettings()
@@ -39,13 +54,16 @@ import AppKit
                 state.draft.pause()
                 state.focusRoutine = nil
                 if state.draft.startedAt != nil {
-                    if settings.mode == .microBreak {
+                    if settings.mode != .standard {
                         var routine = FocusRoutine(settings: settings); routine.suspended = !running
                         state.focusRoutine = routine
                     }
                     if running { state.draft.toggle() }
                 }
             }
+            state.focusRoutine?.settings.standardVolume = settings.standardVolume
+            state.focusRoutine?.settings.microBreakVolume = settings.microBreakVolume
+            state.focusRoutine?.settings.courseVolume = settings.courseVolume
         }) else { return false }
         if let modeDefaults { SharedPreferences.capture(modeDefaults) }
         modeSettings = settings
@@ -86,29 +104,33 @@ import AppKit
         guard let previous = routineTick else { routineTick = now; return }
         let elapsed = max(0, now - previous)
         let phase = routine.phase
-        let focused = routine.advance(elapsed)
-        database.draft.accumulated += focused
+        database.draft.accumulated += routine.advance(elapsed)
         database.draft.runningSince = !routine.suspended && routine.phase == .focus ? now : nil
         database.focusRoutine = routine
         routineTick = now
         if phase != routine.phase && soundsEnabled && elapsed < 2 {
             let sound = (routine.phase == .microRest || routine.phase == .longRest)
-                ? (routine.settings.restSound ?? "Glass") : (routine.settings.focusSound ?? "Pop")
+                ? routine.settings.activeRestSound : routine.settings.activeFocusSound
             playModeSound(sound, volume: routine.settings.volume)
         }
     }
     func skipModeRest() {
         guard database.focusRoutine != nil else { return }
         advanceRoutine()
-        _ = commit { state in
+        let success = commit { state in
             if state.focusRoutine?.phase == .longRest || state.focusRoutine?.phase == .ready {
                 let suspended = state.focusRoutine?.suspended ?? false
-                state.focusRoutine = FocusRoutine(settings: modeSettings)
+                let settings = state.focusRoutine?.settings
+                state.focusRoutine = FocusRoutine(settings: settings?.mode == modeSettings.mode ? modeSettings : (settings ?? modeSettings))
                 state.focusRoutine?.suspended = suspended
             } else { state.focusRoutine?.skipRest() }
             if state.focusRoutine?.suspended == false { state.draft.runningSince = StudyClock.now }
         }
         routineTick = StudyClock.now
+        if success, soundsEnabled, let routine = database.focusRoutine, routine.settings.mode == .course,
+           !routine.suspended, routine.phase == .focus {
+            playModeSound(routine.settings.activeFocusSound, volume: routine.settings.volume)
+        }
     }
 
     private var observers: [NSObjectProtocol] = []
@@ -254,27 +276,34 @@ import AppKit
     func toggle() {
         guard !blocked, database.pendingEnd == nil else { return }
         advanceRoutine()
+        let wasRunning = isRunning
         let beginsRound = database.draft.startedAt == nil || database.focusRoutine?.phase == .ready
         if database.draft.startedAt == nil {
             database.timerID = UUID()
             database.draft.toggle()
-            if modeSettings.mode == .microBreak { database.focusRoutine = FocusRoutine(settings: modeSettings); routineTick = StudyClock.now }
+            if modeSettings.mode != .standard { database.focusRoutine = FocusRoutine(settings: modeSettings); routineTick = StudyClock.now }
         } else if var routine = database.focusRoutine {
-            if routine.phase == .ready { routine = FocusRoutine(settings: modeSettings) }
+            if routine.phase == .ready { routine = FocusRoutine(settings: routine.settings.mode == modeSettings.mode ? modeSettings : routine.settings) }
             else { routine.suspended.toggle() }
             database.focusRoutine = routine
             database.draft.runningSince = !routine.suspended && routine.phase == .focus ? StudyClock.now : nil
             routineTick = StudyClock.now
         } else { database.draft.toggle() }
         if beginsRound, soundsEnabled, let routine = database.focusRoutine {
-            playModeSound(routine.settings.focusSound ?? "Pop", volume: routine.settings.volume)
+            playModeSound(routine.settings.activeFocusSound, volume: routine.settings.volume)
+        }
+        if soundsEnabled, database.focusRoutine == nil, wasRunning != isRunning {
+            playModeSound(isRunning ? (modeSettings.startSound ?? "Pop") : (modeSettings.pauseSound ?? "Glass"), volume: modeSettings.volume(for: .standard))
         }
         persist()
     }
     func pause() {
         advanceRoutine()
+        let playPause = isRunning && database.focusRoutine == nil
         database.focusRoutine?.suspended = true
-        database.draft.pause(); persist()
+        database.draft.pause()
+        if playPause, soundsEnabled { playModeSound(modeSettings.pauseSound ?? "Glass", volume: modeSettings.volume(for: .standard)) }
+        persist()
     }
     func finish() {
         guard !blocked, database.draft.startedAt != nil else { return }
@@ -302,6 +331,7 @@ import AppKit
         change(&database)
         error = nil
         guard persist() else { database = old; return false }
+        if database.draft.startedAt == nil { showingHome = false }
         do { try writeCSV() } catch { self.error = "记录已保存，但 CSV 更新失败：\(error.localizedDescription)" }
         return true
     }
@@ -348,13 +378,13 @@ import AppKit
             }
             let backupFolder = try directory.appendingPathComponent("backups/\(UUID().uuidString)", isDirectory: true)
             try FileManager.default.createDirectory(at: backupFolder, withIntermediateDirectories: true)
-            try export().write(to: backupFolder.appendingPathComponent("before-import.json"), options: .atomic)
+            try export(forBackup: true).write(to: backupFolder.appendingPathComponent("before-import.json"), options: .atomic)
             try RecordExchange.encode(incoming).write(to: backupFolder.appendingPathComponent("incoming.json"), options: .atomic)
             var importedMode = modeSettings
             if let defaults = modeDefaults { importedMode = SharedPreferences.mergedMode(validated.sharedSettings, defaults: defaults, local: modeSettings, syncParameters: syncParameters) }
             if syncSounds, let audio = validated.soundPreferences {
                 let available = Set(soundLibrary.sounds.map(\.id) + (validated.sounds ?? []).map(\.id))
-                guard [audio.restSound, audio.focusSound].compactMap({ $0 }).allSatisfy({ available.contains($0) }) else {
+                guard [audio.restSound, audio.focusSound, audio.classStartSound, audio.classEndSound, audio.startSound, audio.pauseSound].compactMap({ $0 }).allSatisfy({ available.contains($0) }) else {
                     throw RecordExchange.ExchangeError.invalid("提示音设置引用了缺失的音频，请关闭提示音同步或重新导出。")
                 }
                 importedMode = audio.applying(to: importedMode)
@@ -375,9 +405,7 @@ import AppKit
                 if syncTimer, let timer = validated.timerTransfer {
                     $0.focusRoutine = validated.focusRoutine
                     if var routine = $0.focusRoutine {
-                        routine.settings.restSound = importedMode.restSound
-                        routine.settings.focusSound = importedMode.focusSound
-                        routine.settings.volume = importedMode.volume
+                        routine.settings = SoundPreferences(importedMode).applying(to: routine.settings)
                         let focus = routine.advance(max(0, Date().timeIntervalSince(timer.capturedAt)))
                         $0.focusRoutine = routine
                         $0.draft = TimerState(startedAt: timer.startedAt, accumulated: timer.accumulated + focus)
@@ -401,13 +429,14 @@ import AppKit
             return success
         } catch { self.error = "导入未完成：\(error.localizedDescription)"; return false }
     }
-    func export() throws -> Data {
+    func export(forBackup: Bool = false) throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("数据读取失败，无法导出。") }
         advanceRoutine()
         var snapshot = database
         snapshot.sharedSettings = modeDefaults.map { SharedPreferences.capture($0) }
-        snapshot.sounds = try soundLibrary.exportSounds()
-        snapshot.soundPreferences = SoundPreferences(modeSettings)
+        let options = forBackup ? SyncExportOptions(sounds: true, parameters: true, goal: true) : SyncPreferences.exportOptions(from: modeDefaults ?? ApplicationPreferences.current)
+        snapshot.sounds = options.sounds ? try soundLibrary.exportSounds() : nil
+        snapshot.soundPreferences = options.sounds ? SoundPreferences(modeSettings) : nil
         snapshot.source = ExchangeSource(device: Host.current().localizedName ?? "Mac", platform: "macOS")
         let capturedAt = Date()
         snapshot.draft = database.draft.checkpoint()
@@ -416,8 +445,14 @@ import AppKit
             pendingEnd: database.pendingEnd, activity: database.activity, timerID: database.timerID)
         snapshot.focusRoutine?.settings.restSound = nil
         snapshot.focusRoutine?.settings.focusSound = nil
-        snapshot.focusRoutine?.settings.volume = FocusRoutineSettings().volume
-        return try RecordExchange.encode(snapshot)
+        snapshot.focusRoutine?.settings.classStartSound = nil
+        snapshot.focusRoutine?.settings.classEndSound = nil
+        snapshot.focusRoutine?.settings.startSound = nil
+        snapshot.focusRoutine?.settings.pauseSound = nil
+        snapshot.focusRoutine?.settings.standardVolume = FocusRoutineSettings().standardVolume
+        snapshot.focusRoutine?.settings.microBreakVolume = FocusRoutineSettings().microBreakVolume
+        snapshot.focusRoutine?.settings.courseVolume = FocusRoutineSettings().courseVolume
+        return try RecordExchange.encode(options.filtering(snapshot))
     }
     @discardableResult func deleteAllHistory() -> Bool {
         guard !blocked else { return false }
@@ -448,7 +483,7 @@ import AppKit
     func importArchives() throws -> [ImportArchive] { try ImportArchive.list(directory: directory, phone: false) }
     func importPreview(_ incoming: Database, syncParameters: Bool, syncSounds: Bool = true) -> [String] {
         var local = database
-        local.sharedSettings = modeDefaults.map { SharedPreferences.capture($0) }
+        local.sharedSettings = modeDefaults.map { SharedPreferences.capture($0, persist: false) }
         // Compare numbers against the actual defaults, even before they have been saved.
         var changes = ExchangePreview.changes(local: local, incoming: incoming, syncParameters: false)
         let nextMode = modeDefaults.map { SharedPreferences.mergedMode(incoming.sharedSettings, defaults: $0, local: modeSettings, syncParameters: syncParameters) } ?? modeSettings
@@ -460,7 +495,7 @@ import AppKit
                 return sound.modified > oldDate || (sound.modified == oldDate && sound.name > old.name)
             }.count
             if changedSounds > 0 { changes.append("合并 \(changedSounds) 个新增或更新的自定义提示音（含文件）") }
-            if let audio = incoming.soundPreferences, audio != SoundPreferences(modeSettings) { changes.append("更新提示音选择与音量") }
+            if let audio = incoming.soundPreferences, SoundPreferences(audio.applying(to: modeSettings)) != SoundPreferences(modeSettings) { changes.append("更新提示音选择与音量") }
         }
         return changes
     }

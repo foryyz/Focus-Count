@@ -2,6 +2,16 @@ import XCTest
 @testable import FocusCountCore
 
 final class PreferenceStorageTests: XCTestCase {
+    func testUnchangedCaptureDoesNotRewriteLedgerOrPublish() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let preferences = FilePreferences(directory: root)
+        preferences.set(Dictionary(uniqueKeysWithValues: (0..<12).map { ("event-\($0)", "📚") }), forKey: "marker-emojis-v1")
+        let captured = SharedPreferences.capture(preferences)
+        let revision = preferences.revision
+        for _ in 0..<20 { XCTAssertEqual(SharedPreferences.capture(preferences), captured) }
+        XCTAssertEqual(preferences.revision, revision)
+    }
     func testLegacyKeysAreRemovedWithoutTouchingUnrelatedPreferences() {
         let suite = "RetiredPreferences-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

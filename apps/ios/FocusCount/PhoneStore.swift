@@ -19,6 +19,21 @@ struct PhoneState: Codable {
     @Published var error: String?
     @Published var notificationIssue: String?
     @Published private(set) var blocked = false
+    @Published private(set) var showingHome = false
+    /// Returning home pauses the existing timer; no new round is created.
+    func returnHome() {
+        guard !blocked, state.clock.startedAt != nil, state.clock.pendingEnd == nil else { return }
+        if isRunning { toggle() }
+        guard !isRunning else { return }
+        showingHome = true
+    }
+    @discardableResult func resumeFocus() -> Bool {
+        guard !blocked, state.clock.startedAt != nil, state.clock.pendingEnd == nil else { return false }
+        if !isRunning { toggle() }
+        guard isRunning else { return false }
+        showingHome = false
+        return true
+    }
     private var ticker: Timer?
     private let live: Bool
     private let preferences: UserDefaults
@@ -83,8 +98,9 @@ struct PhoneState: Codable {
         state = settled(state, at: date)
         if live, let plan = state.routine, old.phase != plan.phase,
            date.timeIntervalSince(old.anchor) < 2, UIApplication.shared.applicationState == .active {
-            PhoneSounds.shared.play((plan.phase == .microRest || plan.phase == .longRest) ? (plan.settings.restSound ?? "Glass") : (plan.settings.focusSound ?? "Pop"), volume: plan.settings.volume)
+            PhoneSounds.shared.play((plan.phase == .microRest || plan.phase == .longRest) ? plan.settings.activeRestSound : plan.settings.activeFocusSound, volume: plan.settings.volume)
         }
+        if old.phase != state.routine?.phase, state.routine?.settings.mode == .course { refreshNotifications() }
         ticks += 1
         if ticks % 40 == 0 || old.phase != state.routine?.phase { _ = commit { _ in } }
     }
@@ -101,13 +117,16 @@ struct PhoneState: Codable {
                 let running = next.routine.map { !$0.suspended && $0.phase != .ready } ?? next.clock.isRunning
                 next.clock.pause()
                 next.routine = nil
-                if settings.mode == .microBreak {
+                if settings.mode != .standard {
                     var plan = PhoneRoutine(settings: settings); plan.suspended = !running
                     next.routine = plan
                 }
                 if running { next.clock.toggle() }
             }
             next.modeSettings = settings
+            next.routine?.settings.standardVolume = settings.standardVolume
+            next.routine?.settings.microBreakVolume = settings.microBreakVolume
+            next.routine?.settings.courseVolume = settings.courseVolume
         }
         if success {
             SharedPreferences.capture(preferences)
@@ -145,12 +164,17 @@ struct PhoneState: Codable {
         let success = commit { next in
             guard var plan = next.routine else { return }
             let suspended = plan.suspended
-            if plan.phase == .longRest || plan.phase == .ready { plan = PhoneRoutine(settings: modeSettings); plan.suspended = suspended }
+            if plan.phase == .longRest || plan.phase == .ready { plan = PhoneRoutine(settings: plan.settings.mode == modeSettings.mode ? modeSettings : plan.settings); plan.suspended = suspended }
             else { plan.skipRest(at: Date()) }
             next.routine = plan
             next.clock.runningSince = !plan.suspended && plan.phase == .focus ? Date() : nil
         }
-        if success { refreshNotifications() }
+        if success {
+            refreshNotifications()
+            if live, let plan = state.routine, plan.settings.mode == .course, !plan.suspended, plan.phase == .focus {
+                PhoneSounds.shared.play(plan.settings.activeFocusSound, volume: plan.settings.volume)
+            }
+        }
     }
     @discardableResult private func commit(_ change: (inout PhoneState) -> Void) -> Bool {
         guard !blocked else { return false }
@@ -160,6 +184,7 @@ struct PhoneState: Codable {
             let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             try encoder.encode(next).write(to: file, options: .atomic)
             state = next; error = nil
+            if next.clock.startedAt == nil { showingHome = false }
             if live && next.routine == nil { refreshNotifications() }
             return true
         } catch { self.error = "保存失败，修改未生效：\(error.localizedDescription)"; return false }
@@ -174,7 +199,7 @@ struct PhoneState: Codable {
             $0.timerID = UUID()
             $0.activity = activity.trimmingCharacters(in: .whitespacesAndNewlines)
             $0.clock.toggle()
-            if modeSettings.mode == .microBreak { $0.routine = PhoneRoutine(settings: modeSettings) }
+            if modeSettings.mode != .standard { $0.routine = PhoneRoutine(settings: modeSettings) }
         }
         if success { refreshNotifications(); playStart() }; return success
     }
@@ -218,20 +243,30 @@ struct PhoneState: Codable {
         }
     }
     private func playStart() {
-        if live, let plan = state.routine { PhoneSounds.shared.play(plan.settings.focusSound ?? "Pop", volume: plan.settings.volume) }
+        guard live else { return }
+        if let plan = state.routine { PhoneSounds.shared.play(plan.settings.activeFocusSound, volume: plan.settings.volume) }
+        else { PhoneSounds.shared.play(modeSettings.startSound ?? "Pop", volume: modeSettings.volume(for: .standard)) }
     }
     func toggle() {
         if state.clock.startedAt == nil { _ = start(activity: state.activity ?? ""); return }
+        guard state.clock.pendingEnd == nil else { return }
+        let wasRunning = isRunning
         let newRound = state.routine?.phase == .ready
         let success = commit { next in
             if var plan = next.routine {
-                if plan.phase == .ready { plan = PhoneRoutine(settings: modeSettings) }
+                if plan.phase == .ready { plan = PhoneRoutine(settings: plan.settings.mode == modeSettings.mode ? modeSettings : plan.settings) }
                 else { plan.suspended.toggle(); plan.anchor = Date() }
                 next.routine = plan
                 next.clock.runningSince = !plan.suspended && plan.phase == .focus ? Date() : nil
             } else { next.clock.toggle() }
         }
-        if success { refreshNotifications(); if newRound { playStart() } }
+        if success {
+            refreshNotifications()
+            if newRound || (state.routine == nil && !wasRunning && isRunning) { playStart() }
+            else if live, state.routine == nil, wasRunning && !isRunning {
+                PhoneSounds.shared.play(modeSettings.pauseSound ?? "Glass", volume: modeSettings.volume(for: .standard))
+            }
+        }
     }
     func finish() {
         if commit({ $0.clock.finish(); $0.routine?.suspended = true }) { refreshNotifications() }
@@ -284,13 +319,13 @@ struct PhoneState: Codable {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let identifier = UUID().uuidString
             try JSONEncoder().encode(state).write(to: directory.appendingPathComponent("before-import-\(identifier).json"), options: .atomic)
-            try export().write(to: directory.appendingPathComponent("before-import-complete-\(identifier).json"), options: .atomic)
+            try export(forBackup: true).write(to: directory.appendingPathComponent("before-import-complete-\(identifier).json"), options: .atomic)
             try RecordExchange.encode(database).write(to: directory.appendingPathComponent("incoming-\(identifier).json"), options: .atomic)
             var importedMode = modeSettings
             importedMode = SharedPreferences.mergedMode(incoming.sharedSettings, defaults: preferences, local: modeSettings, syncParameters: syncParameters)
             if syncSounds, let audio = incoming.soundPreferences {
                 let available = Set(soundLibrary.sounds.map(\.id) + (incoming.sounds ?? []).map(\.id))
-                guard [audio.restSound, audio.focusSound].compactMap({ $0 }).allSatisfy({ available.contains($0) }) else {
+                guard [audio.restSound, audio.focusSound, audio.classStartSound, audio.classEndSound, audio.startSound, audio.pauseSound].compactMap({ $0 }).allSatisfy({ available.contains($0) }) else {
                     throw RecordExchange.ExchangeError.invalid("提示音设置引用了缺失的音频，请关闭提示音同步或重新导出。")
                 }
                 importedMode = audio.applying(to: importedMode)
@@ -312,9 +347,7 @@ struct PhoneState: Codable {
                 if syncTimer, let timer = incoming.timerTransfer {
                     $0.routine = nil
                     if var routine = incoming.focusRoutine {
-                        routine.settings.restSound = importedMode.restSound
-                        routine.settings.focusSound = importedMode.focusSound
-                        routine.settings.volume = importedMode.volume
+                        routine.settings = SoundPreferences(importedMode).applying(to: routine.settings)
                         let focus = routine.advance(max(0, Date().timeIntervalSince(timer.capturedAt)))
                         $0.routine = PhoneRoutine(routine: routine)
                         $0.clock = MobileClock(); $0.clock.startedAt = timer.startedAt
@@ -367,7 +400,7 @@ struct PhoneState: Codable {
     func importArchives() throws -> [ImportArchive] { try ImportArchive.list(directory: directory, phone: true) }
     func importPreview(_ incoming: Database, syncParameters: Bool, syncSounds: Bool = true) -> [String] {
         var local = Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, goal: state.goal)
-        local.sharedSettings = SharedPreferences.capture(preferences)
+        local.sharedSettings = SharedPreferences.capture(preferences, persist: false)
         // Compare numbers against the actual defaults, even before they have been saved.
         var changes = ExchangePreview.changes(local: local, incoming: incoming, syncParameters: false)
         let nextMode = SharedPreferences.mergedMode(incoming.sharedSettings, defaults: preferences, local: modeSettings, syncParameters: syncParameters)
@@ -379,7 +412,7 @@ struct PhoneState: Codable {
                 return sound.modified > oldDate || (sound.modified == oldDate && sound.name > old.name)
             }.count
             if changedSounds > 0 { changes.append("合并 \(changedSounds) 个新增或更新的自定义提示音（含文件）") }
-            if let audio = incoming.soundPreferences, audio != SoundPreferences(modeSettings) { changes.append("更新提示音选择与音量") }
+            if let audio = incoming.soundPreferences, SoundPreferences(audio.applying(to: modeSettings)) != SoundPreferences(modeSettings) { changes.append("更新提示音选择与音量") }
         }
         return changes
     }
@@ -392,7 +425,7 @@ struct PhoneState: Codable {
             $0.sessions[index] = RecordExchange.replacing($0.sessions[index], with: snapshot.session)
         }
     }
-    func export() throws -> Data {
+    func export(forBackup: Bool = false) throws -> Data {
         guard !blocked else { throw RecordExchange.ExchangeError.invalid("本地数据读取失败，无法导出。") }
         tick()
         let capturedAt = Date()
@@ -401,14 +434,21 @@ struct PhoneState: Codable {
             isRunning: state.clock.isRunning, pendingEnd: state.clock.pendingEnd, activity: state.activity, timerID: state.timerID)
         var snapshot = Database(events: state.events, purgedIDs: state.purgedIDs, sessions: state.sessions, draft: draft, pendingEnd: state.clock.pendingEnd, timerTransfer: transfer, activity: state.activity, goal: state.goal)
         snapshot.sharedSettings = SharedPreferences.capture(preferences)
-        snapshot.sounds = try soundLibrary.exportSounds()
-        snapshot.soundPreferences = SoundPreferences(modeSettings)
+        let options = forBackup ? SyncExportOptions(sounds: true, parameters: true, goal: true) : SyncPreferences.exportOptions(from: preferences)
+        snapshot.sounds = options.sounds ? try soundLibrary.exportSounds() : nil
+        snapshot.soundPreferences = options.sounds ? SoundPreferences(modeSettings) : nil
         snapshot.source = ExchangeSource(device: UIDevice.current.name, platform: "iPhone")
         snapshot.focusRoutine = state.routine?.portable
         snapshot.focusRoutine?.settings.restSound = nil
         snapshot.focusRoutine?.settings.focusSound = nil
-        snapshot.focusRoutine?.settings.volume = FocusRoutineSettings().volume
-        return try RecordExchange.encode(snapshot)
+        snapshot.focusRoutine?.settings.classStartSound = nil
+        snapshot.focusRoutine?.settings.classEndSound = nil
+        snapshot.focusRoutine?.settings.startSound = nil
+        snapshot.focusRoutine?.settings.pauseSound = nil
+        snapshot.focusRoutine?.settings.standardVolume = FocusRoutineSettings().standardVolume
+        snapshot.focusRoutine?.settings.microBreakVolume = FocusRoutineSettings().microBreakVolume
+        snapshot.focusRoutine?.settings.courseVolume = FocusRoutineSettings().courseVolume
+        return try RecordExchange.encode(options.filtering(snapshot))
     }
 }
 
@@ -418,25 +458,7 @@ func phoneDuration(_ seconds: Double) -> String {
     return String(format: "%02d:%02d:%02d", value / 3600, value / 60 % 60, value % 60)
 }
 
-// Coordinate document-provider reads while retaining the selected security scope.
+// Kept for callers using the previous phone-specific name.
 enum PhoneImportFile {
-    static func read(_ url: URL) throws -> Data {
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        var coordinationError: NSError?
-        var result: Result<Data, Error>?
-        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinationError) { readableURL in
-            result = Result {
-                let limit = 512_000_000
-                let size = try readableURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                guard size <= limit else { throw RecordExchange.ExchangeError.invalid("同步文件超过 512 MB，请减少自定义音频后重试。") }
-                let data = try Data(contentsOf: readableURL)
-                guard data.count <= limit else { throw RecordExchange.ExchangeError.invalid("同步文件超过 512 MB，请减少自定义音频后重试。") }
-                return data
-            }
-        }
-        if let coordinationError { throw coordinationError }
-        guard let result else { throw RecordExchange.ExchangeError.invalid("文件暂时无法读取，请在“文件”应用中下载后重试。") }
-        return try result.get()
-    }
+    static func read(_ url: URL) throws -> Data { try ExchangeFileReader.read(url) }
 }

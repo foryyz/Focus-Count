@@ -123,15 +123,16 @@ struct SoundSettingsView: View {
     @State private var deleting: FocusSound?
     @DirectoryPreference(SyncPreferences.soundsKey) private var syncSounds = false
     @DirectoryPreference(SyncPreferences.parametersKey) private var syncParameters = false
+    @DirectoryPreference(SyncPreferences.goalKey) private var syncGoal = true
     var body: some View {
         VStack(spacing: 0) {
             HStack { Text("设置").font(.headline); Spacer(); Button("完成") { dismiss() } }.padding(20)
             Divider()
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(0..<2) { index in
+                    ForEach(0..<3) { index in
                         Button { section = index } label: {
-                            Label(index == 0 ? "提示音" : "同步设置", systemImage: index == 0 ? "speaker.wave.2" : "arrow.triangle.2.circlepath")
+                            Label(["提示音", "同步设置", "主题"][index], systemImage: ["speaker.wave.2", "arrow.triangle.2.circlepath", "paintpalette"][index])
                                 .font(.callout.weight(.medium)).frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(12).background(section == index ? Color.teal.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
                         }.buttonStyle(.plain)
@@ -140,12 +141,15 @@ struct SoundSettingsView: View {
                 }.padding(8).frame(width: 140)
                 Divider()
                 ScrollView {
-                    if section == 1 {
+                    if section == 2 {
+                        ThemeSettingsContent().padding(20)
+                    } else if section == 1 {
                         VStack(alignment: .leading, spacing: 20) {
                             Text("同步设置").font(.headline)
                             Toggle("同步自定义提示音与声音设置", isOn: $syncSounds)
                             Toggle("同步模式数值参数", isOn: $syncParameters)
-                            Text("默认关闭。选择会保存在本机，并用于之后每次导入；计时状态仍在导入时单独选择。")
+                            Toggle("同步目标日期", isOn: $syncGoal)
+                            Text("这些选项决定导出 JSON 包含哪些内容，选择会保存在本机。提示音和模式参数默认关闭，目标日期默认开启。导入按文件内容合并，不受本机开关影响；计时接续需在导入时单独确认。")
                                 .font(.caption).foregroundStyle(.secondary)
                         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
                     } else {

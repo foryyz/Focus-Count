@@ -15,6 +15,12 @@ struct PhoneRoutine: Codable {
     }
     init(routine: FocusRoutine, at date: Date = Date()) {
         settings = routine.settings; anchor = date; suspended = routine.suspended
+        if settings.mode == .course {
+            let lesson = Double(settings.lessonMinutes * 60), rest = Double(settings.classBreakMinutes * 60)
+            segments = [Segment(phase: .focus, seconds: lesson), Segment(phase: .longRest, seconds: rest)]
+            elapsed = routine.phase == .focus ? lesson - routine.remaining : lesson + rest - routine.remaining
+            return
+        }
         var routine = routine, result: [Segment] = []
         routine.suspended = false
         while routine.phase != .ready {
@@ -40,17 +46,28 @@ struct PhoneRoutine: Codable {
         for segment in segments { end += segment.seconds; if elapsed < end { return end - elapsed } }
         return 0
     }
-    var roundRemaining: Double { max(0, total - Double(settings.restMinutes * 60) - elapsed) }
+    var roundRemaining: Double {
+        if settings.mode == .course { return phase == .focus ? remaining : 0 }
+        return max(0, total - Double(settings.restMinutes * 60) - elapsed)
+    }
     var isValid: Bool {
+        (settings.mode != .course || (segments.count == 2 && segments[0].phase == .focus && segments[1].phase == .longRest &&
+            segments[0].seconds == Double(settings.lessonMinutes * 60) && segments[1].seconds == Double(settings.classBreakMinutes * 60) && elapsed < total)) &&
         settings.isValid && elapsed.isFinite && elapsed >= 0 && elapsed <= total && segments.count <= 800 &&
-        segments.allSatisfy { $0.seconds.isFinite && $0.seconds > 0 && $0.phase != .ready } && total <= Double((settings.roundMinutes + settings.restMinutes) * 60) + 0.001
+        segments.allSatisfy { $0.seconds.isFinite && $0.seconds > 0 && $0.phase != .ready } && total <= Double((settings.focusMinutes + settings.breakMinutes) * 60) + 0.001
     }
     static func supports(_ settings: FocusRoutineSettings) -> Bool {
-        settings.isValid && Int(ceil(Double(settings.roundMinutes) / Double(settings.minimumMinutes))) * 2 + 2 <= 64
+        settings.isValid && (settings.mode != .microBreak || Int(ceil(Double(settings.roundMinutes) / Double(settings.minimumMinutes))) * 2 + 2 <= 64)
     }
     @discardableResult mutating func advance(at date: Date) -> Double {
         defer { anchor = date }
         guard !suspended else { return 0 }
+        if settings.mode == .course {
+            var routine = portable
+            let focused = routine.advance(max(0, date.timeIntervalSince(anchor)))
+            elapsed = routine.phase == .focus ? Double(settings.lessonMinutes * 60) - routine.remaining : total - routine.remaining
+            return focused
+        }
         let end = min(total, elapsed + max(0, date.timeIntervalSince(anchor)))
         var start = 0.0, focused = 0.0
         for segment in segments {
@@ -62,6 +79,7 @@ struct PhoneRoutine: Codable {
         return focused
     }
     mutating func skipRest(at date: Date) {
+        if settings.mode == .course, phase == .longRest { elapsed = 0; anchor = date; return }
         guard phase == .microRest else { return }
         elapsed += remaining; anchor = date
     }
@@ -69,6 +87,16 @@ struct PhoneRoutine: Codable {
     func reminders(at date: Date) -> [Reminder] {
         var copy = self; copy.advance(at: date)
         guard !copy.suspended else { return [] }
+        if settings.mode == .course {
+            var routine = copy.portable, nextDate = date, result: [Reminder] = []
+            for _ in 0..<64 {
+                let duration = routine.remaining
+                nextDate = nextDate.addingTimeInterval(duration)
+                routine.advance(duration)
+                result.append(Reminder(date: nextDate, phase: routine.phase))
+            }
+            return result
+        }
         var end = 0.0, result: [Reminder] = []
         for (index, segment) in segments.enumerated() {
             end += segment.seconds
@@ -106,7 +134,11 @@ struct PhoneRoutine: Codable {
                     let rest = reminder.phase == .microRest || reminder.phase == .longRest
                     content.title = reminder.phase == .microRest ? "闭眼休息一下" : reminder.phase == .longRest ? "本轮结束，休息一下" : reminder.phase == .ready ? "休息结束" : "继续专注"
                     content.body = reminder.phase == .microRest ? "休息 \(plan.settings.microSeconds) 秒，下一声提示后继续。" : reminder.phase == .longRest ? "休息 \(plan.settings.restMinutes) 分钟。" : reminder.phase == .ready ? "准备好后打开 FocusCount，手动开始下一轮。" : "回到眼前这一件事。"
-                    let sound = rest ? (plan.settings.restSound ?? "Glass") : (plan.settings.focusSound ?? "Pop")
+                    if plan.settings.mode == .course {
+                        content.title = rest ? "下课了" : "上课了"
+                        content.body = rest ? "课间休息 \(plan.settings.classBreakMinutes) 分钟。" : "开始新一节课，时长 \(plan.settings.lessonMinutes) 分钟。"
+                    }
+                    let sound = rest ? plan.settings.activeRestSound : plan.settings.activeFocusSound
                     content.sound = try PhoneSounds.shared.notificationSound(sound)
                     let request = UNNotificationRequest(identifier: "focus-mode-\(token)-\(index)", content: content,
                         trigger: UNTimeIntervalNotificationTrigger(timeInterval: max(1, reminder.date.timeIntervalSinceNow), repeats: false))

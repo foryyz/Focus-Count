@@ -14,13 +14,13 @@ struct DataExchangeView: View {
     @ObservedObject var store: StudyStore
     @Environment(\.dismiss) private var dismiss
     @State private var syncTimer = false
-    @DirectoryPreference(SyncPreferences.soundsKey) private var syncSounds = false
-    @DirectoryPreference(SyncPreferences.parametersKey) private var syncParameters = false
     @State private var archives: [ImportArchive] = []
     @State private var importing = false
     @State private var exporting = false
     @State private var document = ExchangeDocument(data: Data())
     @State private var incoming: Database?
+    @State private var reading = false
+    @State private var previewChanges: [String] = []
     @State private var message: String?
     @State private var showVersions = false
     @State private var restoring: SessionSnapshot?
@@ -55,10 +55,10 @@ struct DataExchangeView: View {
                         } catch { message = error.localizedDescription }
                     }
                 }
-                Text("与 iPhone 交换 JSON，自动合并记录并保留不同版本。")
+                Text("与 iPhone 交换 JSON，自动合并记录并保留不同版本。导出内容由设置中的同步选项决定。")
                     .foregroundStyle(.secondary)
                 HStack {
-                    Button { importing = true } label: { Label("导入并合并", systemImage: "square.and.arrow.down") }.disabled(store.blocked)
+                    Button { importing = true } label: { Label("导入并合并", systemImage: "square.and.arrow.down") }.disabled(store.blocked || reading)
                     Button {
                         do { document = ExchangeDocument(data: try store.export()); exporting = true }
                         catch { message = error.localizedDescription }
@@ -66,16 +66,17 @@ struct DataExchangeView: View {
                     Spacer()
                     Toggle("历史版本", isOn: $showVersions).toggleStyle(.button)
                 }
+                if reading { ProgressView("正在读取并校验文件…") }
                 if let incoming, !showVersions {
                     GroupBox("导入预览") {
                         VStack(alignment: .leading, spacing: 12) {
                             Text(ExchangePreview.source(incoming)).font(.caption).foregroundStyle(.secondary)
-                            ForEach(store.importPreview(incoming, syncParameters: syncParameters, syncSounds: syncSounds), id: \.self) { Text($0) }
+                            ForEach(previewChanges, id: \.self) { Text($0) }
                             Text(ExchangePreview.rules).font(.caption).foregroundStyle(.secondary)
                             if let timer = incoming.timerTransfer {
                                 Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
                                 if syncTimer { Text("替换本机计时并接续已过时间；原设备不会自动停止。") .font(.caption).foregroundStyle(.orange) }
-                                if syncTimer && !syncParameters { Text("本轮按原节奏接续，下轮沿用本机参数。").font(.caption).foregroundStyle(.secondary) }
+
                             }
                             HStack {
                                 Button("取消") { self.incoming = nil }
@@ -83,11 +84,11 @@ struct DataExchangeView: View {
                                 Button("确认合并") {
                                     let sessionIDs = Set(store.database.sessions.map(\.id))
                                     let eventIDs = Set((store.database.events ?? []).map(\.id))
-                                    if store.importRecords(incoming, syncTimer: syncTimer, syncSounds: syncSounds, syncParameters: syncParameters) {
+                                    if store.importRecords(incoming, syncTimer: syncTimer) {
                                         let addedSessions = store.database.sessions.filter { !sessionIDs.contains($0.id) }.count
                                         let addedEvents = (store.database.events ?? []).filter { !eventIDs.contains($0.id) }.count
                                         self.incoming = nil
-                                        message = "合并完成，新增 \(addedSessions + addedEvents) 个（专注 \(addedSessions)，标记 \(addedEvents)）。已按所选项目同步，可在历史版本查看本次备份。"
+                                        message = "合并完成，新增 \(addedSessions + addedEvents) 个（专注 \(addedSessions)，标记 \(addedEvents)）。已按文件内容同步，可在历史版本查看本次备份。"
                                         archives = (try? store.importArchives()) ?? []
                                     }
                                 }.buttonStyle(.borderedProminent).tint(.teal)
@@ -113,7 +114,7 @@ struct DataExchangeView: View {
                                     Spacer()
                                     Button("查看并合并") {
                                         do {
-                                            incoming = try archive.read(); showVersions = false
+                                            setIncoming(try archive.read()); showVersions = false
                                             syncTimer = false
                                         } catch { message = "备份读取失败：\(error.localizedDescription)" }
                                     }.disabled(store.blocked)
@@ -166,15 +167,21 @@ struct DataExchangeView: View {
             do { archives = try store.importArchives() } catch { message = "历史读取失败：\(error.localizedDescription)" }
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
-            do {
-                let url = try result.get()
-                let access = url.startAccessingSecurityScopedResource()
-                defer { if access { url.stopAccessingSecurityScopedResource() } }
-                guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 512_000_000 else {
-                    throw RecordExchange.ExchangeError.invalid("同步文件超过 512 MB，请减少自定义音频后重试。")
+            switch result {
+            case .success(let url):
+                reading = true; incoming = nil; message = nil
+                Task {
+                    do {
+                        let value = try await Task.detached(priority: .userInitiated) {
+                            try RecordExchange.decode(ExchangeFileReader.read(url))
+                        }.value
+                        setIncoming(value); syncTimer = false; showVersions = false
+                    } catch { incoming = nil; message = "导入失败：\(error.localizedDescription)" }
+                    reading = false
                 }
-                incoming = try RecordExchange.decode(Data(contentsOf: url)); message = nil; syncTimer = false; showVersions = false
-            } catch { incoming = nil; message = "导入失败：\(error.localizedDescription)" }
+            case .failure(let error):
+                if (error as NSError).code != NSUserCancelledError { message = "导入失败：\(error.localizedDescription)" }
+            }
         }
         .fileExporter(isPresented: $exporting, document: document, contentType: .json, defaultFilename: "FocusCount-sessions") { result in
             switch result {
@@ -217,4 +224,9 @@ struct DataExchangeView: View {
             }
         } message: { Text("恢复会更新科目、时间、专注度及删除状态，同时保留当前版本。") }
     }
+    private func setIncoming(_ value: Database) {
+        previewChanges = store.importPreview(value, syncParameters: true, syncSounds: true)
+        incoming = value
+    }
+
 }

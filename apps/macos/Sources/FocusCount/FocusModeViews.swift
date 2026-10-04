@@ -2,8 +2,8 @@ import SwiftUI
 import FocusCountCore
 
 extension FocusMode {
-    var symbol: String { self == .standard ? "scope" : "leaf" }
-    var title: String { self == .standard ? "普通专注" : "微休息" }
+    var symbol: String { self == .standard ? "scope" : self == .course ? "graduationcap" : "leaf" }
+    var title: String { self == .standard ? "普通专注" : self == .course ? "课程模式" : "微休息" }
 }
 
 struct FocusModeMenuView: View {
@@ -23,7 +23,7 @@ struct FocusModeMenuView: View {
                         Image(systemName: mode.symbol).font(.system(size: 19)).frame(width: 26)
                         VStack(alignment: .leading, spacing: 4) {
                             Text(mode.title).font(.system(size: 13, weight: .medium))
-                            Text(mode == .standard ? "按自己的节奏持续专注" : "随机提醒 · 闭眼休息 · 循环专注")
+                            Text(mode == .standard ? "按自己的节奏持续专注" : mode == .course ? "定时上课 · 课间休息 · 自动循环" : "随机提醒 · 闭眼休息 · 循环专注")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
@@ -72,7 +72,7 @@ struct FocusModeSettingsView: View {
                         Stepper("长休息：\(settings.restMinutes) 分钟", value: $settings.restMinutes, in: 1...180)
                         soundPicker("开始休息", selection: $settings.restSound, fallback: "Glass")
                         soundPicker("开始专注", selection: $settings.focusSound, fallback: "Pop")
-                        HStack { Text("音量"); Slider(value: $settings.volume, in: 0...1) }
+                        HStack { Text("音量"); Slider(value: Binding(get: { settings.volume(for: selectedMode) }, set: { settings.setVolume($0, for: selectedMode) }), in: 0...1) }
                         Text("可在主页右上角「设置 → 提示音」导入并命名自己的声音。")
                             .font(.caption).foregroundStyle(.secondary)
                         if !settings.isValid { Text("随机间隔上限不能小于下限。").font(.caption).foregroundStyle(.red) }
@@ -80,16 +80,28 @@ struct FocusModeSettingsView: View {
                             .font(.caption).foregroundStyle(.secondary)
                         Text("参数在下一轮生效。保存设置不会切换当前模式。")
                             .font(.caption).foregroundStyle(.secondary)
+                    } else if selectedMode == .course {
+                        Text("课程与课间").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                        Stepper("一节课：\(settings.lessonMinutes) 分钟", value: $settings.lessonMinutes, in: 1...360)
+                        Stepper("课间休息：\(settings.classBreakMinutes) 分钟", value: $settings.classBreakMinutes, in: 1...180)
+                        soundPicker("上课提示音", selection: $settings.classStartSound, fallback: "Pop")
+                        soundPicker("下课提示音", selection: $settings.classEndSound, fallback: "Glass")
+                        HStack { Text("音量"); Slider(value: Binding(get: { settings.volume(for: selectedMode) }, set: { settings.setVolume($0, for: selectedMode) }), in: 0...1) }
+                        Text("开始时播放上课提示音，下课后进入课间休息，休息结束自动上课。课间不计入专注时长；暂停会冻结当前阶段。重新开始课程后使用新参数。休眠或重启后需手动恢复。")
+                            .font(.caption).foregroundStyle(.secondary)
                     } else {
                         Label("按自己的节奏专注", systemImage: FocusMode.standard.symbol).font(.headline)
-                        Text("普通专注不自动安排休息，也不播放周期提醒，暂时无需调整参数。")
-                            .foregroundStyle(.secondary)
+                        soundPicker("开始／继续", selection: $settings.startSound, fallback: "Pop")
+                        soundPicker("暂停", selection: $settings.pauseSound, fallback: "Glass")
+                        HStack { Text("音量"); Slider(value: Binding(get: { settings.volume(for: selectedMode) }, set: { settings.setVolume($0, for: selectedMode) }), in: 0...1) }
+                        Text("开始或继续专注时播放开始提示音，暂停时播放暂停提示音。可在「设置 → 提示音」导入自定义声音。")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }.padding(20)
             }
             Divider()
             HStack {
-                Button("恢复默认参数") { settings = FocusRoutineSettings() }.disabled(selectedMode == .standard)
+                Button("恢复默认参数") { settings = settings.restoringDefaults(for: selectedMode) }
                 Spacer()
                 Button("应用") {
                     settings.mode = store.modeSettings.mode
@@ -100,7 +112,7 @@ struct FocusModeSettingsView: View {
         }.frame(width: 440, height: 480)
             .onAppear { settings = store.modeSettings; selectedMode = store.modeSettings.mode }
             .onChange(of: library.custom.map(\.id)) { _ in
-                for id in [settings.restSound, settings.focusSound].compactMap({ $0 }) where !library.sounds.contains(where: { $0.id == id }) { settings = settings.removingSound(id) }
+                for id in settings.soundIDs where !library.sounds.contains(where: { $0.id == id }) { settings = settings.removingSound(id) }
             }
     }
     private func soundPicker(_ title: String, selection: Binding<String?>, fallback: String) -> some View {
@@ -111,7 +123,7 @@ struct FocusModeSettingsView: View {
                     Text("提示音不可用，请重新选择").tag(id)
                 }
             }
-            Button("试听") { store.previewModeSound(id: selection.wrappedValue ?? fallback, volume: settings.volume) }
+            Button("试听") { store.previewModeSound(id: selection.wrappedValue ?? fallback, volume: settings.volume(for: selectedMode)) }
         }
     }
 }
@@ -121,7 +133,7 @@ struct ModeRestView: View {
     var body: some View {
         if let routine = store.database.focusRoutine {
             VStack(spacing: 18) {
-                Text(routine.suspended ? "REST PAUSED" : routine.phase == .microRest ? "REST YOUR EYES" : routine.phase == .ready ? "READY WHEN YOU ARE" : "TAKE A BREAK")
+                Text(routine.suspended ? "REST PAUSED" : routine.phase == .microRest ? "REST YOUR EYES" : routine.phase == .ready ? "READY WHEN YOU ARE" : (routine.settings.mode == .course ? "CLASS BREAK" : "TAKE A BREAK"))
                     .font(.system(size: 11, weight: .semibold)).tracking(2).foregroundStyle(.secondary)
                 Text(routine.phase == .ready ? "下一轮" : duration(routine.remaining.rounded(.up)))
                     .font(.system(size: 62, weight: .light, design: .rounded)).monospacedDigit()

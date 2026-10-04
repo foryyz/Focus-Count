@@ -9,6 +9,7 @@ func duration(_ seconds: Double) -> String {
 
 struct ContentView: View {
     @StateObject private var store: StudyStore
+    @DirectoryPreference(FocusMilestone.themeKey) private var rewardsTheme = false
     @State private var command = ""
     @State private var showMarkerInput = false
     @State private var subject = ""
@@ -36,68 +37,86 @@ struct ContentView: View {
     @State private var interaction = Date()
     @State private var pointerLocation: CGPoint?
     private var phase: Int { store.isRunning ? 1 : store.database.draft.startedAt == nil ? 0 : 2 }
+    private var showHome: Bool { phase == 0 || store.showingHome }
     private var ink: Color { colorScheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { colorScheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
     private var backdrop: Color { colorScheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
-    private var visible: Bool { chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showSettings || showToday || showModeSettings || showModes || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
+    private var visible: Bool { showHome || chromeVisible || !focusWindow.fullScreen || phase != 1 || showMarkerInput || !command.isEmpty || showSettings || showToday || showModeSettings || showModes || showData || showHistory || showTarget || cancellingTimer || store.error != nil }
     var body: some View {
         GeometryReader { geometry in
             let wide = geometry.size.width > 1000
             VStack(spacing: 0) {
                 HStack {
-                    HStack(spacing: 8) {
-                        Text("🧠").font(.system(size: 16)).accessibilityHidden(true)
-                        Text("FOCUS-COUNT").font(.system(size: 11, weight: .semibold)).tracking(2.5)
-                    }.foregroundStyle(.secondary)
+                    if !showHome {
+                        Button {
+                            store.returnHome(); showMarkerInput = false; commandFocused = false; revealControls()
+                        } label: {
+                            Label("返回", systemImage: "chevron.left").frame(height: 28)
+                        }.help("返回主页并暂停计时").accessibilityLabel("返回主页")
+                    } else {
+                        HStack(spacing: 8) {
+                            Text("🧠").font(.system(size: 16)).accessibilityHidden(true)
+                            Text("FOCUS-COUNT").font(.system(size: 11, weight: .semibold)).tracking(2.5)
+                        }.foregroundStyle(.secondary)
+                    }
                     Spacer()
-                    Button { showHistory = true } label: {
-                        Image(systemName: "list.bullet.rectangle").frame(width: 32, height: 28)
-                    }.help("专注记录").accessibilityLabel("专注记录")
-                    Button { FocusAnalysisWindow.shared.show(store: store); revealControls() } label: {
-                        Image(systemName: "chart.bar.xaxis").frame(width: 32, height: 28)
-                    }.help("专注分析").accessibilityLabel("专注分析")
-                    Button { MarkerWindowController.shared.show(store: store); revealControls() } label: {
-                        Image(systemName: "tag").frame(width: 32, height: 28)
-                    }.help("时间标记").accessibilityLabel("时间标记")
-                    Button { showTarget = true; revealControls() } label: {
-                        Image(systemName: "calendar").frame(width: 32, height: 28)
-                    }.help("目标日期设置").accessibilityLabel("目标日期设置")
-                    Button { showData = true } label: {
-                        Image(systemName: "arrow.up.arrow.down").frame(width: 32, height: 28)
-                    }.help("数据管理").accessibilityLabel("数据管理")
+                    Menu {
+                        Button { showHistory = true; revealControls() } label: {
+                            Label("专注记录", systemImage: "list.bullet.rectangle")
+                        }
+                        Button { FocusAnalysisWindow.shared.show(store: store); revealControls() } label: {
+                            Label("专注分析", systemImage: "chart.bar.xaxis")
+                        }
+                        Button { MarkerWindowController.shared.show(store: store); revealControls() } label: {
+                            Label("时间标记", systemImage: "tag")
+                        }
+                        Button { showTarget = true; revealControls() } label: {
+                            Label("目标日期", systemImage: "calendar")
+                        }
+                    } label: {
+                        Image(systemName: "square.grid.2x2").frame(width: 32, height: 28)
+                    }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                        .help("更多功能").accessibilityLabel("更多功能")
                     Button { showSettings = true; revealControls() } label: {
                         Image(systemName: "gearshape").frame(width: 32, height: 28)
                     }.help("设置").accessibilityLabel("设置")
+                    Button { showData = true; revealControls() } label: {
+                        Image(systemName: "arrow.up.arrow.down").frame(width: 32, height: 28)
+                    }.help("数据管理").accessibilityLabel("数据管理")
                     Button { focusWindow.toggle(); revealControls() } label: {
                         Image(systemName: focusWindow.fullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                             .frame(width: 32, height: 28)
                     }.help(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
                         .accessibilityLabel(focusWindow.fullScreen ? "退出全屏" : "进入全屏")
-                }.buttonStyle(.plain)
+                }.buttonStyle(PearlChromeStyle(enabled: rewardsTheme && showHome, seconds: TodaySummary(database: store.database).seconds))
                     .opacity(visible ? 1 : 0).allowsHitTesting(visible).accessibilityHidden(!visible)
                 Spacer(minLength: 24)
                 Group {
-                    if phase == 0 {
-                        VStack(spacing: min(26, max(18, geometry.size.height * 0.04))) {
+                    if showHome {
+                        VStack(spacing: rewardsTheme ? 12 : min(26, max(18, geometry.size.height * 0.04))) {
                             TodayFocusHero(store: store, fontSize: min(120, max(78, min(geometry.size.width * 0.11, geometry.size.height * 0.20))) * 1.5)
                                 .foregroundStyle(ink)
-                                .padding(.bottom, 10)
-                            HStack {
-                                TextField("这次想专注于什么？（可选）", text: $subject)
-                                    .textFieldStyle(.plain).onSubmit { submitActivity() }.help("填写活动开始专注，或输入 !文字并回车添加标记")
-                                    .accessibilityLabel("本次活动名称，可选")
-                                if !store.subjects.isEmpty {
-                                    Menu { ForEach(store.subjects, id: \.self) { item in Button(item) { subject = item } } }
-                                    label: { Image(systemName: "clock.arrow.circlepath") }
-                                        .menuStyle(.borderlessButton).fixedSize().help("最近活动")
-                                }
-                            }.font(.system(size: wide ? 15 : 14)).padding(.horizontal, 16).padding(.vertical, 13)
-                                .frame(maxWidth: min(400, max(330, geometry.size.width * 0.4)))
-                                .background(ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
-                            Button { submitActivity() } label: {
-                                Label("开始专注", systemImage: "play.fill")
+                                .padding(.bottom, rewardsTheme ? 0 : 10)
+                            if phase == 0 {
+                                HStack {
+                                    TextField("这次想专注于什么？（可选）", text: $subject)
+                                        .textFieldStyle(.plain).onSubmit { submitActivity() }.help("填写活动开始专注，或输入 !文字并回车添加标记")
+                                        .accessibilityLabel("本次活动名称，可选")
+                                    if !store.subjects.isEmpty {
+                                        Menu { ForEach(store.subjects, id: \.self) { item in Button(item) { subject = item } } }
+                                        label: { Image(systemName: "clock.arrow.circlepath") }
+                                            .menuStyle(.borderlessButton).fixedSize().help("最近活动")
+                                    }
+                                }.font(.system(size: wide ? 15 : 14)).padding(.horizontal, 16).padding(.vertical, 13)
+                                    .frame(maxWidth: min(400, max(330, geometry.size.width * 0.4)))
+                                    .background(rewardsTheme ? Color.clear : ink.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+                                    .modifier(PearlInputSurface(seconds: TodaySummary(database: store.database).seconds, enabled: rewardsTheme, isInput: true))
+                            }
+                            Button { if phase == 0 { submitActivity() } else { _ = store.resumeFocus(); revealControls() } } label: {
+                                Label(phase == 0 ? "开始专注" : "恢复专注", systemImage: "play.fill")
                                     .font(.system(size: 17, weight: .semibold))
-                            }.buttonStyle(PrismaticStartStyle()).disabled(store.blocked).keyboardShortcut(.defaultAction)
+                            }.buttonStyle(PrismaticStartStyle(resuming: phase != 0))
+                                .disabled(store.blocked).keyboardShortcut(.defaultAction)
                         }.transition(.opacity)
                     } else if store.isResting {
                         ModeRestView(store: store)
@@ -123,7 +142,7 @@ struct ContentView: View {
                             FocusFlow(running: phase == 1, reduceMotion: reduceMotion, tint: phase == 1 ? .teal : pauseInk)
                                 .frame(maxWidth: wide ? 460 : 300)
                             if let routine = store.database.focusRoutine {
-                                Text("MICRO BREAK MODE · \(Int(ceil(routine.roundRemaining / 60)))min").font(.system(size: 10, weight: .medium)).tracking(1.5).foregroundStyle(Color.accentColor)
+                                Text(routine.settings.mode == .course ? "上课中 · \(Int(ceil(routine.remaining / 60)))min" : "MICRO BREAK MODE · \(Int(ceil(routine.roundRemaining / 60)))min").font(.system(size: 10, weight: .medium)).tracking(1.5).foregroundStyle(Color.accentColor)
                             }
                             Text(phase == 1 ? "Stay with this moment. 🌊" : "Take a breath. Come back when you’re ready. 🍃")
                                 .font(.system(size: 13)).foregroundStyle(.secondary)
@@ -131,7 +150,7 @@ struct ContentView: View {
                     }
                 }.frame(maxWidth: .infinity)
                 Spacer(minLength: 24)
-                if phase != 0 {
+                if !showHome {
                     VStack(spacing: 12) {
                         if showMarkerInput {
                             TextField("!文字 标记，例如 !sad", text: $command)
@@ -164,10 +183,10 @@ struct ContentView: View {
                 if !hint.isEmpty { Text(hint).font(.caption).foregroundStyle(.secondary).padding(.top, 10) }
                 if let error = store.error { Text(error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(.top, 8) }
             }
-            .padding(.horizontal, wide ? 64 : 32).padding(.top, 22).padding(.bottom, phase == 0 ? 60 : 24)
+            .padding(.horizontal, wide ? 64 : 32).padding(.top, 22).padding(.bottom, showHome ? 60 : 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(backdrop.ignoresSafeArea())
             .background(FocusWindowReader(controller: focusWindow))
+
             .overlay(alignment: .bottomLeading) {
                 Group {
                     Button { showToday.toggle(); revealControls() } label: {
@@ -184,7 +203,7 @@ struct ContentView: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if phase == 0 {
+                if showHome {
                     TargetCountdownRow(store: targetCountdown) { showTarget = true }
                         .frame(maxWidth: max(240, geometry.size.width - 180))
                         .frame(height: 34)
@@ -195,7 +214,7 @@ struct ContentView: View {
                 Button { showModes.toggle(); revealControls() } label: {
                     Image(systemName: store.modeSettings.mode.symbol)
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(store.modeSettings.mode == .microBreak ? Color.teal : ink.opacity(0.65))
+                        .foregroundStyle(store.modeSettings.mode != .standard ? Color.teal : ink.opacity(0.65))
                         .frame(width: 34, height: 34)
                         .background(ink.opacity(0.045), in: Circle())
                         .overlay(Circle().strokeBorder(ink.opacity(0.09), lineWidth: 1))
@@ -218,14 +237,18 @@ struct ContentView: View {
                 }
             }
         }
-        .frame(minWidth: 720, minHeight: phase == 0 ? 440 : 520)
+        .modifier(MilestoneHomeEffect(seconds: TodaySummary(database: store.database).seconds,
+                                      enabled: rewardsTheme && showHome, backdrop: backdrop,
+                                      dailySeconds: { TodaySummary(database: store.database, now: $0).seconds }))
+        .frame(minWidth: 720, minHeight: showHome ? 440 : 520)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: phase)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: showHome)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: visible)
         .onChange(of: focusWindow.fullScreen) { _ in revealControls() }
         .onChange(of: phase) { _ in showToday = false; revealControls() }
         .onChange(of: command) { _ in revealControls() }
         .task(id: interaction) {
-            guard focusWindow.fullScreen, phase == 1 else { return }
+            guard focusWindow.fullScreen, phase == 1, !showHome else { return }
             do { try await Task.sleep(for: .seconds(4)) } catch { return }
             chromeVisible = false
         }

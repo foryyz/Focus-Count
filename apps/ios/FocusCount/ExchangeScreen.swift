@@ -15,8 +15,6 @@ struct ExchangeScreen: View {
     var initialImport: Database? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var syncTimer = false
-    @AppStorage(SyncPreferences.soundsKey) private var syncSounds = false
-    @AppStorage(SyncPreferences.parametersKey) private var syncParameters = false
     @State private var importing = false
     @State private var exporting = false
     @State private var document = JSONDocument(data: Data())
@@ -37,17 +35,17 @@ struct ExchangeScreen: View {
                     Section("请确认导入 · 尚未写入") {
                         Text(filename).font(.headline)
                         Text(ExchangePreview.source(pending)).font(.footnote).foregroundStyle(.secondary)
-                        ForEach(store.importPreview(pending, syncParameters: syncParameters, syncSounds: syncSounds), id: \.self) { Text($0) }
+                        ForEach(store.importPreview(pending, syncParameters: true, syncSounds: true), id: \.self) { Text($0) }
                         Text(ExchangePreview.rules).font(.footnote).foregroundStyle(.secondary)
                         if let timer = pending.timerTransfer {
                             Toggle("同步计时状态：\(timer.status)", isOn: $syncTimer)
                             if syncTimer { Text("替换本机计时并接续已过时间；原设备不会自动停止。") .font(.footnote).foregroundStyle(.orange) }
-                            if syncTimer && !syncParameters { Text("本轮按原节奏接续，下轮沿用本机参数。").font(.caption).foregroundStyle(.secondary) }
+
                         }
                         Button {
-                            let changes = store.importPreview(pending, syncParameters: syncParameters, syncSounds: syncSounds)
-                            if store.importRecords(pending, syncTimer: syncTimer, syncSounds: syncSounds, syncParameters: syncParameters) {
-                                message = (["合并完成，已按所选项目同步。"] + changes + ["本次备份可在历史版本查看。"]).joined(separator: "\n")
+                            let changes = store.importPreview(pending, syncParameters: true, syncSounds: true)
+                            if store.importRecords(pending, syncTimer: syncTimer) {
+                                message = (["合并完成，已按文件内容同步。"] + changes + ["本次备份可在历史版本查看。"]).joined(separator: "\n")
                                 self.pending = nil
                                 showResult = true
                             } else { failure = store.error ?? "导入未完成，请重试。" }
@@ -69,7 +67,7 @@ struct ExchangeScreen: View {
                         do { document = JSONDocument(data: try store.export()); exporting = true }
                         catch { failure = error.localizedDescription }
                     } label: { Label("导出 JSON", systemImage: "square.and.arrow.up") }.disabled(store.blocked)
-                } footer: { Text("交换记录、标记与个性化设置。提示音与模式参数按“设置 → 同步设置”执行；计时可在本页选择。") }
+                } footer: { Text("导出内容由“设置 → 同步设置”决定。导入按文件中包含的内容合并；接续计时需在本页单独确认。") }
                 Section {
                     Button { showVersions = true } label: { Label("历史版本与恢复", systemImage: "clock.arrow.circlepath") }
                 } footer: { Text("查看历次导入备份和记录旧修改，不重复计入统计。") }
@@ -92,8 +90,9 @@ struct ExchangeScreen: View {
                     reading = true
                     Task {
                         do {
-                            let data = try await Task.detached { try PhoneImportFile.read(url) }.value
-                            pending = try RecordExchange.decode(data)
+                            pending = try await Task.detached(priority: .userInitiated) {
+                                try RecordExchange.decode(ExchangeFileReader.read(url))
+                            }.value
                             syncTimer = false
                             failure = nil; message = nil
                         } catch {

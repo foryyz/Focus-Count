@@ -15,6 +15,7 @@ import FocusCountCore
 
 struct TimerScreen: View {
     @ObservedObject var store: PhoneStore
+    @AppStorage(FocusMilestone.themeKey) private var rewardsTheme = false
     @State private var history = false
     @State private var exchange = false
     @State private var today = false
@@ -51,6 +52,7 @@ struct TimerScreen: View {
     @State private var encouragement = Int.random(in: 0..<5)
     private var running: Bool { store.isRunning }
     private var idle: Bool { store.state.clock.startedAt == nil }
+    private var showHome: Bool { idle || store.showingHome }
     private var ink: Color { scheme == .dark ? Color(red: 0.92, green: 0.94, blue: 0.95) : Color(red: 0.12, green: 0.16, blue: 0.20) }
     private var pauseInk: Color { scheme == .dark ? Color(red: 0.91, green: 0.72, blue: 0.43) : Color(red: 0.53, green: 0.34, blue: 0.13) }
     private var backdrop: Color { scheme == .dark ? Color(red: 0.065, green: 0.08, blue: 0.10) : Color(red: 0.975, green: 0.97, blue: 0.955) }
@@ -60,11 +62,11 @@ struct TimerScreen: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         Spacer(minLength: 24)
-                        if idle { welcome }
+                        if showHome { welcome }
                         else if let plan = store.state.routine, plan.phase != .focus { PhoneRestView(store: store) }
                         else { timer(width: geometry.size.width) }
                         Spacer(minLength: 24)
-                        if !idle { controls }
+                        if !showHome { controls }
                         if !message.isEmpty {
                             Text(message).font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                         }
@@ -75,7 +77,6 @@ struct TimerScreen: View {
                         .frame(minHeight: geometry.size.height)
                 }.scrollIndicators(.hidden).scrollDismissesKeyboard(.interactively)
             }
-            .background(backdrop.ignoresSafeArea())
             .navigationTitle("").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if #available(iOS 26.0, *) {
@@ -84,23 +85,28 @@ struct TimerScreen: View {
                     brandItem
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    if !immersive {
-                        Menu {
+                    Menu {
+                        if !immersive {
                             Button { history = true } label: { Label("专注记录", systemImage: "list.bullet.rectangle") }
                             Button { analysis = true } label: { Label("专注分析", systemImage: "chart.bar.xaxis") }
                             Button { markers = true } label: { Label("时间标记", systemImage: "tag") }
                             Button { targetSettings = true } label: { Label("目标日期", systemImage: "calendar") }
-                            Button { exchange = true } label: { Label("数据管理", systemImage: "arrow.up.arrow.down") }
-                        } label: { Image(systemName: "square.grid.2x2") }.accessibilityLabel("记录、分析与设置")
-                    }
+                            Divider()
+                        }
+                        Button { immersive.toggle(); activityFocused = false; markerFocused = false } label: {
+                            Label(immersive ? "退出沉浸模式" : "沉浸模式", systemImage: immersive ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        }
+                    } label: { Image(systemName: "square.grid.2x2").padding(5)
+                        .modifier(PearlInputSurface(seconds: store.today().seconds, enabled: rewardsTheme && showHome)) }.accessibilityLabel("更多功能")
                     if !immersive {
-                        Button { settings = true } label: { Image(systemName: "gearshape") }.accessibilityLabel("设置")
+                        Button { exchange = true } label: { Image(systemName: "arrow.up.arrow.down").padding(5)
+                            .modifier(PearlInputSurface(seconds: store.today().seconds, enabled: rewardsTheme && showHome)) }.accessibilityLabel("数据传输")
+                        Button { settings = true } label: { Image(systemName: "gearshape").padding(5)
+                            .modifier(PearlInputSurface(seconds: store.today().seconds, enabled: rewardsTheme && showHome)) }.accessibilityLabel("设置")
                     }
-                    Button { immersive.toggle(); activityFocused = false; markerFocused = false } label: {
-                        Image(systemName: immersive ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    }.accessibilityLabel(immersive ? "退出沉浸模式" : "沉浸模式")
                 }
             }
+
             .safeAreaInset(edge: .bottom, alignment: .leading) {
                 if !immersive {
                     HStack(spacing: 12) {
@@ -109,20 +115,24 @@ struct TimerScreen: View {
                                 .background(ink.opacity(0.05), in: Circle())
                         }.buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("今日概览")
                         Group {
-                            if idle { PhoneCountdownFooter(store: targetCountdown) { targetSettings = true } }
+                            if showHome { PhoneCountdownFooter(store: targetCountdown) { targetSettings = true } }
                             else { Spacer() }
                         }.frame(maxWidth: .infinity)
                         Button { modes = true } label: {
                             Image(systemName: store.modeSettings.mode.symbol).frame(width: 44, height: 44)
                                 .background(ink.opacity(0.05), in: Circle())
-                        }.buttonStyle(.plain).foregroundStyle(store.modeSettings.mode == .microBreak ? Color.teal : .secondary)
+                        }.buttonStyle(.plain).foregroundStyle(store.modeSettings.mode != .standard ? Color.teal : .secondary)
                             .accessibilityLabel("专注模式：" + store.modeSettings.mode.title)
                     }.padding(.horizontal, 24).padding(.bottom, 8)
 
                 }
             }
+            .modifier(MilestoneHomeEffect(seconds: store.today().seconds, enabled: rewardsTheme && showHome,
+                                          backdrop: backdrop,
+                                          dailySeconds: { store.today(at: $0).seconds }))
             .statusBarHidden(immersive)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: running)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: showHome)
             .onChange(of: idle) { _, value in
                 if value {
                     subject = ""; markerInput = false; command = ""
@@ -161,7 +171,12 @@ struct TimerScreen: View {
     }
     private var brandItem: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
-            if !immersive {
+            if !showHome {
+                Button {
+                    store.returnHome(); immersive = false; activityFocused = false; markerFocused = false; markerInput = false
+                } label: { Label("返回", systemImage: "chevron.left").frame(minHeight: 44) }
+                    .accessibilityLabel("返回主页").accessibilityHint("返回主页并暂停计时")
+            } else if !immersive {
                 (Text("🧠 ").font(.system(size: 20))
                  + Text("foryyz").font(.system(size: 14, weight: .medium, design: .rounded)))
                     .fixedSize(horizontal: true, vertical: false)
@@ -174,38 +189,46 @@ struct TimerScreen: View {
         VStack(spacing: 16) {
             TimelineView(.periodic(from: .now, by: 60)) { context in
                 let minutes = Int(store.today(at: context.date).seconds) / 60
-                VStack(spacing: 12) {
-                    VStack(spacing: 4) {
-                        (Text("Today’s ").foregroundColor(.secondary)
-                         + Text("focus").fontWeight(.semibold).foregroundColor(ink))
-                            .font(.system(size: 32.76, weight: .regular, design: .rounded))
-                            .lineLimit(1).minimumScaleFactor(0.8)
-                        (Text("\(minutes / 60)H").font(.system(size: 64, weight: .medium, design: .rounded)).foregroundColor(ink)
-                         + Text("  \(minutes % 60)m").font(.system(size: 30, weight: .regular, design: .rounded)).foregroundColor(.secondary))
-                            .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
-                            .accessibilityLabel("今日已保存专注时长，\(minutes / 60) 小时 \(minutes % 60) 分钟")
+                if rewardsTheme {
+                    MilestoneHero(seconds: Double(minutes * 60), fontSize: 64)
+                } else {
+                    VStack(spacing: 12) {
+                        VStack(spacing: 4) {
+                            (Text("Today’s ").foregroundColor(.secondary)
+                             + Text("focus").fontWeight(.semibold).foregroundColor(ink))
+                                .font(.system(size: 32.76, weight: .regular, design: .rounded))
+                                .lineLimit(1).minimumScaleFactor(0.8)
+                            (Text("\(minutes / 60)H").font(.system(size: 64, weight: .medium, design: .rounded)).foregroundColor(ink)
+                             + Text("  \(minutes % 60)m").font(.system(size: 30, weight: .regular, design: .rounded)).foregroundColor(.secondary))
+                                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                                .accessibilityLabel("今日已保存专注时长，\(minutes / 60) 小时 \(minutes % 60) 分钟")
+                        }
+                        Text(Self.greetings[encouragement].1).font(.footnote).foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
                     }
-                    Text(Self.greetings[encouragement].1).font(.footnote).foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
                 }
             }
-            HStack {
-                TextField("这次想专注于什么？（可选）", text: $subject)
-                    .font(.body).focused($activityFocused).submitLabel(.go)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled()
-                    .onSubmit { startOrMark() }
-                    .accessibilityHint("输入活动名称开始专注，或输入 !文字添加标记")
-                if !store.subjects.isEmpty {
-                    Menu {
-                        ForEach(store.subjects, id: \.self) { name in Button(name) { subject = name } }
-                    } label: { Image(systemName: "clock.arrow.circlepath").frame(minWidth: 36, minHeight: 44) }
-                        .accessibilityLabel("最近活动")
-                }
-            }.padding(.horizontal, 14).frame(minHeight: 52)
-                .background(ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
-            Button { startOrMark() } label: {
-                Label("开始专注", systemImage: "play.fill").font(.headline)
-            }.buttonStyle(PrismaticStartStyle()).disabled(store.blocked).padding(.top, 12)
+            if idle {
+                HStack {
+                    TextField("这次想专注于什么？（可选）", text: $subject)
+                        .font(.body).focused($activityFocused).submitLabel(.go)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .onSubmit { startOrMark() }
+                        .accessibilityHint("输入活动名称开始专注，或输入 !文字添加标记")
+                    if !store.subjects.isEmpty {
+                        Menu {
+                            ForEach(store.subjects, id: \.self) { name in Button(name) { subject = name } }
+                        } label: { Image(systemName: "clock.arrow.circlepath").frame(minWidth: 36, minHeight: 44) }
+                            .accessibilityLabel("最近活动")
+                    }
+                }.padding(.horizontal, 14).frame(minHeight: 52)
+                    .background(rewardsTheme ? Color.clear : ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+                    .modifier(PearlInputSurface(seconds: store.today().seconds, enabled: rewardsTheme, isInput: true))
+            }
+            Button { if idle { startOrMark() } else { _ = store.resumeFocus() } } label: {
+                Label(idle ? "开始专注" : "恢复专注", systemImage: "play.fill").font(.headline)
+            }.buttonStyle(PrismaticStartStyle(resuming: !idle))
+                .disabled(store.blocked).padding(.top, 12)
         }
     }
     private func timer(width: CGFloat) -> some View {
@@ -236,7 +259,7 @@ struct TimerScreen: View {
             FocusFlow(running: running && scenePhase == .active, reduceMotion: reduceMotion, tint: running ? .teal : pauseInk)
                 .frame(maxWidth: 300)
             if let plan = store.state.routine {
-                Text("MICRO BREAK MODE · \(Int(ceil(plan.roundRemaining / 60)))min")
+                Text(plan.settings.mode == .course ? "上课中 · \(Int(ceil(plan.remaining / 60)))min" : "MICRO BREAK MODE · \(Int(ceil(plan.roundRemaining / 60)))min")
                     .font(.caption2.weight(.medium)).tracking(1.5).foregroundStyle(.teal)
             }
             Text(running ? "Stay with this moment. 🌊" : "Take a breath. Come back when you’re ready. 🍃")
@@ -309,17 +332,27 @@ struct FocusFlow: View {
 
 /// A compact foil-like finish; the label stays still and readable as light passes behind it.
 struct PrismaticStartStyle: ButtonStyle {
+    var resuming = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.scenePhase) private var scenePhase
     @State private var hovering = false
-    private let colors = [
-        Color(red: 0.12, green: 0.48, blue: 0.57),
-        Color(red: 0.25, green: 0.39, blue: 0.75),
-        Color(red: 0.53, green: 0.32, blue: 0.72),
-        Color(red: 0.69, green: 0.32, blue: 0.49),
-        Color(red: 0.64, green: 0.43, blue: 0.20)
-    ]
+    private var colors: [Color] {
+        if resuming {
+            return [Color(red: 0.78, green: 0.12, blue: 0.26),
+                    Color(red: 0.08, green: 0.50, blue: 0.30),
+                    Color(red: 0.18, green: 0.32, blue: 0.84),
+                    Color(red: 0.78, green: 0.12, blue: 0.26)]
+        }
+        return [
+            Color(red: 0.02, green: 0.58, blue: 0.76),
+            Color(red: 0.23, green: 0.32, blue: 0.94),
+            Color(red: 0.57, green: 0.20, blue: 0.88),
+            Color(red: 0.90, green: 0.18, blue: 0.52),
+            Color(red: 0.96, green: 0.47, blue: 0.26),
+            Color(red: 0.57, green: 0.20, blue: 0.88)
+        ]
+    }
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.horizontal, 32).padding(.vertical, 15)
@@ -327,11 +360,35 @@ struct PrismaticStartStyle: ButtonStyle {
             .background {
                 TimelineView(.animation(minimumInterval: 1.0 / 24, paused: reduceMotion || !isEnabled || scenePhase != .active)) { context in
                     let progress = reduceMotion || !isEnabled ? 0.5 : context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 7) / 7
-                    Capsule().fill(LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing))
+                    let angle = progress * 2 * Double.pi
+                    let start = resuming ? UnitPoint(x: 0.5 + 0.5 * cos(angle), y: 0.5 + 0.5 * sin(angle)) : UnitPoint(x: 0.5 + 0.5 * cos(angle), y: 0.5 + 0.35 * sin(angle))
+                    let end = resuming ? UnitPoint(x: 0.5 - 0.5 * cos(angle), y: 0.5 - 0.5 * sin(angle)) : UnitPoint(x: 0.5 - 0.5 * cos(angle), y: 0.5 - 0.35 * sin(angle))
+                    Capsule().fill(LinearGradient(colors: colors, startPoint: start, endPoint: end))
+                        .overlay {
+                            if !resuming {
+                                GeometryReader { geometry in
+                                    Ellipse()
+                                        .fill(Color.cyan.opacity(0.55))
+                                        .frame(width: geometry.size.width * 0.65, height: geometry.size.height * 1.5)
+                                        .blur(radius: 18)
+                                        .offset(x: geometry.size.width * (0.15 + 0.3 * sin(angle)), y: -geometry.size.height * 0.75)
+                                    Ellipse()
+                                        .fill(Color.pink.opacity(0.5))
+                                        .frame(width: geometry.size.width * 0.55, height: geometry.size.height)
+                                        .blur(radius: 16)
+                                        .offset(x: geometry.size.width * (0.35 - 0.3 * sin(angle)), y: geometry.size.height * 0.55)
+                                }.clipShape(Capsule())
+                            }
+                        }
+                        .overlay {
+                            if !resuming {
+                                Capsule().fill(LinearGradient(colors: [.white.opacity(0.24), .clear, .black.opacity(0.12)], startPoint: .top, endPoint: .bottom))
+                            }
+                        }
                         .overlay {
                             GeometryReader { geometry in
                                 Rectangle()
-                                    .fill(LinearGradient(colors: [.clear, .white.opacity(0.28), .clear], startPoint: .leading, endPoint: .trailing))
+                                    .fill(LinearGradient(colors: [.clear, .white.opacity(resuming ? 0.28 : 0.4), .clear], startPoint: .leading, endPoint: .trailing))
                                     .frame(width: geometry.size.width * 0.55)
                                     .rotationEffect(.degrees(20))
                                     .offset(x: geometry.size.width * (progress * 2.2 - 0.7))
@@ -341,7 +398,8 @@ struct PrismaticStartStyle: ButtonStyle {
             }
             .overlay(Capsule().strokeBorder(LinearGradient(colors: [.white.opacity(0.8), .white.opacity(0.15), .white.opacity(0.45)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1))
             .shadow(color: colors[2].opacity(isEnabled ? (hovering ? 0.28 : 0.17) : 0), radius: hovering ? 13 : 9, y: 4)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .shadow(color: resuming || !isEnabled ? .clear : colors[0].opacity(hovering ? 0.3 : 0.18), radius: hovering ? 17 : 12, x: -5, y: 3)
+            .scaleEffect(configuration.isPressed ? 0.97 : (hovering && !resuming && isEnabled ? 1.025 : 1))
             .opacity(isEnabled ? 1 : 0.45)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: configuration.isPressed)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: hovering)

@@ -1,5 +1,10 @@
 // !$*UTF8*$!
-{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
 757E8A7AEAAF22C00F2AA795 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FocusCount/PhoneSounds.swift"; sourceTree = SOURCE_ROOT; };
 2BC6722D56C571F9E7E62C58 = {isa = PBXBuildFile; fileRef = 757E8A7AEAAF22C00F2AA795; };
 808B3FE038D9B5962194891C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FocusCount/PhoneRoutine.swift"; sourceTree = SOURCE_ROOT; };
@@ -9,104 +14,435 @@ FF22BF3A31B26FC9329499FB = {isa = PBXBuildFile; fileRef = 986BC3EBB948B64671E6AB
 9ABDA3E5A0A6B8C296DEF112 = {isa = PBXFileReference; lastKnownFileType = folder; path = "FocusCount/Sounds"; sourceTree = SOURCE_ROOT; };
 7E3E285466CE76542D429F5F = {isa = PBXBuildFile; fileRef = 9ABDA3E5A0A6B8C296DEF112; };
 
-38E3758EE39252BA51EF8D58 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExchangeScreen.swift; sourceTree = "<group>"; };
-11FD2D9475253CFF619F994E = { isa = PBXBuildFile; fileRef = 38E3758EE39252BA51EF8D58; };
-B03F0C787FACE595D91C0E80 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCountApp.swift; sourceTree = "<group>"; };
-ED59C1983025EEC0E0D68A4A = { isa = PBXBuildFile; fileRef = B03F0C787FACE595D91C0E80; };
-4F046974B009B7974276501D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneDashboard.swift; sourceTree = "<group>"; };
-C3993E411B0AA12165C213E4 = { isa = PBXBuildFile; fileRef = 4F046974B009B7974276501D; };
-0C9A4B5594D8E6CC8382FA2F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneFocusAnalysis.swift; sourceTree = "<group>"; };
-14EB2E2E400D6925FAE437CD = { isa = PBXBuildFile; fileRef = 0C9A4B5594D8E6CC8382FA2F; };
-1FD351825BC66ADD701F9AED = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHistory.swift; sourceTree = "<group>"; };
-0DE88444DF3B507126DAB721 = { isa = PBXBuildFile; fileRef = 1FD351825BC66ADD701F9AED; };
-7276021261C77693307B4B10 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneMarkerScreen.swift; sourceTree = "<group>"; };
-A71534FF973A61BE66732056 = { isa = PBXBuildFile; fileRef = 7276021261C77693307B4B10; };
-4CF628851D5981C12303F952 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneStore.swift; sourceTree = "<group>"; };
-91D0BAA289A386CA7C83A845 = { isa = PBXBuildFile; fileRef = 4CF628851D5981C12303F952; };
-1FBFFC812F489BBEEC3C23C5 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordEditor.swift; sourceTree = "<group>"; };
-F8CEA72177241F5AEDE59219 = { isa = PBXBuildFile; fileRef = 1FBFFC812F489BBEEC3C23C5; };
-C5B7B56E09DDB2BDA3D9C695 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/EventAnalytics.swift"; sourceTree = SOURCE_ROOT; };
-6A8E78921E34AFD7643CE98B = { isa = PBXBuildFile; fileRef = C5B7B56E09DDB2BDA3D9C695; };
-A9BA1846E5ECB249B313F6D4 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/MarkerOverviewData.swift"; sourceTree = SOURCE_ROOT; };
-51764CEC2FB9DE0A56F28D6A = { isa = PBXBuildFile; fileRef = A9BA1846E5ECB249B313F6D4; };
-F16A653133EA9D5A818562D0 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/MarkerPointLayout.swift"; sourceTree = SOURCE_ROOT; };
-57013F9874B04F6B359608F7 = { isa = PBXBuildFile; fileRef = F16A653133EA9D5A818562D0; };
-AC9906175EE761E7520180B8 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/MarkerColors.swift"; sourceTree = SOURCE_ROOT; };
-4B7D61EA01D48EA1F3121524 = { isa = PBXBuildFile; fileRef = AC9906175EE761E7520180B8; };
-A161DFCA413436CE7A4C4413 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/MarkerPointTimeline.swift"; sourceTree = SOURCE_ROOT; };
-338DA43EBDB79B19B7BE2F49 = { isa = PBXBuildFile; fileRef = A161DFCA413436CE7A4C4413; };
-76A643C8D3800FC1E2F0BCD6 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/MarkerFrequencyOverview.swift"; sourceTree = SOURCE_ROOT; };
-3A137205DA471951903AB749 = { isa = PBXBuildFile; fileRef = 76A643C8D3800FC1E2F0BCD6; };
-1B8EC373E63E8CCBBD8649CC = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/MarkerRangeNavigator.swift"; sourceTree = SOURCE_ROOT; };
-A2541BA0DB94EF71AAB6D62B = { isa = PBXBuildFile; fileRef = 1B8EC373E63E8CCBBD8649CC; };
-21EEA37C6D5223870524881E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/MarkerTimelineChart.swift"; sourceTree = SOURCE_ROOT; };
-C6059474EFAE53572CAEFC66 = { isa = PBXBuildFile; fileRef = 21EEA37C6D5223870524881E; };
-9B6DD69386647F9D1DCEA451 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/FocusAnalysisData.swift"; sourceTree = SOURCE_ROOT; };
-97F751A58DCDBA4A208A8737 = { isa = PBXBuildFile; fileRef = 9B6DD69386647F9D1DCEA451; };
-0B12661EFFF497D54F5888B2 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/FocusAppearanceStore.swift"; sourceTree = SOURCE_ROOT; };
-01C066DEA90FE2F95BA8B6D3 = { isa = PBXBuildFile; fileRef = 0B12661EFFF497D54F5888B2; };
-04D6208F2BB46765AE78BB4B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/FocusShareChart.swift"; sourceTree = SOURCE_ROOT; };
-42D242F4A3AF6868CE6A0B10 = { isa = PBXBuildFile; fileRef = 04D6208F2BB46765AE78BB4B; };
-8EE9CBF423C29FC9AA8D91FA = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/TodaySummaryView.swift"; sourceTree = SOURCE_ROOT; };
-482D9637CFDEE1A69A472815 = { isa = PBXBuildFile; fileRef = 8EE9CBF423C29FC9AA8D91FA; };
-50C3F527088C84E56E071A56 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/TargetCountdown.swift"; sourceTree = SOURCE_ROOT; };
-E3D6449356DFCE4E9BBEA52E = { isa = PBXBuildFile; fileRef = 50C3F527088C84E56E071A56; };
-59BD0A3FF43B32849B319E64 = { isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-05FAC94380A70241F23780E7 = { isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-CF8A4D27E1C506A7C75A76BE = { isa = PBXBuildFile; fileRef = 05FAC94380A70241F23780E7; };
-38A007151ABE87CC01A5B6E9 = { isa = PBXFileReference; explicitFileType = wrapper.application; path = FocusCount.app; sourceTree = BUILT_PRODUCTS_DIR; };
-582681C2EAE02B3F3D399C0C = { isa = XCLocalSwiftPackageReference; relativePath = ../../packages/FocusCountCore; };
-E9FAD0C6CD43534327C0AF90 = { isa = XCSwiftPackageProductDependency; package = 582681C2EAE02B3F3D399C0C; productName = FocusCountCore; };
-4F0AA52D656A3D75867F784B = { isa = PBXBuildFile; productRef = E9FAD0C6CD43534327C0AF90; };
-482182478A3ECD4745BEA917 = { isa = PBXGroup; children = (
-757E8A7AEAAF22C00F2AA795,808B3FE038D9B5962194891C,986BC3EBB948B64671E6ABA6,9ABDA3E5A0A6B8C296DEF112,38E3758EE39252BA51EF8D58,B03F0C787FACE595D91C0E80,4F046974B009B7974276501D,0C9A4B5594D8E6CC8382FA2F,1FD351825BC66ADD701F9AED,7276021261C77693307B4B10,4CF628851D5981C12303F952,1FBFFC812F489BBEEC3C23C5,C5B7B56E09DDB2BDA3D9C695,A9BA1846E5ECB249B313F6D4,F16A653133EA9D5A818562D0,AC9906175EE761E7520180B8,A161DFCA413436CE7A4C4413,76A643C8D3800FC1E2F0BCD6,1B8EC373E63E8CCBBD8649CC,21EEA37C6D5223870524881E,9B6DD69386647F9D1DCEA451,0B12661EFFF497D54F5888B2,04D6208F2BB46765AE78BB4B,8EE9CBF423C29FC9AA8D91FA,50C3F527088C84E56E071A56,59BD0A3FF43B32849B319E64,05FAC94380A70241F23780E7,); path = FocusCount; sourceTree = "<group>"; };
-FBDC4F23F93125BBEEAE800C = { isa = PBXGroup; children = (38A007151ABE87CC01A5B6E9,B7480EC88B7F22D0A4757273,); name = Products; sourceTree = "<group>"; };
-B28B7AF69320201D1CF206EB = { isa = PBXGroup; children = (482182478A3ECD4745BEA917,E05FCB614AB36FDEE72EE1F2,FBDC4F23F93125BBEEAE800C,); sourceTree = "<group>"; };
-BCE16DD0260827ECF338C787 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
-2BC6722D56C571F9E7E62C58,BD033719F7F04A98C92622DB,FF22BF3A31B26FC9329499FB,11FD2D9475253CFF619F994E,ED59C1983025EEC0E0D68A4A,C3993E411B0AA12165C213E4,14EB2E2E400D6925FAE437CD,0DE88444DF3B507126DAB721,A71534FF973A61BE66732056,91D0BAA289A386CA7C83A845,F8CEA72177241F5AEDE59219,6A8E78921E34AFD7643CE98B,51764CEC2FB9DE0A56F28D6A,57013F9874B04F6B359608F7,4B7D61EA01D48EA1F3121524,338DA43EBDB79B19B7BE2F49,3A137205DA471951903AB749,A2541BA0DB94EF71AAB6D62B,C6059474EFAE53572CAEFC66,97F751A58DCDBA4A208A8737,01C066DEA90FE2F95BA8B6D3,42D242F4A3AF6868CE6A0B10,482D9637CFDEE1A69A472815,E3D6449356DFCE4E9BBEA52E,); runOnlyForDeploymentPostprocessing = 0; };
-7561BFB015D8F536760CB671 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (4F0AA52D656A3D75867F784B,); runOnlyForDeploymentPostprocessing = 0; };
-0189424A5A60FED329FA868E = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (
-7E3E285466CE76542D429F5F,CF8A4D27E1C506A7C75A76BE,); runOnlyForDeploymentPostprocessing = 0; };
-89E1FD6268CC0F221A2BE178 = { isa = XCBuildConfiguration; name = Debug; buildSettings = { CLANG_ENABLE_MODULES = YES; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; }; };
-7082CC0B6FC1282FCEABD07A = { isa = XCBuildConfiguration; name = Debug; buildSettings = {
- ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; PRODUCT_NAME = FocusCount; PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios;
- GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = FocusCount/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = FocusCount;
- INFOPLIST_KEY_UIFileSharingEnabled = YES; INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
- INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
- INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
- TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
- SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
- CURRENT_PROJECT_VERSION = 14; MARKETING_VERSION = 1.5.7; CODE_SIGN_STYLE = Automatic;
- ENABLE_DEBUG_DYLIB = NO; ENABLE_TESTABILITY = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone";
- SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG";
- }; };
-E6DE6C99132752C914FEF632 = { isa = XCBuildConfiguration; name = Release; buildSettings = { CLANG_ENABLE_MODULES = YES; ONLY_ACTIVE_ARCH = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SWIFT_VERSION = 5.0; }; };
-639A7CA24D39909E713B47F7 = { isa = XCBuildConfiguration; name = Release; buildSettings = {
- ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; PRODUCT_NAME = FocusCount; PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios;
- GENERATE_INFOPLIST_FILE = YES; INFOPLIST_FILE = FocusCount/Info.plist; INFOPLIST_KEY_CFBundleDisplayName = FocusCount;
- INFOPLIST_KEY_UIFileSharingEnabled = YES; INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
- INFOPLIST_KEY_UILaunchScreen_Generation = YES; INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
- INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
- TARGETED_DEVICE_FAMILY = 1; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
- SUPPORTS_MACCATALYST = NO; SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
- CURRENT_PROJECT_VERSION = 14; MARKETING_VERSION = 1.5.7; CODE_SIGN_STYLE = Automatic;
- ENABLE_DEBUG_DYLIB = NO; ENABLE_TESTABILITY = YES; SWIFT_EMIT_LOC_STRINGS = YES; SWIFT_OPTIMIZATION_LEVEL = "-O";
- SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
- }; };
-862894B703A6DEDF96A9DD6C = { isa = XCConfigurationList; buildConfigurations = (89E1FD6268CC0F221A2BE178,E6DE6C99132752C914FEF632,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-C57128001CE614BF8549D6BB = { isa = XCConfigurationList; buildConfigurations = (7082CC0B6FC1282FCEABD07A,639A7CA24D39909E713B47F7,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-0E8A3AD980EC179856012B7E = { isa = PBXNativeTarget; buildConfigurationList = C57128001CE614BF8549D6BB; buildPhases = (BCE16DD0260827ECF338C787,7561BFB015D8F536760CB671,0189424A5A60FED329FA868E,); buildRules = (); dependencies = (); name = FocusCount; packageProductDependencies = (E9FAD0C6CD43534327C0AF90,); productName = FocusCount; productReference = 38A007151ABE87CC01A5B6E9; productType = "com.apple.product-type.application"; };
-E05FCB614AB36FDEE72EE1F2 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/PhoneStoreTests.swift; sourceTree = "<group>"; };
-80FAC02A0BD5812E2A00F339 = { isa = PBXBuildFile; fileRef = E05FCB614AB36FDEE72EE1F2; };
-DF5B192FE80F93ACAF2EA928 = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (80FAC02A0BD5812E2A00F339,); runOnlyForDeploymentPostprocessing = 0; };
-B7480EC88B7F22D0A4757273 = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = FocusCountTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-D799BAE6088A90139B415FCC = { isa = PBXContainerItemProxy; containerPortal = 98F54143AB4E86B28C3AFEE0; proxyType = 1; remoteGlobalIDString = 0E8A3AD980EC179856012B7E; remoteInfo = FocusCount; };
-B6EBBA31D46E8F71AE1B6924 = { isa = PBXTargetDependency; target = 0E8A3AD980EC179856012B7E; targetProxy = D799BAE6088A90139B415FCC; };
-0F3D67935A4F199E058A017A = { isa = XCBuildConfiguration; name = Debug; buildSettings = { GENERATE_INFOPLIST_FILE = YES; PRODUCT_NAME = FocusCountTests; PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios.tests; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FocusCount.app/FocusCount"; BUNDLE_LOADER = "$(TEST_HOST)"; TARGETED_DEVICE_FAMILY = 1; CODE_SIGN_STYLE = Automatic; SWIFT_VERSION = 5.0; }; };
-20B70E15FDC36C625E57F658 = { isa = XCBuildConfiguration; name = Release; buildSettings = { GENERATE_INFOPLIST_FILE = YES; PRODUCT_NAME = FocusCountTests; PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios.tests; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FocusCount.app/FocusCount"; BUNDLE_LOADER = "$(TEST_HOST)"; TARGETED_DEVICE_FAMILY = 1; CODE_SIGN_STYLE = Automatic; SWIFT_VERSION = 5.0; }; };
-BECB265224D91761C05FDA33 = { isa = XCConfigurationList; buildConfigurations = (0F3D67935A4F199E058A017A,20B70E15FDC36C625E57F658,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-C9F380819EDC0E56C623B360 = { isa = PBXBuildFile; productRef = E9FAD0C6CD43534327C0AF90; };
-99C7943D90D870A50ADE9160 = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C9F380819EDC0E56C623B360,); runOnlyForDeploymentPostprocessing = 0; };
-0A06C5E2DA34E686D888A695 = { isa = PBXNativeTarget; buildConfigurationList = BECB265224D91761C05FDA33; buildPhases = (DF5B192FE80F93ACAF2EA928,99C7943D90D870A50ADE9160,); packageProductDependencies = (E9FAD0C6CD43534327C0AF90,); buildRules = (); dependencies = (B6EBBA31D46E8F71AE1B6924,); name = FocusCountTests; productName = FocusCountTests; productReference = B7480EC88B7F22D0A4757273; productType = "com.apple.product-type.bundle.unit-test"; };
-98F54143AB4E86B28C3AFEE0 = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2600; }; buildConfigurationList = 862894B703A6DEDF96A9DD6C; compatibilityVersion = "Xcode 14.0"; developmentRegion = zh-Hans; knownRegions = ("zh-Hans", en, Base,); mainGroup = B28B7AF69320201D1CF206EB; productRefGroup = FBDC4F23F93125BBEEAE800C; packageReferences = (582681C2EAE02B3F3D399C0C,); projectDirPath = ""; projectRoot = ""; targets = (0E8A3AD980EC179856012B7E,0A06C5E2DA34E686D888A695,); };
-}; rootObject = 98F54143AB4E86B28C3AFEE0; }
+
+/* Begin PBXBuildFile section */
+		0DE88444DF3B507126DAB721 /* PhoneHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD351825BC66ADD701F9AED /* PhoneHistory.swift */; };
+		11FD2D9475253CFF619F994E /* ExchangeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38E3758EE39252BA51EF8D58 /* ExchangeScreen.swift */; };
+		338DA43EBDB79B19B7BE2F49 /* ../macos/Sources/FocusCount/MarkerPointTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A161DFCA413436CE7A4C4413 /* ../macos/Sources/FocusCount/MarkerPointTimeline.swift */; };
+		3A137205DA471951903AB749 /* ../macos/Sources/FocusCount/MarkerFrequencyOverview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76A643C8D3800FC1E2F0BCD6 /* ../macos/Sources/FocusCount/MarkerFrequencyOverview.swift */; };
+		4B7D61EA01D48EA1F3121524 /* ../macos/Sources/FocusCount/MarkerColors.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC9906175EE761E7520180B8 /* ../macos/Sources/FocusCount/MarkerColors.swift */; };
+		4F0AA52D656A3D75867F784B /* FocusCountCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9FAD0C6CD43534327C0AF90 /* FocusCountCore */; };
+		51764CEC2FB9DE0A56F28D6A /* ../macos/Sources/FocusCount/MarkerOverviewData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9BA1846E5ECB249B313F6D4 /* ../macos/Sources/FocusCount/MarkerOverviewData.swift */; };
+		57013F9874B04F6B359608F7 /* ../macos/Sources/FocusCount/MarkerPointLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = F16A653133EA9D5A818562D0 /* ../macos/Sources/FocusCount/MarkerPointLayout.swift */; };
+		6A8E78921E34AFD7643CE98B /* ../macos/Sources/FocusCount/EventAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B7B56E09DDB2BDA3D9C695 /* ../macos/Sources/FocusCount/EventAnalytics.swift */; };
+		80FAC02A0BD5812E2A00F339 /* Tests/PhoneStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05FCB614AB36FDEE72EE1F2 /* Tests/PhoneStoreTests.swift */; };
+		91D0BAA289A386CA7C83A845 /* PhoneStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF628851D5981C12303F952 /* PhoneStore.swift */; };
+		A2541BA0DB94EF71AAB6D62B /* ../macos/Sources/FocusCount/MarkerRangeNavigator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8EC373E63E8CCBBD8649CC /* ../macos/Sources/FocusCount/MarkerRangeNavigator.swift */; };
+		B423BA269711E49202C02546 /* FocusCount/PhoneMarkerScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F31BA1802571CAA42CDBD6D /* FocusCount/PhoneMarkerScreen.swift */; };
+		C6059474EFAE53572CAEFC66 /* ../macos/Sources/FocusCount/MarkerTimelineChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21EEA37C6D5223870524881E /* ../macos/Sources/FocusCount/MarkerTimelineChart.swift */; };
+		C9F380819EDC0E56C623B360 /* FocusCountCore in Frameworks */ = {isa = PBXBuildFile; productRef = E9FAD0C6CD43534327C0AF90 /* FocusCountCore */; };
+		CF8A4D27E1C506A7C75A76BE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 05FAC94380A70241F23780E7 /* Assets.xcassets */; };
+		ED59C1983025EEC0E0D68A4A /* FocusCountApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B03F0C787FACE595D91C0E80 /* FocusCountApp.swift */; };
+		F8CEA72177241F5AEDE59219 /* RecordEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FBFFC812F489BBEEC3C23C5 /* RecordEditor.swift */; };
+5473E4419DA6917AA146EAE5 = {isa = PBXBuildFile; fileRef = EA093018B604EEAB60874DBA; };
+9DCBBEC5D63DFB5B1F371043 = {isa = PBXBuildFile; fileRef = 8A26489937BB22B7570D0DBD; };
+6B2D0872C254C4E4C9CCE953 = {isa = PBXBuildFile; fileRef = B8456520E465295716DE9152; };
+D3E166A97A63AF7FA2A030CD = {isa = PBXBuildFile; fileRef = 928DAC220D2C7386762CAE78; };
+8F046C66B064B9D0813E408C = {isa = PBXBuildFile; fileRef = 6DA82D9F3351A7B21664DDA9; };
+3DD0A1E592F0F0837332336A = {isa = PBXBuildFile; fileRef = 2A93294CAD9E9C9B2794DC0C; };
+B7EAC61EDA9EB3AB9B32C20D = {isa = PBXBuildFile; fileRef = D1DAA8E8E99545DCEEB1DE0A; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D799BAE6088A90139B415FCC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0E8A3AD980EC179856012B7E;
+			remoteInfo = FocusCount;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		05FAC94380A70241F23780E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1B8EC373E63E8CCBBD8649CC /* ../macos/Sources/FocusCount/MarkerRangeNavigator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../macos/Sources/FocusCount/MarkerRangeNavigator.swift; sourceTree = SOURCE_ROOT; };
+		1FBFFC812F489BBEEC3C23C5 /* RecordEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordEditor.swift; sourceTree = "<group>"; };
+		1FD351825BC66ADD701F9AED /* PhoneHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneHistory.swift; sourceTree = "<group>"; };
+		21EEA37C6D5223870524881E /* ../macos/Sources/FocusCount/MarkerTimelineChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../macos/Sources/FocusCount/MarkerTimelineChart.swift; sourceTree = SOURCE_ROOT; };
+		38A007151ABE87CC01A5B6E9 /* FocusCount.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = FocusCount.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		38E3758EE39252BA51EF8D58 /* ExchangeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExchangeScreen.swift; sourceTree = "<group>"; };
+		4CF628851D5981C12303F952 /* PhoneStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneStore.swift; sourceTree = "<group>"; };
+		4F31BA1802571CAA42CDBD6D /* FocusCount/PhoneMarkerScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCount/PhoneMarkerScreen.swift; sourceTree = SOURCE_ROOT; };
+		59BD0A3FF43B32849B319E64 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		76A643C8D3800FC1E2F0BCD6 /* ../macos/Sources/FocusCount/MarkerFrequencyOverview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../macos/Sources/FocusCount/MarkerFrequencyOverview.swift; sourceTree = SOURCE_ROOT; };
+		A161DFCA413436CE7A4C4413 /* ../macos/Sources/FocusCount/MarkerPointTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../macos/Sources/FocusCount/MarkerPointTimeline.swift; sourceTree = SOURCE_ROOT; };
+		A9BA1846E5ECB249B313F6D4 /* ../macos/Sources/FocusCount/MarkerOverviewData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../macos/Sources/FocusCount/MarkerOverviewData.swift; sourceTree = SOURCE_ROOT; };
+		AC9906175EE761E7520180B8 /* ../macos/Sources/FocusCount/MarkerColors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../macos/Sources/FocusCount/MarkerColors.swift; sourceTree = SOURCE_ROOT; };
+		B03F0C787FACE595D91C0E80 /* FocusCountApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusCountApp.swift; sourceTree = "<group>"; };
+		B7480EC88B7F22D0A4757273 /* FocusCountTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = FocusCountTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C5B7B56E09DDB2BDA3D9C695 /* ../macos/Sources/FocusCount/EventAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../macos/Sources/FocusCount/EventAnalytics.swift; sourceTree = SOURCE_ROOT; };
+		E05FCB614AB36FDEE72EE1F2 /* Tests/PhoneStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/PhoneStoreTests.swift; sourceTree = "<group>"; };
+		F16A653133EA9D5A818562D0 /* ../macos/Sources/FocusCount/MarkerPointLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../macos/Sources/FocusCount/MarkerPointLayout.swift; sourceTree = SOURCE_ROOT; };
+EA093018B604EEAB60874DBA = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FocusCount/PhoneDashboard.swift"; sourceTree = SOURCE_ROOT; };
+8A26489937BB22B7570D0DBD = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FocusCount/PhoneFocusAnalysis.swift"; sourceTree = SOURCE_ROOT; };
+B8456520E465295716DE9152 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/FocusAnalysisData.swift"; sourceTree = SOURCE_ROOT; };
+928DAC220D2C7386762CAE78 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/FocusAppearanceStore.swift"; sourceTree = SOURCE_ROOT; };
+6DA82D9F3351A7B21664DDA9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/FocusShareChart.swift"; sourceTree = SOURCE_ROOT; };
+2A93294CAD9E9C9B2794DC0C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/TodaySummaryView.swift"; sourceTree = SOURCE_ROOT; };
+D1DAA8E8E99545DCEEB1DE0A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "../macos/Sources/FocusCount/TargetCountdown.swift"; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		7561BFB015D8F536760CB671 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4F0AA52D656A3D75867F784B /* FocusCountCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		99C7943D90D870A50ADE9160 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C9F380819EDC0E56C623B360 /* FocusCountCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		482182478A3ECD4745BEA917 /* FocusCount */ = {
+			isa = PBXGroup;
+			children = (
+757E8A7AEAAF22C00F2AA795,808B3FE038D9B5962194891C,986BC3EBB948B64671E6ABA6,9ABDA3E5A0A6B8C296DEF112,
+D1DAA8E8E99545DCEEB1DE0A,
+2A93294CAD9E9C9B2794DC0C,
+6DA82D9F3351A7B21664DDA9,
+928DAC220D2C7386762CAE78,
+B8456520E465295716DE9152,
+8A26489937BB22B7570D0DBD,
+EA093018B604EEAB60874DBA,
+				4F31BA1802571CAA42CDBD6D /* FocusCount/PhoneMarkerScreen.swift */,
+				C5B7B56E09DDB2BDA3D9C695 /* ../macos/Sources/FocusCount/EventAnalytics.swift */,
+				A9BA1846E5ECB249B313F6D4 /* ../macos/Sources/FocusCount/MarkerOverviewData.swift */,
+				F16A653133EA9D5A818562D0 /* ../macos/Sources/FocusCount/MarkerPointLayout.swift */,
+				AC9906175EE761E7520180B8 /* ../macos/Sources/FocusCount/MarkerColors.swift */,
+				A161DFCA413436CE7A4C4413 /* ../macos/Sources/FocusCount/MarkerPointTimeline.swift */,
+				76A643C8D3800FC1E2F0BCD6 /* ../macos/Sources/FocusCount/MarkerFrequencyOverview.swift */,
+				1B8EC373E63E8CCBBD8649CC /* ../macos/Sources/FocusCount/MarkerRangeNavigator.swift */,
+				21EEA37C6D5223870524881E /* ../macos/Sources/FocusCount/MarkerTimelineChart.swift */,
+				38E3758EE39252BA51EF8D58 /* ExchangeScreen.swift */,
+				B03F0C787FACE595D91C0E80 /* FocusCountApp.swift */,
+				1FD351825BC66ADD701F9AED /* PhoneHistory.swift */,
+				4CF628851D5981C12303F952 /* PhoneStore.swift */,
+				1FBFFC812F489BBEEC3C23C5 /* RecordEditor.swift */,
+				59BD0A3FF43B32849B319E64 /* Info.plist */,
+				05FAC94380A70241F23780E7 /* Assets.xcassets */,
+			);
+			path = FocusCount;
+			sourceTree = "<group>";
+		};
+		B28B7AF69320201D1CF206EB = {
+			isa = PBXGroup;
+			children = (
+				482182478A3ECD4745BEA917 /* FocusCount */,
+				E05FCB614AB36FDEE72EE1F2 /* Tests/PhoneStoreTests.swift */,
+				FBDC4F23F93125BBEEAE800C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FBDC4F23F93125BBEEAE800C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				38A007151ABE87CC01A5B6E9 /* FocusCount.app */,
+				B7480EC88B7F22D0A4757273 /* FocusCountTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0A06C5E2DA34E686D888A695 /* FocusCountTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BECB265224D91761C05FDA33 /* Build configuration list for PBXNativeTarget "FocusCountTests" */;
+			buildPhases = (
+				DF5B192FE80F93ACAF2EA928 /* Sources */,
+				99C7943D90D870A50ADE9160 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B6EBBA31D46E8F71AE1B6924 /* PBXTargetDependency */,
+			);
+			name = FocusCountTests;
+			packageProductDependencies = (
+				E9FAD0C6CD43534327C0AF90 /* FocusCountCore */,
+			);
+			productName = FocusCountTests;
+			productReference = B7480EC88B7F22D0A4757273 /* FocusCountTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		0E8A3AD980EC179856012B7E /* FocusCount */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C57128001CE614BF8549D6BB /* Build configuration list for PBXNativeTarget "FocusCount" */;
+			buildPhases = (
+				BCE16DD0260827ECF338C787 /* Sources */,
+				7561BFB015D8F536760CB671 /* Frameworks */,
+				0189424A5A60FED329FA868E /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FocusCount;
+			packageProductDependencies = (
+				E9FAD0C6CD43534327C0AF90 /* FocusCountCore */,
+			);
+			productName = FocusCount;
+			productReference = 38A007151ABE87CC01A5B6E9 /* FocusCount.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2600;
+			};
+			buildConfigurationList = 862894B703A6DEDF96A9DD6C /* Build configuration list for PBXProject "FocusCount" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"zh-Hans",
+				en,
+				Base,
+			);
+			mainGroup = B28B7AF69320201D1CF206EB;
+			packageReferences = (
+				582681C2EAE02B3F3D399C0C /* XCLocalSwiftPackageReference "../../packages/FocusCountCore" */,
+			);
+			productRefGroup = FBDC4F23F93125BBEEAE800C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0E8A3AD980EC179856012B7E /* FocusCount */,
+				0A06C5E2DA34E686D888A695 /* FocusCountTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0189424A5A60FED329FA868E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+7E3E285466CE76542D429F5F,
+				CF8A4D27E1C506A7C75A76BE /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BCE16DD0260827ECF338C787 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+2BC6722D56C571F9E7E62C58,BD033719F7F04A98C92622DB,FF22BF3A31B26FC9329499FB,
+B7EAC61EDA9EB3AB9B32C20D,
+3DD0A1E592F0F0837332336A,
+8F046C66B064B9D0813E408C,
+D3E166A97A63AF7FA2A030CD,
+6B2D0872C254C4E4C9CCE953,
+9DCBBEC5D63DFB5B1F371043,
+5473E4419DA6917AA146EAE5,
+				B423BA269711E49202C02546 /* FocusCount/PhoneMarkerScreen.swift in Sources */,
+				6A8E78921E34AFD7643CE98B /* ../macos/Sources/FocusCount/EventAnalytics.swift in Sources */,
+				51764CEC2FB9DE0A56F28D6A /* ../macos/Sources/FocusCount/MarkerOverviewData.swift in Sources */,
+				57013F9874B04F6B359608F7 /* ../macos/Sources/FocusCount/MarkerPointLayout.swift in Sources */,
+				4B7D61EA01D48EA1F3121524 /* ../macos/Sources/FocusCount/MarkerColors.swift in Sources */,
+				338DA43EBDB79B19B7BE2F49 /* ../macos/Sources/FocusCount/MarkerPointTimeline.swift in Sources */,
+				3A137205DA471951903AB749 /* ../macos/Sources/FocusCount/MarkerFrequencyOverview.swift in Sources */,
+				A2541BA0DB94EF71AAB6D62B /* ../macos/Sources/FocusCount/MarkerRangeNavigator.swift in Sources */,
+				C6059474EFAE53572CAEFC66 /* ../macos/Sources/FocusCount/MarkerTimelineChart.swift in Sources */,
+				11FD2D9475253CFF619F994E /* ExchangeScreen.swift in Sources */,
+				ED59C1983025EEC0E0D68A4A /* FocusCountApp.swift in Sources */,
+				0DE88444DF3B507126DAB721 /* PhoneHistory.swift in Sources */,
+				91D0BAA289A386CA7C83A845 /* PhoneStore.swift in Sources */,
+				F8CEA72177241F5AEDE59219 /* RecordEditor.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF5B192FE80F93ACAF2EA928 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				80FAC02A0BD5812E2A00F339 /* Tests/PhoneStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B6EBBA31D46E8F71AE1B6924 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0E8A3AD980EC179856012B7E /* FocusCount */;
+			targetProxy = D799BAE6088A90139B415FCC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0F3D67935A4F199E058A017A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios.tests;
+				PRODUCT_NAME = FocusCountTests;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FocusCount.app/FocusCount";
+			};
+			name = Debug;
+		};
+		20B70E15FDC36C625E57F658 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = local.focuscount.ios.tests;
+				PRODUCT_NAME = FocusCountTests;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FocusCount.app/FocusCount";
+			};
+			name = Release;
+		};
+		639A7CA24D39909E713B47F7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 29;
+				DEVELOPMENT_TEAM = GR23563P52;
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FocusCount/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = FocusCount;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIFileSharingEnabled = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 1.14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = top.foryyz.focuscount;
+				PRODUCT_NAME = FocusCount;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		7082CC0B6FC1282FCEABD07A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 29;
+				DEVELOPMENT_TEAM = GR23563P52;
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_TESTABILITY = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = FocusCount/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = FocusCount;
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIFileSharingEnabled = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				MARKETING_VERSION = 1.14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = top.foryyz.focuscount;
+				PRODUCT_NAME = FocusCount;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		89E1FD6268CC0F221A2BE178 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		E6DE6C99132752C914FEF632 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		862894B703A6DEDF96A9DD6C /* Build configuration list for PBXProject "FocusCount" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				89E1FD6268CC0F221A2BE178 /* Debug */,
+				E6DE6C99132752C914FEF632 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BECB265224D91761C05FDA33 /* Build configuration list for PBXNativeTarget "FocusCountTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0F3D67935A4F199E058A017A /* Debug */,
+				20B70E15FDC36C625E57F658 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C57128001CE614BF8549D6BB /* Build configuration list for PBXNativeTarget "FocusCount" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7082CC0B6FC1282FCEABD07A /* Debug */,
+				639A7CA24D39909E713B47F7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		582681C2EAE02B3F3D399C0C /* XCLocalSwiftPackageReference "../../packages/FocusCountCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../packages/FocusCountCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E9FAD0C6CD43534327C0AF90 /* FocusCountCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 582681C2EAE02B3F3D399C0C /* XCLocalSwiftPackageReference "../../packages/FocusCountCore" */;
+			productName = FocusCountCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}

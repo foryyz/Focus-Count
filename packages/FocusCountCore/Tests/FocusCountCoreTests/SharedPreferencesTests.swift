@@ -2,6 +2,38 @@ import XCTest
 @testable import FocusCountCore
 
 final class SharedPreferencesTests: XCTestCase {
+    func testExportOptionsFilterOnlyOutgoingContents() throws {
+        var database = Database(goal: GoalSnapshot(name: "目标", date: Date(), deleted: true))
+        database.soundPreferences = SoundPreferences(FocusRoutineSettings())
+        database.sounds = [SharedSound(id: UUID().uuidString, name: "铃声", fileExtension: "wav", data: Data([1]), modified: Date())]
+        var shared = SharedSettings()
+        for key in ["mode", "focus-target-hidden-v1", "focus-target-total-hours-v1", "emoji/test"] {
+            shared.entries[key] = PreferenceValue(value: "test", modified: Date())
+        }
+        database.sharedSettings = shared
+        for sounds in [false, true] {
+            for parameters in [false, true] {
+                for goal in [false, true] {
+                    let filtered = SyncExportOptions(sounds: sounds, parameters: parameters, goal: goal).filtering(database)
+                    XCTAssertEqual(filtered.soundPreferences != nil, sounds)
+                    XCTAssertEqual(filtered.sounds != nil, sounds)
+                    XCTAssertEqual(filtered.sharedSettings?.entries["mode"] != nil, parameters)
+                    XCTAssertEqual(filtered.goal != nil, goal)
+                    XCTAssertEqual(filtered.sharedSettings?.entries["focus-target-hidden-v1"] != nil, goal)
+                    XCTAssertEqual(filtered.sharedSettings?.entries["focus-target-total-hours-v1"] != nil, goal)
+                    XCTAssertNotNil(filtered.sharedSettings?.entries["emoji/test"])
+                }
+            }
+        }
+        XCTAssertEqual(database.sharedSettings, shared)
+        XCTAssertNotNil(database.goal)
+        let suite = UserDefaults(suiteName: UUID().uuidString)!
+        XCTAssertEqual(SyncPreferences.exportOptions(from: suite), SyncExportOptions())
+        suite.set(false, forKey: SyncPreferences.goalKey)
+        XCTAssertFalse(SyncPreferences.exportOptions(from: suite).goal)
+        XCTAssertNil(SharedPreferences.capture(suite).entries[SyncPreferences.goalKey])
+        suite.removeObject(forKey: SyncPreferences.goalKey)
+    }
     func testImportChoicesDefaultOffPersistAndStayDeviceLocal() {
         let name = UUID().uuidString, defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }
@@ -37,7 +69,7 @@ final class SharedPreferencesTests: XCTestCase {
         XCTAssertEqual(actual.volume, 0.75)
         let exported = SharedPreferences.capture(defaults)
         let json = try JSONSerialization.jsonObject(with: XCTUnwrap(Data(base64Encoded: XCTUnwrap(exported.entries["mode"]?.value)))) as! [String: Any]
-        XCTAssertEqual(Set(json.keys), ["minimumMinutes", "maximumMinutes", "microSeconds", "roundMinutes", "restMinutes"])
+        XCTAssertEqual(Set(json.keys), ["minimumMinutes", "maximumMinutes", "microSeconds", "roundMinutes", "restMinutes", "lessonMinutes", "classBreakMinutes"])
         var soundOnly = actual; soundOnly.volume = 0.2
         defaults.set(try JSONEncoder().encode(soundOnly), forKey: "focus-modes-v1")
         XCTAssertEqual(SharedPreferences.capture(defaults), exported)

@@ -29,19 +29,73 @@ public struct ExchangeSource: Codable, Equatable {
 public struct SoundPreferences: Codable, Equatable {
     public var restSound: String?
     public var focusSound: String?
+    public var classStartSound: String?
+    public var classEndSound: String?
+    public var startSound: String?
+    public var pauseSound: String?
     public var volume: Double
+    public var standardVolume: Double?
+    public var microBreakVolume: Double?
+    public var courseVolume: Double?
+    private var includesClassSounds = true
+    private var includesStandardSounds = true
+    private enum CodingKeys: String, CodingKey {
+        case restSound, focusSound, classStartSound, classEndSound, startSound, pauseSound, volume
+        case standardVolume, microBreakVolume, courseVolume
+    }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        restSound = try values.decodeIfPresent(String.self, forKey: .restSound)
+        focusSound = try values.decodeIfPresent(String.self, forKey: .focusSound)
+        classStartSound = try values.decodeIfPresent(String.self, forKey: .classStartSound)
+        classEndSound = try values.decodeIfPresent(String.self, forKey: .classEndSound)
+        startSound = try values.decodeIfPresent(String.self, forKey: .startSound)
+        pauseSound = try values.decodeIfPresent(String.self, forKey: .pauseSound)
+        volume = try values.decode(Double.self, forKey: .volume)
+        standardVolume = try values.decodeIfPresent(Double.self, forKey: .standardVolume)
+        microBreakVolume = try values.decodeIfPresent(Double.self, forKey: .microBreakVolume)
+        courseVolume = try values.decodeIfPresent(Double.self, forKey: .courseVolume)
+        includesClassSounds = values.contains(.classStartSound) || values.contains(.classEndSound)
+        includesStandardSounds = values.contains(.startSound) || values.contains(.pauseSound)
+    }
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encodeIfPresent(restSound, forKey: .restSound)
+        try values.encodeIfPresent(focusSound, forKey: .focusSound)
+        try values.encode(volume, forKey: .volume)
+        try values.encodeIfPresent(standardVolume, forKey: .standardVolume)
+        try values.encodeIfPresent(microBreakVolume, forKey: .microBreakVolume)
+        try values.encodeIfPresent(courseVolume, forKey: .courseVolume)
+        // Explicit null means reset to the default; absent old fields preserve local choices.
+        if includesClassSounds {
+            try values.encode(classStartSound, forKey: .classStartSound)
+            try values.encode(classEndSound, forKey: .classEndSound)
+        }
+        if includesStandardSounds {
+            try values.encode(startSound, forKey: .startSound)
+            try values.encode(pauseSound, forKey: .pauseSound)
+        }
+    }
     public init(_ settings: FocusRoutineSettings) {
-        restSound = settings.restSound; focusSound = settings.focusSound; volume = settings.volume
+        classStartSound = settings.classStartSound; classEndSound = settings.classEndSound
+        startSound = settings.startSound; pauseSound = settings.pauseSound
+        restSound = settings.restSound; focusSound = settings.focusSound; volume = settings.microBreakVolume
+        standardVolume = settings.standardVolume; microBreakVolume = settings.microBreakVolume; courseVolume = settings.courseVolume
     }
     public var isValid: Bool {
         let builtins = ["Glass", "Pop", "Hero", "Ping", "Tink", "Submarine"]
-        return volume.isFinite && (0...1).contains(volume) && [restSound, focusSound].allSatisfy {
+        return [volume, standardVolume ?? volume, microBreakVolume ?? volume, courseVolume ?? volume].allSatisfy({ $0.isFinite && (0...1).contains($0) }) && [restSound, focusSound, classStartSound, classEndSound, startSound, pauseSound].allSatisfy {
             $0 == nil || builtins.contains($0!) || UUID(uuidString: $0!) != nil
         }
     }
     public func applying(to local: FocusRoutineSettings) -> FocusRoutineSettings {
         var result = local
-        result.restSound = restSound; result.focusSound = focusSound; result.volume = volume
+        if includesClassSounds { result.classStartSound = classStartSound; result.classEndSound = classEndSound }
+        if includesStandardSounds { result.startSound = startSound; result.pauseSound = pauseSound }
+        result.restSound = restSound; result.focusSound = focusSound
+        result.standardVolume = standardVolume ?? volume
+        result.microBreakVolume = microBreakVolume ?? volume
+        result.courseVolume = courseVolume ?? volume
         return result
     }
 }

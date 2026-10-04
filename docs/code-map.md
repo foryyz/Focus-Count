@@ -1,6 +1,6 @@
 # FocusCount 功能与代码定位索引
 
-核对日期：2026-10-02。对应当前工作区：Mac 1.20.1 / iPhone 1.5.7。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
+核对日期：2026-10-04。对应当前工作区：Mac 1.29.0 / iPhone 1.14.0。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
 
 ## 如何使用
 
@@ -204,3 +204,61 @@ iPhone 品牌使用 `brandItem`；iOS 26+ 调用 `sharedBackgroundVisibility(.hi
 ### 提示音反馈与删除（Mac 1.20.1 / iPhone 1.5.7）
 
 两端声音库的 `notice/error` 提供操作反馈，`rename` 返回成功状态并验证 1–80 字名称；`stageDeletion` 通过 `SoundFileTransaction(removing:)` 暂存删除，可回滚源文件与索引。Store 的 `deleteCustomSound` 更新当前模式与当前轮次引用，使用 Core `FocusRoutineSettings.removingSound` 恢复默认声音。Phone 刷新通知并清理 `Library/Sounds/<ID>.caf`；两端模式编辑视图监听声音列表变化，避免重新保存失效引用。`SoundSettingsView` / `PhoneSoundSettings` 使用传入 Store 的声音库，不能另外创建脱节的库实例。
+
+
+### 课程模式与普通专注提示音（2026-10-03）
+
+- Core `FocusRoutine.swift`：FocusMode.course、课程时长与独立声音字段；advanceCourse 按完整周期计算有效上课时间，skipRest 保留暂停状态。
+- Core `SharedPreferences.swift` / `ExchangePreview.swift`：课程数值同步和新增声音选择，区分旧字段缺失与显式恢复默认。
+- Mac `FocusModeViews.swift` / `StudyStore.swift`：三种模式菜单、课程参数与声音设置，课程开始/阶段切换/跳过课间铃声，以及普通专注 toggle/pause 提示音。
+- iPhone `PhoneModeViews.swift` / `PhoneRoutine.swift` / `PhoneStore.swift`：课程界面、循环计时与 64 次上下课通知安排、普通专注开始暂停声音；前台阶段转换更新通知安排，becameActive 补齐后台提醒。
+- 回归：Core FocusRoutineTests / SharedPreferencesTests；Mac FocusModeTests；iPhone PhoneStoreTests 的课程周期、提醒时间、暂停、持久化及传输测试；PhoneLayoutTests 增加课程和普通声音设置的小屏/横屏截图。
+
+
+### 独立模式音量（2026-10-03）
+
+Core FocusRoutineSettings 的 standardVolume / microBreakVolume / courseVolume、volume(for:) / setVolume(_:for:) 和 restoringDefaults(for:) 处理独立音量、旧配置迁移及单模式恢复默认。SoundPreferences 处理同步和校验；两端设置视图按编辑模式绑定，Store.setMode 更新当前计时中的音量。回归测试覆盖独立修改、编码持久化、旧字段迁移、声音同步与恢复默认。
+
+
+### 导入预览卡顿与导出选项（2026-10-03）
+
+- Core SharedPreferences.capture 的 persist 参数与内容相等检查：预览只读，未变账本不编码写入；SyncExportOptions.filtering 过滤声音、参数、目标及目标显示字段。
+- Core MobileClock.swift 的 ExchangeFileReader.read：安全作用域、文件协调、512 MB 大小检查；须在后台调用。
+- Mac DataExchangeView 的 reading / previewChanges / setIncoming：文件后台读取解码、一次生成预览；确认导入不使用本机导出开关。Store.export(forBackup:) 区分用户导出与完整备份。
+- 两端 SoundLibrary / PhoneSounds 设置页：新增目标日期开关和导出范围说明；iPhone ExchangeScreen 同样按文件内容导入。
+- 测试：Core PreferenceStorageTests 验证未变账本不写入/发布，SharedPreferencesTests 验证八种导出开关组合；Mac DirectorySettingsTests 验证预览无写入和完整备份。设置 FOCUSCOUNT_IMPORT_SAMPLE 可在临时目录验证指定 JSON，原文件只读且不进入仓库。
+
+
+### 主页入口折叠（Mac 1.21.3 / iPhone 1.6.3）
+
+两端 FocusCountApp.swift 中的主页工具栏使用 square.grid.2x2 的“更多功能”菜单。Mac 菜单内为记录、分析、标记、目标，直接入口为全屏、数据传输、设置；iPhone 菜单额外包含沉浸模式切换，直接入口为数据传输、设置。iPhone 沉浸模式下保留菜单用于退出。
+
+Mac 1.21.4：主页直接按钮排序为折叠菜单、设置、数据管理、全屏，见 Mac FocusCountApp.swift 顶部 HStack。
+
+
+### 专注中返回主页（Mac 1.22.0 / iPhone 1.7.0）
+
+- 两端 Store.showingHome 为不持久化的界面状态；returnHome 暂停当前计时并切换页面，resumeFocus 继续原计时并切回计时界面；清空计时后重置导航状态。
+- FocusCountApp.swift 的 showHome 区分有活动计时的主页与真正空闲；隐藏活动输入/计时操作，显示恢复按钮。Mac 保留全屏主页控件，iPhone 返回时退出沉浸布局。
+- PrismaticStartStyle(resuming:) 使用 RGB 旋转渐变区分恢复按钮，遵循 reduceMotion；两端保持独立的平台按钮实现。
+- FocusModeTests / PhoneStoreTests 覆盖三种模式的计时 ID、活动、阶段保留、返回暂停、恢复继续与取消重置；PhoneLayoutTests.testReturnHomeScreens 提供返回按钮和恢复主页截图。
+
+### 珠光流彩主题与预览（当前实现）
+
+产品规则与阶段表见 [theme.md](theme.md)，历史演变见 [changelog.md](changelog.md)。
+
+| 定位 | 当前职责 |
+|---|---|
+| Core FocusMilestone | 11 个阶段、鼓励文字、remainingAchievementMinutes 向上取整；finalPush.encouragement 为空 |
+| ThemeSettingsContent / ThemeEffectPreview | 经典与珠光流彩本机选择；独立 @State 模拟 0–10 小时，不修改 Store |
+| MilestoneHero | Mac 横排 / iPhone 纵排，9 小时 RGB xMins 倒计时，10 小时 🎉YOU MADE IT. |
+| MilestoneColors / PearlSilkField | 阶段调色与材质，MeshGradient 系统门槛、旧系统渐变、Canvas 丝绸反光 |
+| RoseFlowField | 9 小时深粉、紫、玫瑰红渐变，独立于灯带与开始按钮 |
+| PearlInputSurface | isInput 区分活动输入框与工具装饰；5 小时灯带，8 小时粉/蓝/紫流动灯带，无绿 |
+| AchievementOrbit | 9 小时时间及 10 小时标题后方的精细椭圆反光弧 |
+| MilestoneHomeEffect / MilestoneAtmosphere / PaperCelebration | 本地日期时长刷新、背景、12/18/26 颗高阶段星星、10 小时常驻庆祝，后台暂停与减少动态效果 |
+| 两端 PrismaticStartStyle | 阶段无关的原 RGB 开始 / 恢复按钮，无 PearlStage 环境注入 |
+
+FocusCelebration 保留旧兼容 API 与历史测试，当前主题不再调用每日标记；不存在手动庆祝按钮或重播状态。已删除的 MilestoneAura、CrystalFacets、PearlButtonBody 等不再作为当前代码入口。
+
+验证：Core FocusMilestoneTests；iPhone PhoneLayoutTests.testMilestoneThemeScreens / testEffectPreviewAndHorizontalMilestones。Shared TodaySummaryView.swift 的主题部分同时编译进两端。

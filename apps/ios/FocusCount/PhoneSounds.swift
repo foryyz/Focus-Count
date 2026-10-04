@@ -159,6 +159,7 @@ struct PhoneSoundSettings: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(SyncPreferences.soundsKey) private var syncSounds = false
     @AppStorage(SyncPreferences.parametersKey) private var syncParameters = false
+    @AppStorage(SyncPreferences.goalKey) private var syncGoal = true
     @State private var importing = false
     @State private var deleting: PhoneSound?
     @State private var renameID: String?
@@ -166,6 +167,7 @@ struct PhoneSoundSettings: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("主题") { ThemeSettingsContent() }
                 Section("我的提示音") {
                     Button { importing = true } label: { Label("导入音频", systemImage: "plus.circle") }
                     if let notice = sounds.notice, sounds.error == nil { Label(notice, systemImage: "checkmark.circle.fill").font(.footnote).foregroundStyle(.green) }
@@ -181,8 +183,9 @@ struct PhoneSoundSettings: View {
                 Section {
                     Toggle("同步自定义提示音与声音设置", isOn: $syncSounds)
                     Toggle("同步模式数值参数", isOn: $syncParameters)
+                    Toggle("同步目标日期", isOn: $syncGoal)
                 } header: { Text("同步设置") } footer: {
-                    Text("默认关闭。选择会保存在本机，并用于之后每次导入；计时状态仍在导入时单独选择。")
+                    Text("这些选项决定导出 JSON 包含哪些内容，选择会保存在本机。提示音和模式参数默认关闭，目标日期默认开启。导入按文件内容合并，不受本机开关影响；计时接续需在导入时单独确认。")
                 }
                 Section("提示音 · 内置声音") {
                     ForEach(PhoneSounds.presets) { sound in

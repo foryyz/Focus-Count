@@ -145,3 +145,26 @@ public enum RecordExchange {
         public var errorDescription: String? { if case let .invalid(message) = self { return message }; return nil }
     }
 }
+
+/// Call off the main thread: cloud providers may download or coordinate a file before reading it.
+public enum ExchangeFileReader {
+    public static func read(_ url: URL) throws -> Data {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        var coordinationError: NSError?
+        var result: Result<Data, Error>?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinationError) { readableURL in
+            result = Result {
+                let limit = 512_000_000
+                let size = try readableURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                guard size <= limit else { throw RecordExchange.ExchangeError.invalid("同步文件超过 512 MB，请减少自定义音频后重试。") }
+                let data = try Data(contentsOf: readableURL)
+                guard data.count <= limit else { throw RecordExchange.ExchangeError.invalid("同步文件超过 512 MB，请减少自定义音频后重试。") }
+                return data
+            }
+        }
+        if let coordinationError { throw coordinationError }
+        guard let result else { throw RecordExchange.ExchangeError.invalid("文件暂时无法读取，请先下载到本机后重试。") }
+        return try result.get()
+    }
+}

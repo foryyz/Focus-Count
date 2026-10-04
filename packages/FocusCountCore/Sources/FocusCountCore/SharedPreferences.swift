@@ -1,9 +1,35 @@
 import Foundation
 
-/// Device-local import choices. Deliberately excluded from shared settings.
+/// Device-local export choices. Existing keys retain device preferences across upgrades.
 public enum SyncPreferences {
     public static let soundsKey = "import-sync-sounds-v1"
     public static let parametersKey = "import-sync-parameters-v1"
+    public static let goalKey = "export-sync-goal-v1"
+    public static func exportOptions(from storage: any PreferenceStorage) -> SyncExportOptions {
+        SyncExportOptions(sounds: storage.bool(forKey: soundsKey), parameters: storage.bool(forKey: parametersKey),
+            goal: storage.object(forKey: goalKey) == nil ? true : storage.bool(forKey: goalKey))
+    }
+}
+
+/// Export filtering never changes the local database or its revision ledger.
+public struct SyncExportOptions: Equatable {
+    public var sounds: Bool
+    public var parameters: Bool
+    public var goal: Bool
+    public init(sounds: Bool = false, parameters: Bool = false, goal: Bool = true) {
+        self.sounds = sounds; self.parameters = parameters; self.goal = goal
+    }
+    public func filtering(_ database: Database) -> Database {
+        var result = database
+        if !sounds { result.sounds = nil; result.soundPreferences = nil }
+        if !parameters { result.sharedSettings?.entries.removeValue(forKey: "mode") }
+        if !goal {
+            result.goal = nil
+            result.sharedSettings?.entries.removeValue(forKey: "focus-target-hidden-v1")
+            result.sharedSettings?.entries.removeValue(forKey: "focus-target-total-hours-v1")
+        }
+        return result
+    }
 }
 
 public struct PreferenceValue: Codable, Equatable {
@@ -31,7 +57,10 @@ public struct ModeParameters: Codable, Equatable {
     public var microSeconds: Int
     public var roundMinutes: Int
     public var restMinutes: Int
+    public var lessonMinutes: Int?
+    public var classBreakMinutes: Int?
     public init(_ settings: FocusRoutineSettings) {
+        lessonMinutes = settings.lessonMinutes; classBreakMinutes = settings.classBreakMinutes
         minimumMinutes = settings.minimumMinutes; maximumMinutes = settings.maximumMinutes
         microSeconds = settings.microSeconds; roundMinutes = settings.roundMinutes; restMinutes = settings.restMinutes
     }
@@ -39,6 +68,8 @@ public struct ModeParameters: Codable, Equatable {
         var result = local
         result.minimumMinutes = minimumMinutes; result.maximumMinutes = maximumMinutes
         result.microSeconds = microSeconds; result.roundMinutes = roundMinutes; result.restMinutes = restMinutes
+        if let lessonMinutes { result.lessonMinutes = lessonMinutes }
+        if let classBreakMinutes { result.classBreakMinutes = classBreakMinutes }
         return result
     }
 }
@@ -74,7 +105,7 @@ public enum SharedPreferences {
         }
         return result
     }
-    @discardableResult public static func capture(_ defaults: any PreferenceStorage = ApplicationPreferences.current, at date: Date = Date()) -> SharedSettings {
+    @discardableResult public static func capture(_ defaults: any PreferenceStorage = ApplicationPreferences.current, at date: Date = Date(), persist: Bool = true) -> SharedSettings {
         let saved = defaults.data(forKey: ledger).flatMap { try? JSONDecoder().decode(SharedSettings.self, from: $0) }
         var result = numbersOnly(saved ?? SharedSettings())
         let values = current(defaults)
@@ -83,7 +114,8 @@ public enum SharedPreferences {
             let time = saved == nil ? Date.distantPast : max(date, (result.entries[key]?.modified ?? .distantPast).addingTimeInterval(0.001))
             result.entries[key] = PreferenceValue(value: values[key], modified: time)
         }
-        if let data = try? JSONEncoder().encode(result) { defaults.set(data, forKey: ledger) }
+        // Dictionary encoding order must not trigger a write/publish on every SwiftUI render.
+        if persist, saved != result, let data = try? canonical(result) { defaults.set(data, forKey: ledger) }
         return result
     }
     public static func validate(_ value: SharedSettings) -> Bool {
@@ -102,7 +134,7 @@ public enum SharedPreferences {
     }
     public static func mergedMode(_ incoming: SharedSettings?, defaults: any PreferenceStorage, local: FocusRoutineSettings, syncParameters: Bool) -> FocusRoutineSettings {
         guard syncParameters, let incoming else { return local }
-        let merged = SharedSettings.merge(capture(defaults), numbersOnly(incoming))
+        let merged = SharedSettings.merge(capture(defaults, persist: false), numbersOnly(incoming))
         guard let text = merged.entries["mode"]?.value, let data = Data(base64Encoded: text),
               let parameters = try? JSONDecoder().decode(ModeParameters.self, from: data) else { return local }
         return parameters.applying(to: local)
@@ -132,7 +164,7 @@ public enum SharedPreferences {
             let local = defaults.data(forKey: "focus-modes-v1").flatMap { try? JSONDecoder().decode(FocusRoutineSettings.self, from: $0) } ?? FocusRoutineSettings()
             if let data = try? canonical(parameters.applying(to: local)) { defaults.set(data, forKey: "focus-modes-v1") }
         }
-        if let data = try? JSONEncoder().encode(merged) { defaults.set(data, forKey: ledger) }
+        if let data = try? canonical(merged) { defaults.set(data, forKey: ledger) }
         NotificationCenter.default.post(name: changed, object: defaults)
     }
 }

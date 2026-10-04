@@ -146,8 +146,28 @@ Mac 1.19.1 / iPhone 1.5.1 的 `sharedSettings.entries.mode` 只含五个时间�
 两端历史页面新增“删除全部历史版本”，确认时列出导入备份和记录旧版本数量。两端 Store 的 `deleteAllHistory()` 先原子保存所有记录的旧版本删除标记（Core `RecordExchange.deletingAllVersions(from:)`），再删除本机导入备份；保留当前记录、最近删除记录、时间标记及计时。数据库保存失败时不删除备份；文件清理失败会显示错误并刷新剩余备份，允许重试。不会为本次清理再生成一份历史备份。记录旧版本的删除标记参与后续同步，其他设备的本机备份需在对应设备清理。
 
 
-### 本机同步偏好（Mac 1.19.5 / iPhone 1.5.5）
+### 本机导出选择（当前规则）
 
-“同步自定义提示音与声音设置”和“同步模式数值参数”移至设置中的“同步设置”，默认关闭，按设备持久记忆。导入预览不再显示这两个开关，每次直接使用本机选择；计时状态仍在预览中临时选择，默认关闭。
+声音、模式参数、目标日期三个本机选择只控制普通导出；声音与参数默认关闭，目标日期默认开启。导入按文件实际内容合并，不使用这些开关过滤；计时接续单独确认。完整备份不裁剪内容。具体字段过滤见下方“导出范围设置”。Mac 使用 DirectoryPreference / FilePreferences，iPhone 使用 AppStorage / UserDefaults；这些本机选择不参与跨设备同步。
 
-共享常量 `SyncPreferences.soundsKey/parametersKey` 位于 Core `SharedPreferences.swift`；两端设置页和交换页通过 `@AppStorage` 使用同一组本机键。导入时仍向 Store 显式传入两个选择，预览变化也按相同选择计算。这两个偏好不进入 `SharedPreferences` 交换内容，导入其他设备的数据不会重置它们。导出内容不受本机导入偏好影响。此规则替代上一版“每次导入默认开启”的交互。
+### 课程模式与普通专注声音（2026-10-03）
+
+`FocusMode.course` 使用 `lessonMinutes`（默认 60）和 `classBreakMinutes`（默认 10），分别允许 1–360 和 1–180 分钟。旧本机设置缺少这两个值时采用默认。课程 `FocusRoutine` 只使用 focus / longRest 两个阶段，课间结束自动回到 focus，不进入 ready；roundRemaining 在上课时等于 remaining，在课间为 0。课程的 longRest 不计入专注时长。iPhone 保存固定课程/课间两段与当前周期内 elapsed，以日期基准计算完整周期，不依赖通知次数计时。
+
+`ModeParameters` 增加可选 lessonMinutes / classBreakMinutes，导入旧参数时保留接收端本机课程时长。模式选择仍留在本机。`SoundPreferences` 增加 classStartSound / classEndSound（上下课）、startSound / pauseSound（普通专注开始/暂停）；缺省声音分别为 Pop / Glass。新导出对新增声音写入显式 null 以表达恢复默认，旧文件完全缺少新增声音字段时保留接收端对应选择。音量沿用 volume。声音和数值的同步仍分别受本机开关控制。
+
+计时传输保留课程阶段与剩余时间，按捕获时间接续完整周期，只累计上课秒数；活动计时快照内声音由接收端声音设置注入。旧客户端不认识 course，接续课程计时前应更新两端。
+
+
+### 模式独立音量（Mac 1.21.1 / iPhone 1.6.1）
+
+本机 FocusRoutineSettings 与 SoundPreferences 新增 standardVolume、microBreakVolume、courseVolume，范围均为有限的 0–1 数值。旧设置缺少字段时分别回退到原 volume，默认 0.4；新导出保留 volume = microBreakVolume 供旧客户端读取。设置的 volume 访问器按 mode 读写相应音量，编辑界面使用 volume(for:) / setVolume(_:for:) 按编辑对象访问。声音同步携带三项音量，ModeParameters 不包含音量。正在运行的模式保存音量后立即更新，iPhone 后台通知音量仍由系统决定。
+
+
+### 导出范围设置（Mac 1.21.2 / iPhone 1.6.2）
+
+SyncExportOptions 仅过滤向用户导出的快照，不修改数据库或 SharedPreferences 账本。沿用原 soundsKey / parametersKey 以保留本机选择，但语义从导入开关改为导出开关；默认均关闭。新增 export-sync-goal-v1，缺失时默认 true。三个键不参与设置同步。
+
+关闭声音导出时不读取或包含 sounds / soundPreferences；关闭参数时移除 sharedSettings.entries.mode；关闭目标日期时同时省略 goal（包括删除标记）和 focus-target-hidden-v1 / focus-target-total-hours-v1。省略不是删除，接收端保留本机缺失项目。当前计时接续所需的阶段参数仍在 focusRoutine 中，计时接续必须单独确认。
+
+两端数据管理导入按文件实际内容合并，不读取本机导出开关；Store.export(forBackup: true) 用于完整本机导入前备份，不过滤上述字段。SharedPreferences.capture(persist: false) 用于预览，避免在 SwiftUI body 中写设置、触发发布。
