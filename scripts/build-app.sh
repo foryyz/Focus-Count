@@ -16,8 +16,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleIconFile</key><string>FocusCount.icns</string>
 <key>CFBundleName</key><string>FocusCount</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.29.3</string>
-<key>CFBundleVersion</key><string>75</string>
+<key>CFBundleShortVersionString</key><string>1.30.0</string>
+<key>CFBundleVersion</key><string>76</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>

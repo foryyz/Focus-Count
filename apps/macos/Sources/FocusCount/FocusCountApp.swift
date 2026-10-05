@@ -359,7 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     init() { FilePreferences.discardLegacyDefaults(.standard) }
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     var body: some Scene {
-        Window("FocusCount · 专注计时", id: "main") { ContentView() }
+        Window("FocusCount · 专注计时", id: "main") { ContentView().modifier(AppAppearanceModifier()) }
             .windowStyle(.hiddenTitleBar)
             .defaultSize(width: 920, height: 560)
             .windowResizability(.contentMinSize)

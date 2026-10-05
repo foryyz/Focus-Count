@@ -1,6 +1,81 @@
 import SwiftUI
 import FocusCountCore
 
+#if os(macOS)
+import AppKit
+#endif
+
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    static let preferenceKey = "focus-app-appearance-v1"
+    var id: String { rawValue }
+    var title: String {
+        switch self { case .system: return "跟随系统"; case .light: return "浅色"; case .dark: return "深色" }
+    }
+    var colorScheme: ColorScheme? {
+        switch self { case .system: return nil; case .light: return .light; case .dark: return .dark }
+    }
+}
+
+@propertyWrapper struct AppearancePreference: DynamicProperty {
+    #if os(macOS)
+    @ObservedObject private var storage = FilePreferences.shared
+    #else
+    @AppStorage(AppAppearance.preferenceKey) private var rawValue = AppAppearance.system.rawValue
+    #endif
+    var wrappedValue: AppAppearance {
+        get {
+            #if os(macOS)
+            return AppAppearance(rawValue: storage.object(forKey: AppAppearance.preferenceKey) as? String ?? "") ?? .system
+            #else
+            return AppAppearance(rawValue: rawValue) ?? .system
+            #endif
+        }
+        nonmutating set {
+            #if os(macOS)
+            storage.set(newValue.rawValue, forKey: AppAppearance.preferenceKey)
+            #else
+            rawValue = newValue.rawValue
+            #endif
+        }
+    }
+    var projectedValue: Binding<AppAppearance> { Binding(get: { wrappedValue }, set: { wrappedValue = $0 }) }
+}
+
+struct AppAppearanceModifier: ViewModifier {
+    @AppearancePreference private var appearance
+    func body(content: Content) -> some View {
+        content.preferredColorScheme(appearance.colorScheme)
+        #if os(macOS)
+            .onAppear { applyToApplication() }
+            .onChange(of: appearance) { _ in applyToApplication() }
+        #endif
+    }
+    #if os(macOS)
+    private func applyToApplication() {
+        // Also updates AppKit auxiliary windows and native popovers.
+        switch appearance {
+        case .system: NSApp.appearance = nil
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+    #endif
+}
+
+struct AppearanceSettingsContent: View {
+    @AppearancePreference private var appearance
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Picker("软件外观", selection: $appearance) {
+                ForEach(AppAppearance.allCases) { option in Text(option.title).tag(option) }
+            }.pickerStyle(.segmented)
+            Text("选择保存在本机，立即生效。跟随系统会随系统的深浅色设置自动切换。")
+                .font(.caption).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct TodaySummary {
     let sessions: [StudySession]
     let events: [TimeEvent]

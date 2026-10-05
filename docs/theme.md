@@ -1,6 +1,6 @@
 # 珠光流彩主题
 
-当前版本：Mac 1.29.3（75） / iPhone 1.14.3（32）。核对日期：2026-10-04。
+当前版本：Mac 1.30.0（76） / iPhone 1.15.0（33）。核对日期：2026-10-05。
 
 ## 使用与统计口径
 
@@ -47,3 +47,7 @@ Mac 保持标题与时长横排、13–14 pt 鼓励文字和紧凑输入框间�
 - iPhone `PhoneLayoutTests` 覆盖全部 11 个预览阶段、共享横版布局与深色成就文字。横版截图验证共享绘制，不等同于 Mac 原生窗口或真机运行验证。
 
 版本历史见 [changelog.md](changelog.md)，开发入口见 [code-map.md](code-map.md)。
+
+## 软件外观
+
+设置中独立的“外观”栏目提供跟随系统（默认）、浅色、深色，使用本机偏好 focus-app-appearance-v1 保存，与经典/珠光流彩主题独立，不进入交换 JSON。选择立即应用至主页、专注和设置；Mac 通过 NSApp.appearance 同时更新分析、时间标记等 AppKit 窗口，跟随系统时清除覆盖。iPhone 使用根视图 preferredColorScheme，跟随系统时传 nil。

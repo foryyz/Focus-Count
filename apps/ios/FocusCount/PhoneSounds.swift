@@ -167,6 +167,7 @@ struct PhoneSoundSettings: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("外观") { AppearanceSettingsContent() }
                 Section("主题") { ThemeSettingsContent() }
                 Section("我的提示音") {
                     Button { importing = true } label: { Label("导入音频", systemImage: "plus.circle") }

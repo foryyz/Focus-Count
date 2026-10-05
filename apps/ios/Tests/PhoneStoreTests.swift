@@ -936,6 +936,22 @@ final class MarkerPointLayoutTests: XCTestCase {
         if let sound = store.soundLibrary.custom.first { store.soundLibrary.rename(sound.id, name: "我的自定义提示音") }
         await render(PhoneSoundSettings(store: store), name: "sound-library", size: CGSize(width: 375, height: 667))
     }
+    func testAppearanceSelectionScreens() async throws {
+        let suite = "AppearanceLayout-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PhoneStore(directory: root)
+        for appearance in AppAppearance.allCases {
+            defaults.set(appearance.rawValue, forKey: AppAppearance.preferenceKey)
+            await render(PhoneSoundSettings(store: store).modifier(AppAppearanceModifier()).defaultAppStorage(defaults),
+                name: "appearance-settings-\(appearance.rawValue)", size: CGSize(width: 375, height: 667))
+            await render(TimerScreen(store: store).modifier(AppAppearanceModifier()).defaultAppStorage(defaults),
+                name: "appearance-home-\(appearance.rawValue)", size: CGSize(width: 375, height: 667))
+        }
+    }
+
     func testMilestoneThemeScreens() async throws {
         let suite = "ThemeLayout-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

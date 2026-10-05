@@ -5,7 +5,7 @@ import FocusCountCore
     @StateObject private var store = PhoneStore()
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
-        WindowGroup { TimerScreen(store: store).tint(.teal) }
+        WindowGroup { TimerScreen(store: store).tint(.teal).modifier(AppAppearanceModifier()) }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background { store.checkpoint() }
                 if phase == .active { store.becameActive() }

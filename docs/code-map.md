@@ -1,6 +1,6 @@
 # FocusCount 功能与代码定位索引
 
-核对日期：2026-10-04。对应当前工作区：Mac 1.29.3 / iPhone 1.14.3。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
+核对日期：2026-10-05。对应当前工作区：Mac 1.30.0 / iPhone 1.15.0。本文描述当前实现，不是历史需求清单。开发流程见 [development-guide.md](development-guide.md)。
 
 ## 如何使用
 
@@ -263,8 +263,12 @@ FocusCelebration 保留旧兼容 API 与历史测试，当前主题不再调用�
 
 验证：Core FocusMilestoneTests；iPhone PhoneLayoutTests.testMilestoneThemeScreens / testEffectPreviewAndHorizontalMilestones。Shared TodaySummaryView.swift 的主题部分同时编译进两端。
 
-### 主页工具栏悬停与简化（Mac 1.29.3 / iPhone 1.14.3）
+### 主页工具栏悬停与简化（Mac 1.30.0 / iPhone 1.15.0）
 
 - iPhone toolbar 三个入口移除 PearlInputSurface，两个主题使用相同系统按钮样式。
 - Mac 顶部四个入口统一使用普通 Button，外层应用 ToolbarHoverSurface，与主题开关无关。更多功能按钮弹出四项入口，选择后关闭；四个按钮的 32×28 标签均使用 Rectangle contentShape，让留白边缘可点击。
 - ToolbarHoverSurface 在背景层提供柔和底色、细边与阴影，遵循减少动态效果，不拦截点击；预览工具图标不再叠加珠光框。
+
+### 软件外观
+
+TodaySummaryView.swift 内的 AppAppearance / AppearancePreference / AppAppearanceModifier / AppearanceSettingsContent 为两端共享外观设置。Mac 使用 FilePreferences，iPhone 使用 AppStorage；默认跟随系统，根视图与 Mac 应用外观实时更新。SoundSettingsView 第四栏与 PhoneSoundSettings 独立外观 Section 提供入口。

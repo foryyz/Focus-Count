@@ -130,9 +130,9 @@ struct SoundSettingsView: View {
             Divider()
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(0..<3) { index in
+                    ForEach(0..<4) { index in
                         Button { section = index } label: {
-                            Label(["提示音", "同步设置", "主题"][index], systemImage: ["speaker.wave.2", "arrow.triangle.2.circlepath", "paintpalette"][index])
+                            Label(["提示音", "同步设置", "主题", "外观"][index], systemImage: ["speaker.wave.2", "arrow.triangle.2.circlepath", "paintpalette", "circle.lefthalf.filled"][index])
                                 .font(.callout.weight(.medium)).frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(12).background(section == index ? Color.teal.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
                         }.buttonStyle(.plain)
@@ -141,7 +141,12 @@ struct SoundSettingsView: View {
                 }.padding(8).frame(width: 140)
                 Divider()
                 ScrollView {
-                    if section == 2 {
+                    if section == 3 {
+                        VStack(alignment: .leading, spacing: 20) {
+                            Text("外观").font(.headline)
+                            AppearanceSettingsContent()
+                        }.padding(20)
+                    } else if section == 2 {
                         ThemeSettingsContent().padding(20)
                     } else if section == 1 {
                         VStack(alignment: .leading, spacing: 20) {
